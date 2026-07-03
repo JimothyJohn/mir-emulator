@@ -118,7 +118,8 @@ if [[ "${SKIP_SMOKE:-0}" == "1" ]]; then
 fi
 
 log "Smoke testing"
-AUTH_TOKEN="$(printf '%s:%s' distributor "$(printf distributor | sha256)" | base64)"
+# tr strips GNU base64's 76-column line wrap (macOS base64 never wraps).
+AUTH_TOKEN="$(printf '%s:%s' distributor "$(printf distributor | sha256)" | base64 | tr -d '\n')"
 
 check() { # check <expected_status> <url> [curl args...]
     local expected="$1" url="$2"
