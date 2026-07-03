@@ -158,6 +158,45 @@ def test_report_contains_api_diff(specs_dir, tmp_path):
     assert "`GET /shiny_new`" in text
 
 
+def test_report_gets_ai_summary_when_configured(specs_dir, tmp_path):
+    sync(specs_dir, 1, dry_run=False, client=_portal({"3.0.0": _swagger("3.0.0")}))
+    report = tmp_path / "report.md"
+    sync(
+        specs_dir,
+        1,
+        dry_run=False,
+        client=_portal({"3.1.0": _swagger("3.1.0", extra_op=True)}),
+        report_path=report,
+        summarizer=lambda md: "Integrators gain `GET /shiny_new`.",
+    )
+    text = report.read_text()
+    assert text.index("Release impact (AI-generated)") < text.index("API changes")
+    assert "Integrators gain" in text
+
+
+def test_ai_summary_failure_never_blocks_the_sync(specs_dir, tmp_path):
+    from mir_spec_scraper.summarize import SummaryError
+
+    def broken(_md: str) -> str:
+        raise SummaryError("OpenRouter request failed (ConnectError)")
+
+    sync(specs_dir, 1, dry_run=False, client=_portal({"3.0.0": _swagger("3.0.0")}))
+    report = tmp_path / "report.md"
+    changed, summary = sync(
+        specs_dir,
+        1,
+        dry_run=False,
+        client=_portal({"3.1.0": _swagger("3.1.0", extra_op=True)}),
+        report_path=report,
+        summarizer=broken,
+    )
+    assert changed  # the spec update still happened
+    assert "AI summary skipped" in summary
+    text = report.read_text()
+    assert "API changes 3.0.0 → 3.1.0" in text  # mechanical report still written
+    assert "Release impact" not in text
+
+
 def test_dry_run_writes_nothing(specs_dir):
     changed, _ = sync(specs_dir, 3, dry_run=True, client=_portal({"3.2.1": _swagger("3.2.1")}))
     assert changed

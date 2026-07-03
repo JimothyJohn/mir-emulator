@@ -40,6 +40,10 @@ curl -H "Authorization: Basic $(printf '%s:%s' distributor "$(printf distributor
 
 - `MIR_PORTAL_EMAIL` / `MIR_PORTAL_PASSWORD` — portal credentials (free
   account); without them the scrape workflow no-ops with a notice.
+- `OPEN_ROUTER_API_KEY` (optional) — adds an AI-generated "release impact"
+  summary on top of the mechanical API changelog in scrape PRs (model:
+  `anthropic/claude-sonnet-5`, override with `MIR_SUMMARY_MODEL`). Strictly
+  best-effort: any failure falls back to the mechanical report.
 - `PYPI_API_TOKEN` (optional) — to publish wheels from `release.yml`.
 
 ## Tracked versions

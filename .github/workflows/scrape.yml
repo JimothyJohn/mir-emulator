@@ -61,6 +61,8 @@ jobs:
         env:
           MIR_PORTAL_EMAIL: ${{ secrets.MIR_PORTAL_EMAIL }}
           MIR_PORTAL_PASSWORD: ${{ secrets.MIR_PORTAL_PASSWORD }}
+          # Optional: adds an AI "release impact" summary to the PR body.
+          OPEN_ROUTER_API_KEY: ${{ secrets.OPEN_ROUTER_API_KEY }}
         run: uv run mir-spec-scraper sync --report scrape-report.md
 
       - name: Test against the updated spec set before proposing it

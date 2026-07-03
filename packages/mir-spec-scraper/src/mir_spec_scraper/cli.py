@@ -29,9 +29,11 @@ import shutil
 import sys
 import tempfile
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
 
 from mir_spec_scraper.portal import PortalClient, PortalFile
+from mir_spec_scraper.summarize import SummaryError, summarizer_from_env
 from mir_spec_scraper.versions import format_version, select_tracked
 
 DEFAULT_SPECS_DIR = Path("packages/mir-emulator/src/mir_emulator/specs")
@@ -159,6 +161,7 @@ def sync(
     force: bool = False,
     report_path: Path | None = None,
     client: PortalClient | None = None,
+    summarizer: Callable[[str], str] | None = None,
 ) -> tuple[bool, str]:
     if client is None:
         email = os.environ.get("MIR_PORTAL_EMAIL", "")
@@ -286,6 +289,14 @@ def sync(
 
     if report_path is not None:
         body = "\n\n".join(report) if report else "_No spec changes this run._\n"
+        if summarizer is None:
+            summarizer = summarizer_from_env()
+        if report and summarizer is not None:
+            try:
+                summary_md = summarizer(body)
+                body = f"### Release impact (AI-generated)\n\n{summary_md}\n\n---\n\n{body}"
+            except SummaryError as exc:
+                lines.append(f"AI summary skipped: {exc}")
         report_path.write_text(f"## Scrape report\n\n{'; '.join(lines)}\n\n{body}")
 
     if not changed:
