@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  mir-emulator public demo: one Lambda serving every tracked MiR REST API
+  version behind an API Gateway HTTP API. Hardened for public exposure:
+  stage throttling, reserved concurrency, scoped IAM, capped log retention.
+
+Parameters:
+  CodeS3Bucket:
+    Type: String
+    Description: Private artifacts bucket holding the Lambda code zip
+  CodeS3Key:
+    Type: String
+    Description: Content-hashed key of the Lambda code zip
+  ThrottleRateLimit:
+    Type: Number
+    Default: 25
+    Description: Steady-state requests/second across the whole API
+  ThrottleBurstLimit:
+    Type: Number
+    Default: 50
+    Description: Burst requests/second across the whole API
+  ReservedConcurrency:
+    Type: Number
+    Default: 10
+    Description: Hard cap on concurrent executions (cost / account-limit guard)
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+
+Resources:
+  FunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/mir-emulator-demo
+      RetentionInDays: !Ref LogRetentionDays
+
+  AccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/apigateway/mir-emulator-demo
+      RetentionInDays: !Ref LogRetentionDays
+
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: write-own-logs-only
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "${FunctionLogGroup.Arn}:*"
+
+  Function:
+    Type: AWS::Lambda::Function
+    DependsOn: FunctionLogGroup
+    Properties:
+      FunctionName: mir-emulator-demo
+      Description: MiR REST API emulator - all tracked versions at /<version>/api/v2.0.0
+      Runtime: python3.13
+      Architectures: [arm64]
+      Handler: mir_emulator.serverless.handler
+      MemorySize: 512
+      Timeout: 10
+      ReservedConcurrentExecutions: !Ref ReservedConcurrency
+      Role: !GetAtt FunctionRole.Arn
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3Key
+
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: mir-emulator-demo
+      Description: Public demo endpoint for the MiR REST API emulator
+      ProtocolType: HTTP
+
+  Integration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt Function.Arn
+      PayloadFormatVersion: "2.0"
+      TimeoutInMillis: 10500
+
+  DefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: $default
+      Target: !Sub integrations/${Integration}
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: $default
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingRateLimit: !Ref ThrottleRateLimit
+        ThrottlingBurstLimit: !Ref ThrottleBurstLimit
+      AccessLogSettings:
+        DestinationArn: !GetAtt AccessLogGroup.Arn
+        # Metadata only - no bodies, no auth headers. requestId first for grep.
+        Format: >-
+          {"requestId":"$context.requestId","ip":"$context.identity.sourceIp",
+          "requestTime":"$context.requestTime","method":"$context.httpMethod",
+          "path":"$context.path","protocol":"$context.protocol",
+          "status":"$context.status","responseLength":"$context.responseLength",
+          "integrationLatencyMs":"$context.integrationLatency",
+          "error":"$context.error.messageString"}
+
+  InvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref Function
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
+
+Outputs:
+  ApiUrl:
+    Description: Base URL of the public demo API ($default stage)
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
+  FunctionName:
+    Value: !Ref Function

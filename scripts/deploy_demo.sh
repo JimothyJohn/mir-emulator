@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# Build the mir-emulator Lambda bundle and deploy the public demo stack.
+#
+#   ./scripts/deploy_demo.sh            # build + deploy + smoke test
+#   SKIP_SMOKE=1 ./scripts/deploy_demo.sh
+#
+# The bundle is cross-built for the Lambda runtime (aarch64-manylinux,
+# CPython 3.13) because jsonschema pulls the binary rpds-py wheel — a
+# macOS-built zip would import-error in Lambda.
+
+set -e
+set -o nounset
+set -o pipefail
+
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
+}
+
+STACK_NAME="${STACK_NAME:-mir-emulator-demo}"
+REGION="${AWS_REGION:-$(aws configure get region)}"
+ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+BUCKET="mir-emulator-artifacts-${ACCOUNT_ID}-${REGION}"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mir-emulator-lambda.XXXXXX")"
+trap 'rm -rf "$BUILD_DIR"' EXIT
+
+log "Building wheel"
+uv build --package mir-emulator --wheel -o "$BUILD_DIR/wheels" >/dev/null
+
+log "Cross-installing for aarch64-manylinux2014 / CPython 3.13"
+uv pip install \
+    --target "$BUILD_DIR/site" \
+    --python-version 3.13 \
+    --python-platform aarch64-manylinux2014 \
+    --only-binary :all: \
+    "$BUILD_DIR"/wheels/mir_emulator-*.whl >/dev/null
+
+find "$BUILD_DIR/site" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+
+log "Zipping bundle"
+(cd "$BUILD_DIR/site" && zip -qr "$BUILD_DIR/code.zip" .)
+ZIP_SHA="$(shasum -a 256 "$BUILD_DIR/code.zip" | cut -d' ' -f1)"
+S3_KEY="${STACK_NAME}/${ZIP_SHA}.zip"
+log "Bundle: $(du -h "$BUILD_DIR/code.zip" | cut -f1 | tr -d ' ') sha256=${ZIP_SHA}"
+
+if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+    log "Creating private artifacts bucket ${BUCKET}"
+    if [[ "$REGION" == "us-east-1" ]]; then
+        aws s3api create-bucket --bucket "$BUCKET" >/dev/null
+    else
+        aws s3api create-bucket --bucket "$BUCKET" \
+            --create-bucket-configuration "LocationConstraint=${REGION}" >/dev/null
+    fi
+    aws s3api put-public-access-block --bucket "$BUCKET" \
+        --public-access-block-configuration \
+        "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+    # Build artifacts are only needed at deploy time - don't accrete forever.
+    aws s3api put-bucket-lifecycle-configuration --bucket "$BUCKET" \
+        --lifecycle-configuration '{"Rules":[{"ID":"expire-artifacts","Status":"Enabled","Filter":{},"Expiration":{"Days":30}}]}'
+fi
+
+if ! aws s3api head-object --bucket "$BUCKET" --key "$S3_KEY" >/dev/null 2>&1; then
+    log "Uploading s3://${BUCKET}/${S3_KEY}"
+    aws s3 cp --no-progress "$BUILD_DIR/code.zip" "s3://${BUCKET}/${S3_KEY}" >/dev/null
+else
+    log "Bundle already uploaded (content-addressed), skipping"
+fi
+
+log "Deploying CloudFormation stack ${STACK_NAME}"
+aws cloudformation deploy \
+    --region "$REGION" \
+    --stack-name "$STACK_NAME" \
+    --template-file "$REPO_ROOT/deploy/template.yaml" \
+    --capabilities CAPABILITY_IAM \
+    --no-fail-on-empty-changeset \
+    --parameter-overrides "CodeS3Bucket=${BUCKET}" "CodeS3Key=${S3_KEY}"
+
+API_URL="$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$STACK_NAME" \
+    --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)"
+log "Deployed: ${API_URL}"
+
+if [[ "${SKIP_SMOKE:-0}" == "1" ]]; then
+    exit 0
+fi
+
+log "Smoke testing"
+AUTH_TOKEN="$(printf '%s:%s' distributor "$(printf distributor | shasum -a 256 | cut -d' ' -f1)" | base64)"
+
+check() { # check <expected_status> <url> [curl args...]
+    local expected="$1" url="$2"
+    shift 2
+    local status
+    status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$@" "$url")"
+    if [[ "$status" != "$expected" ]]; then
+        log "FAIL ${url} -> ${status} (wanted ${expected})"
+        return 1
+    fi
+    log "ok   ${expected} ${url}"
+}
+
+check 200 "${API_URL}/healthz"
+check 200 "${API_URL}/"
+check 401 "${API_URL}/latest/api/v2.0.0/status"
+for v in $(curl -s "${API_URL}/healthz" | python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin)["versions"]))'); do
+    check 200 "${API_URL}/${v}/api/v2.0.0/status" -H "Authorization: Basic ${AUTH_TOKEN}"
+done
+log "Smoke test passed"

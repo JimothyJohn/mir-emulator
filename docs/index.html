@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MIR-EMULATOR // fleet console</title>
+<meta name="description" content="Live demo console for the mir-emulator — a spec-faithful emulator of the MiR robot REST API, every tracked version on one serverless endpoint.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='12' fill='%23101418'/><rect x='18' y='34' width='64' height='32' rx='6' fill='%23f5c518'/><circle cx='34' cy='50' r='7' fill='%23101418'/><circle cx='66' cy='50' r='7' fill='%23101418'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0c0f12;
+  --panel: #12161b;
+  --panel-2: #171c22;
+  --line: #242b33;
+  --line-bright: #39434e;
+  --ink: #d7dde3;
+  --ink-dim: #7c8791;
+  --ink-faint: #4b555f;
+  --yellow: #f5c518;
+  --yellow-dim: #8a7215;
+  --blue: #4aa3ff;
+  --green: #3ddc84;
+  --red: #ff5c5c;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --display: "Chakra Petch", var(--mono);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.55;
+  min-height: 100vh;
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: -1px -1px;
+}
+body::after { /* scanline grain */
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,.016) 0 1px, transparent 1px 3px);
+}
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+::selection { background: var(--yellow); color: #10130a; }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px 80px; }
+
+/* ---------- header ---------- */
+header {
+  border-bottom: 1px solid var(--line-bright);
+  background: linear-gradient(180deg, #14181d, #0e1116);
+  position: sticky; top: 0; z-index: 20;
+}
+.hazard { height: 6px; background: repeating-linear-gradient(-45deg, var(--yellow) 0 14px, #14181d 14px 28px); }
+.masthead {
+  max-width: 1180px; margin: 0 auto; padding: 14px 20px;
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+}
+.mark {
+  width: 40px; height: 40px; border-radius: 8px; flex: none;
+  background: var(--yellow);
+  display: grid; place-items: center;
+  box-shadow: 0 0 0 1px #000, 0 0 24px rgba(245,197,24,.25);
+}
+.mark svg { display: block; }
+h1 {
+  font-family: var(--display);
+  font-size: 20px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+}
+h1 span { color: var(--yellow); }
+.sub { font-size: 11px; color: var(--ink-dim); letter-spacing: .08em; text-transform: uppercase; }
+.head-right { margin-left: auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.led-box {
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid var(--line-bright); border-radius: 6px;
+  padding: 6px 12px; background: var(--panel);
+  font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-dim);
+}
+.led { width: 9px; height: 9px; border-radius: 50%; background: var(--ink-faint); flex: none; }
+.led.on  { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2.2s infinite; }
+.led.err { background: var(--red);   box-shadow: 0 0 8px var(--red); }
+@keyframes pulse { 50% { opacity: .55; } }
+
+/* ---------- panels ---------- */
+.grid { display: grid; grid-template-columns: 340px 1fr; gap: 18px; margin-top: 26px; align-items: start; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line-bright);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 14px 40px rgba(0,0,0,.35);
+}
+.panel-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-bright);
+  background: var(--panel-2);
+  font-family: var(--display);
+  font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.panel-head .tag { margin-left: auto; color: var(--yellow-dim); font-size: 10px; }
+.panel-body { padding: 16px 14px; }
+
+/* ---------- intro strip ---------- */
+.intro {
+  margin-top: 26px; padding: 18px 20px;
+  border: 1px solid var(--line-bright); border-left: 4px solid var(--yellow);
+  border-radius: 10px; background: var(--panel);
+  display: flex; gap: 20px; flex-wrap: wrap; align-items: baseline;
+}
+.intro b { font-family: var(--display); letter-spacing: .06em; text-transform: uppercase; font-size: 13px; }
+.intro p { color: var(--ink-dim); font-size: 13px; max-width: 72ch; }
+.intro code { color: var(--yellow); }
+
+/* ---------- version picker ---------- */
+.versions { display: flex; flex-direction: column; gap: 8px; }
+.vbtn {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; text-align: left; cursor: pointer;
+  background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line-bright); border-radius: 8px;
+  padding: 12px 14px; font-family: var(--mono); font-size: 14px;
+  transition: border-color .15s, background .15s, transform .1s;
+}
+.vbtn:hover { border-color: var(--yellow-dim); }
+.vbtn.active { border-color: var(--yellow); background: #1b1f16; }
+.vbtn .vnum { font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: .04em; }
+.vbtn.active .vnum { color: var(--yellow); }
+.vbtn .vpath { margin-left: auto; font-size: 10px; color: var(--ink-faint); }
+.vbtn .chip {
+  font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
+  border: 1px solid var(--line-bright); border-radius: 999px; padding: 2px 8px; color: var(--ink-dim);
+}
+.vbtn.active .chip.latest { border-color: var(--yellow); color: var(--yellow); }
+.kv { margin-top: 16px; font-size: 12px; color: var(--ink-dim); display: grid; gap: 6px; }
+.kv div { display: flex; gap: 10px; }
+.kv dt { color: var(--ink-faint); min-width: 82px; text-transform: uppercase; font-size: 10px; letter-spacing: .1em; padding-top: 2px; }
+.kv dd { word-break: break-all; }
+.kv a { color: var(--blue); }
+
+/* ---------- console ---------- */
+.presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.preset {
+  cursor: pointer; font-family: var(--mono); font-size: 11.5px;
+  background: transparent; color: var(--ink-dim);
+  border: 1px solid var(--line-bright); border-radius: 999px; padding: 5px 12px;
+  transition: color .15s, border-color .15s;
+}
+.preset:hover { color: var(--yellow); border-color: var(--yellow-dim); }
+.preset b { color: var(--ink); font-weight: 600; margin-right: 6px; }
+.preset:hover b { color: var(--yellow); }
+
+.reqline { display: flex; gap: 10px; flex-wrap: wrap; }
+select, input[type=text], textarea {
+  background: #0b0e11; color: var(--ink);
+  border: 1px solid var(--line-bright); border-radius: 8px;
+  font-family: var(--mono); font-size: 13.5px; padding: 10px 12px;
+  outline: none;
+}
+select:focus, input:focus, textarea:focus { border-color: var(--yellow); }
+select { cursor: pointer; font-weight: 600; }
+#method { width: 108px; flex: none; }
+#path { flex: 1; min-width: 240px; }
+textarea { width: 100%; min-height: 96px; resize: vertical; line-height: 1.5; margin-top: 10px; }
+.send {
+  flex: none; cursor: pointer;
+  font-family: var(--display); font-weight: 700; font-size: 13px;
+  letter-spacing: .14em; text-transform: uppercase;
+  background: var(--yellow); color: #14120a;
+  border: 1px solid var(--yellow); border-radius: 8px; padding: 10px 22px;
+  transition: transform .08s, box-shadow .15s;
+  box-shadow: 0 0 0 rgba(245,197,24,0);
+}
+.send:hover { box-shadow: 0 0 22px rgba(245,197,24,.35); }
+.send:active { transform: translateY(1px); }
+.send[disabled] { opacity: .45; cursor: wait; box-shadow: none; }
+.body-label, .curl-label {
+  margin-top: 14px; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint);
+  display: flex; align-items: center; gap: 10px;
+}
+.curl {
+  margin-top: 8px; position: relative;
+  background: #0b0e11; border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 44px 12px 12px; font-size: 12px; color: var(--ink-dim);
+  white-space: pre-wrap; word-break: break-all;
+}
+.copy {
+  position: absolute; top: 8px; right: 8px; cursor: pointer;
+  background: var(--panel-2); color: var(--ink-dim);
+  border: 1px solid var(--line-bright); border-radius: 6px;
+  font-family: var(--mono); font-size: 10px; padding: 4px 8px;
+}
+.copy:hover { color: var(--yellow); border-color: var(--yellow-dim); }
+
+/* ---------- response ---------- */
+.resp-meta {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line-bright);
+  font-size: 12px; color: var(--ink-dim);
+}
+.status-big { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: .04em; }
+.status-big.s2 { color: var(--green); }
+.status-big.s4 { color: var(--yellow); }
+.status-big.s5, .status-big.s0 { color: var(--red); }
+pre.resp {
+  margin-top: 10px; background: #0b0e11;
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 14px; font-size: 12.5px; line-height: 1.6;
+  max-height: 460px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+}
+pre.resp .k { color: var(--blue); }
+pre.resp .s { color: #c8e08c; }
+pre.resp .n { color: var(--yellow); }
+pre.resp .b { color: #e08cc8; }
+.hint { color: var(--ink-faint); font-size: 11.5px; margin-top: 10px; }
+
+/* ---------- auth strip ---------- */
+.auth { display: grid; gap: 8px; font-size: 12px; }
+.auth label { color: var(--ink-faint); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.auth .row { display: flex; gap: 8px; }
+.auth .row > div { flex: 1; min-width: 0; }
+.auth input { width: 100%; padding: 8px 10px; font-size: 12.5px; }
+.token { font-size: 10.5px; color: var(--ink-faint); word-break: break-all; line-height: 1.5; }
+.token b { color: var(--ink-dim); }
+
+/* ---------- footer / banner ---------- */
+.banner {
+  margin-top: 26px; padding: 14px 18px; border-radius: 10px;
+  border: 1px solid var(--red); background: #1c1113; color: #f0b6b6; font-size: 13px;
+  display: none;
+}
+.banner.show { display: block; }
+.banner code { color: var(--yellow); }
+footer { margin-top: 46px; color: var(--ink-faint); font-size: 11.5px; line-height: 1.8; }
+footer .hazard-mini { height: 3px; margin-bottom: 16px; opacity: .5;
+  background: repeating-linear-gradient(-45deg, var(--yellow) 0 10px, transparent 10px 20px); }
+
+@media (prefers-reduced-motion: reduce) { .led.on { animation: none; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hazard"></div>
+  <div class="masthead">
+    <div class="mark">
+      <svg width="24" height="24" viewBox="0 0 100 100"><rect x="8" y="30" width="84" height="40" rx="8" fill="#101418"/><circle cx="30" cy="50" r="9" fill="#f5c518"/><circle cx="70" cy="50" r="9" fill="#f5c518"/></svg>
+    </div>
+    <div>
+      <h1>MIR<span>-</span>EMULATOR <span>//</span> FLEET CONSOLE</h1>
+      <div class="sub">spec-faithful MiR robot REST API &mdash; every tracked version, one serverless endpoint</div>
+    </div>
+    <div class="head-right">
+      <div class="led-box"><span class="led" id="led"></span><span id="led-text">probing&hellip;</span></div>
+      <div class="led-box" id="endpoint-box" title="API endpoint">&#9096; <span id="endpoint-label">&mdash;</span></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="banner" id="banner">
+    No API endpoint configured. Append <code>?api=https://your-endpoint.example.com</code> to this page's URL,
+    or set <code>API_BASE</code> at the top of the script in <code>docs/index.html</code>.
+  </div>
+
+  <div class="intro">
+    <b>&#9888; Shared demo unit</b>
+    <p>
+      This console talks to a live, public emulator of the
+      <a href="https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/" rel="noopener">Mobile Industrial Robots REST API</a>
+      running on AWS Lambda. Each tracked MiR software generation is mounted at its own path prefix
+      — <code>/&lt;version&gt;/api/v2.0.0/&hellip;</code> — so you can diff robot behavior across releases from one URL.
+      State (mission queue, PLC registers, status writes) is in-memory per runtime instance and resets on cold start.
+      Auth mirrors a factory robot: <code>Basic BASE64(user&colon;SHA-256(password))</code>, default account
+      <code>distributor / distributor</code>.
+    </p>
+  </div>
+
+  <div class="grid">
+    <div style="display:grid; gap:18px;">
+      <section class="panel">
+        <div class="panel-head">&#9635; Software version <span class="tag" id="vcount"></span></div>
+        <div class="panel-body">
+          <div class="versions" id="versions"><div class="hint">loading version manifest&hellip;</div></div>
+          <dl class="kv" id="vmeta"></dl>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">&#9919; Robot credentials</div>
+        <div class="panel-body auth">
+          <div class="row">
+            <div style="flex:1"><label for="user">user</label><input type="text" id="user" value="distributor" autocomplete="off"></div>
+            <div style="flex:1"><label for="pass">password</label><input type="text" id="pass" value="distributor" autocomplete="off"></div>
+          </div>
+          <div class="token" id="token-view"></div>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="panel-head">&#9881; Request console <span class="tag" id="target-tag"></span></div>
+      <div class="panel-body">
+        <div class="presets" id="presets"></div>
+        <div class="reqline">
+          <select id="method"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select>
+          <input type="text" id="path" value="/status" spellcheck="false" autocomplete="off">
+          <button class="send" id="send">Transmit</button>
+        </div>
+        <div class="body-label" id="body-label">request body &mdash; JSON</div>
+        <textarea id="body" spellcheck="false"></textarea>
+        <div class="curl-label">curl equivalent</div>
+        <div class="curl"><span id="curl"></span><button class="copy" id="copy">COPY</button></div>
+        <div class="resp-meta" id="resp-meta" style="display:none">
+          <span class="status-big" id="resp-status"></span>
+          <span id="resp-time"></span>
+          <span id="resp-type"></span>
+        </div>
+        <pre class="resp" id="resp" style="display:none"></pre>
+        <div class="hint" id="resp-hint">Pick a preset or type a path (relative to <code>/api/v2.0.0</code>), then transmit.
+          Writes are welcome — it's an emulator. Try enqueueing a mission, then listing the queue.</div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <div class="hazard-mini"></div>
+    <div>
+      MIR-EMULATOR is an independent open-source emulator; not affiliated with Mobile Industrial Robots A/S.
+      The endpoint is rate-limited and concurrency-capped; responses are deterministic examples generated from the
+      official API definitions. Machine-readable specs per version:
+      <code>/&lt;version&gt;/swagger.json</code> (Swagger 2.0) &middot; <code>/&lt;version&gt;/openapi.json</code> (OpenAPI 3.0).
+    </div>
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ================= configuration =================
+   Set at deploy time. Can be overridden per-visit with ?api=https://... */
+const API_BASE = "";
+/* ================================================= */
+
+const qs = new URLSearchParams(location.search);
+const RAW_BASE = (qs.get("api") || API_BASE || "").replace(/\/+$/, "");
+const $ = (id) => document.getElementById(id);
+
+const PRESETS = [
+  { m: "GET",    p: "/status",             body: null, note: "robot state" },
+  { m: "PUT",    p: "/status",             body: { name: "renamed-from-console" }, note: "rename robot" },
+  { m: "GET",    p: "/missions",           body: null, note: "list missions" },
+  { m: "POST",   p: "/mission_queue",      body: { mission_id: "demo-mission-guid" }, note: "enqueue" },
+  { m: "GET",    p: "/mission_queue",      body: null, note: "queue" },
+  { m: "DELETE", p: "/mission_queue",      body: null, note: "clear queue" },
+  { m: "GET",    p: "/registers/1",        body: null, note: "PLC register" },
+  { m: "PUT",    p: "/registers/1",        body: { value: 42 }, note: "write register" },
+  { m: "GET",    p: "/system/info",        body: null, note: "system" },
+];
+
+let versions = [];       // newest first
+let currentVersion = null;
+
+/* ---------- MiR auth token: BASE64(user ":" SHA256HEX(pass)) ---------- */
+async function sha256hex(text) {
+  if (crypto.subtle) {
+    const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+  // Insecure-context fallback: only the documented factory default is precomputed.
+  if (text === "distributor")
+    return "62f2f0f1eff10d3152c95f6f0596576e482bb8e44806433f4cf929792834b014";
+  throw new Error("WebCrypto unavailable — serve this page over HTTPS for custom passwords");
+}
+async function authToken() {
+  const user = $("user").value || "distributor";
+  const hash = await sha256hex($("pass").value || "");
+  return btoa(user + ":" + hash);
+}
+
+/* ---------- helpers ---------- */
+function apiRoot(v)   { return RAW_BASE + "/" + v; }
+function fullPath(v, p) { return apiRoot(v) + "/api/v2.0.0" + (p.startsWith("/") ? p : "/" + p); }
+
+function esc(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function highlight(json) {
+  return esc(json).replace(
+    /("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g,
+    (m, str, colon, kw) => {
+      if (str) return '<span class="' + (colon ? "k" : "s") + '">' + str + "</span>" + (colon || "");
+      if (kw) return '<span class="b">' + kw + "</span>";
+      return '<span class="n">' + m + "</span>";
+    });
+}
+
+async function refreshCurl() {
+  const m = $("method").value, p = $("path").value || "/";
+  let cmd = "curl -X " + m + " \\\n  '" + fullPath(currentVersion || "latest", p) + "' \\\n  -H 'Authorization: Basic " + await authToken() + "'";
+  const body = $("body").value.trim();
+  if (body && (m === "POST" || m === "PUT"))
+    cmd += " \\\n  -H 'Content-Type: application/json' \\\n  -d '" + body.replace(/'/g, "'\\''") + "'";
+  $("curl").textContent = cmd;
+  $("token-view").innerHTML = "<b>Authorization:</b> Basic " + esc(await authToken());
+}
+
+/* ---------- version panel ---------- */
+function renderVersions() {
+  const box = $("versions");
+  box.innerHTML = "";
+  versions.forEach((v, i) => {
+    const b = document.createElement("button");
+    b.className = "vbtn" + (v === currentVersion ? " active" : "");
+    b.innerHTML = '<span class="vnum">' + esc(v) + "</span>" +
+      (i === 0 ? '<span class="chip latest">latest</span>' : "") +
+      '<span class="vpath">/' + esc(v) + "/api/v2.0.0</span>";
+    b.onclick = () => { currentVersion = v; renderVersions(); loadVersionMeta(); refreshCurl(); };
+    box.appendChild(b);
+  });
+  $("vcount").textContent = versions.length + " tracked";
+  $("target-tag").textContent = currentVersion ? "target: " + currentVersion : "";
+}
+
+async function loadVersionMeta() {
+  const dl = $("vmeta");
+  dl.innerHTML = "";
+  if (!currentVersion) return;
+  try {
+    const r = await fetch(apiRoot(currentVersion) + "/", {
+      headers: { Authorization: "Basic " + await authToken() },
+    });
+    const j = await r.json();
+    const rows = [
+      ["title", j.api_title],
+      ["operations", j.operations],
+      ["swagger 2.0", '<a href="' + apiRoot(currentVersion) + '/swagger.json" rel="noopener">swagger.json</a>'],
+      ["openapi 3.0", '<a href="' + apiRoot(currentVersion) + '/openapi.json" rel="noopener">openapi.json</a>'],
+    ];
+    dl.innerHTML = rows.map(([k, v]) =>
+      "<div><dt>" + k + "</dt><dd>" + (k.includes("swagger") || k.includes("openapi") ? v : esc(String(v ?? "—"))) + "</dd></div>").join("");
+  } catch { /* index is cosmetic */ }
+}
+
+/* ---------- presets ---------- */
+function renderPresets() {
+  const box = $("presets");
+  PRESETS.forEach((pr) => {
+    const b = document.createElement("button");
+    b.className = "preset";
+    b.innerHTML = "<b>" + pr.m + "</b>" + esc(pr.p) + " · " + esc(pr.note);
+    b.onclick = () => {
+      $("method").value = pr.m;
+      $("path").value = pr.p;
+      $("body").value = pr.body ? JSON.stringify(pr.body, null, 2) : "";
+      syncBodyVisibility();
+      refreshCurl();
+    };
+    box.appendChild(b);
+  });
+}
+function syncBodyVisibility() {
+  const writable = ["POST", "PUT"].includes($("method").value);
+  $("body").style.display = writable ? "" : "none";
+  $("body-label").style.display = writable ? "" : "none";
+}
+
+/* ---------- transmit ---------- */
+async function transmit() {
+  if (!RAW_BASE) { $("banner").classList.add("show"); return; }
+  if (!currentVersion) return;
+  const btn = $("send");
+  btn.disabled = true;
+  const m = $("method").value;
+  const url = fullPath(currentVersion, $("path").value || "/");
+  const opts = { method: m, headers: { Authorization: "Basic " + await authToken() } };
+  const body = $("body").value.trim();
+  if (body && (m === "POST" || m === "PUT")) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = body;
+  }
+  const t0 = performance.now();
+  let status = 0, text = "", ctype = "";
+  try {
+    const r = await fetch(url, opts);
+    status = r.status;
+    ctype = r.headers.get("content-type") || "";
+    text = await r.text();
+  } catch (e) {
+    text = "network error: " + e.message + "\n(endpoint down, CORS blocked, or bad ?api= override)";
+  }
+  const ms = Math.round(performance.now() - t0);
+  const meta = $("resp-meta");
+  meta.style.display = "";
+  const sEl = $("resp-status");
+  sEl.textContent = status || "ERR";
+  sEl.className = "status-big s" + String(status)[0];
+  $("resp-time").textContent = ms + " ms";
+  $("resp-type").textContent = ctype;
+  const pre = $("resp");
+  pre.style.display = "";
+  $("resp-hint").style.display = "none";
+  try {
+    pre.innerHTML = highlight(JSON.stringify(JSON.parse(text), null, 2));
+  } catch {
+    pre.textContent = text || "(empty body)";
+  }
+  btn.disabled = false;
+}
+
+/* ---------- boot ---------- */
+async function probe() {
+  const led = $("led"), lt = $("led-text");
+  if (!RAW_BASE) {
+    $("banner").classList.add("show");
+    led.className = "led err"; lt.textContent = "no endpoint";
+    $("endpoint-label").textContent = "unconfigured";
+    $("versions").innerHTML = '<div class="hint">configure an endpoint to load versions</div>';
+    return;
+  }
+  $("endpoint-label").textContent = RAW_BASE.replace(/^https?:\/\//, "");
+  try {
+    const r = await fetch(RAW_BASE + "/healthz");
+    const j = await r.json();
+    versions = j.versions || [];
+    currentVersion = versions[0] || null;
+    led.className = "led on"; lt.textContent = "online";
+    renderVersions(); loadVersionMeta(); refreshCurl();
+  } catch {
+    led.className = "led err"; lt.textContent = "unreachable";
+    $("versions").innerHTML = '<div class="hint">could not reach ' + esc(RAW_BASE) + "/healthz</div>";
+  }
+}
+
+renderPresets();
+syncBodyVisibility();
+["method", "path", "body", "user", "pass"].forEach((id) =>
+  $(id).addEventListener("input", () => { syncBodyVisibility(); refreshCurl(); }));
+$("send").onclick = transmit;
+$("path").addEventListener("keydown", (e) => { if (e.key === "Enter") transmit(); });
+$("copy").onclick = async () => {
+  await navigator.clipboard.writeText($("curl").textContent);
+  $("copy").textContent = "COPIED"; setTimeout(() => ($("copy").textContent = "COPY"), 1200);
+};
+probe(); refreshCurl();
+</script>
+</body>
+</html>
