@@ -40,6 +40,10 @@ MAX_EVENT_BODY_BYTES = 4 * 1024 * 1024
 # Absent in normal installs, where /console simply 404s.
 CONSOLE_FILE = Path(__file__).with_name("console.html")
 
+# docs/landing.html, bundled the same way. Served at / only when the client
+# prefers HTML (a browser); curl and API clients keep the JSON index.
+LANDING_FILE = Path(__file__).with_name("landing.html")
+
 # The console is a single inline-script page (hence 'unsafe-inline'); it
 # fetches Google Fonts and, via its ?api= override, arbitrary user-chosen
 # emulator endpoints — hence the broad connect-src.
@@ -50,6 +54,17 @@ CONSOLE_CSP = (
     "script-src 'unsafe-inline'; "
     "img-src data:; "
     "connect-src https: http://127.0.0.1:* http://localhost:*; "
+    "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+)
+
+# The landing page only ever talks to its own origin (the /healthz badge).
+LANDING_CSP = (
+    "default-src 'none'; "
+    "style-src 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src https://fonts.gstatic.com; "
+    "script-src 'unsafe-inline'; "
+    "img-src data:; "
+    "connect-src 'self'; "
     "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 )
 
@@ -99,7 +114,15 @@ def build_app() -> Starlette:
     version_apps = {v: _LazyVersionApp(v) for v in versions}
     latest = versions[0]
 
-    async def index(request: Request) -> JSONResponse:
+    async def index(request: Request) -> HTMLResponse | JSONResponse:
+        if "text/html" in request.headers.get("accept", "") and LANDING_FILE.is_file():
+            return HTMLResponse(
+                LANDING_FILE.read_text("utf-8"),
+                headers={
+                    "Content-Security-Policy": LANDING_CSP,
+                    "Vary": "Accept",
+                },
+            )
         base = str(request.base_url).rstrip("/")
         return JSONResponse(
             {
