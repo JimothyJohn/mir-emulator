@@ -83,6 +83,42 @@ def test_console_404s_when_not_bundled(call):
     assert response["statusCode"] == 404
 
 
+def test_index_stays_json_for_api_clients_even_when_landing_bundled(call, tmp_path, monkeypatch):
+    # curl sends Accept: */* — the JSON contract must survive the landing page.
+    page = tmp_path / "landing.html"
+    page.write_text("<!DOCTYPE html><title>landing</title>", encoding="utf-8")
+    monkeypatch.setattr(serverless, "LANDING_FILE", page)
+    for accept in ({}, {"accept": "*/*"}, {"accept": "application/json"}):
+        response = call(event("GET", "/", headers=accept))
+        assert response["statusCode"] == 200
+        assert "application/json" in response["headers"]["content-type"]
+        assert "versions" in body_json(response)
+
+
+def test_index_serves_landing_page_to_browsers(call, tmp_path, monkeypatch):
+    page = tmp_path / "landing.html"
+    page.write_text("<!DOCTYPE html><title>landing</title>", encoding="utf-8")
+    monkeypatch.setattr(serverless, "LANDING_FILE", page)
+    browser_accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    response = call(event("GET", "/", headers={"accept": browser_accept}))
+    assert response["statusCode"] == 200
+    assert "text/html" in response["headers"]["content-type"]
+    assert "landing" in response["body"]
+    assert response["headers"]["vary"] == "Accept"
+    csp = response["headers"]["content-security-policy"]
+    assert "default-src 'none'" in csp
+    assert "connect-src 'self'" in csp
+    assert "frame-ancestors 'none'" in csp
+    assert response["headers"]["x-content-type-options"] == "nosniff"
+
+
+def test_index_serves_json_to_browsers_when_landing_not_bundled(call, monkeypatch):
+    monkeypatch.setattr(serverless, "LANDING_FILE", serverless.LANDING_FILE.parent / "absent.html")
+    response = call(event("GET", "/", headers={"accept": "text/html"}))
+    assert response["statusCode"] == 200
+    assert "application/json" in response["headers"]["content-type"]
+
+
 def test_console_serves_bundled_page_with_csp(call, tmp_path, monkeypatch):
     page = tmp_path / "console.html"
     page.write_text("<!DOCTYPE html><title>fleet console</title>", encoding="utf-8")

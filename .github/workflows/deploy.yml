@@ -11,6 +11,7 @@ on:
       - packages/mir-emulator/**
       - deploy/template.yaml
       - docs/index.html
+      - docs/landing.html
       - scripts/deploy_demo.sh
       - .github/workflows/deploy.yml
       - uv.lock

@@ -47,8 +47,10 @@ uv pip install \
 
 find "$BUILD_DIR/site" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
 
-# The fleet console ships inside the bundle and is served at /console.
+# The fleet console ships inside the bundle and is served at /console;
+# the landing page is served at / to clients that prefer HTML.
 cp "$REPO_ROOT/docs/index.html" "$BUILD_DIR/site/mir_emulator/console.html"
+cp "$REPO_ROOT/docs/landing.html" "$BUILD_DIR/site/mir_emulator/landing.html"
 
 log "Zipping bundle"
 (cd "$BUILD_DIR/site" && zip -qr "$BUILD_DIR/code.zip" .)
