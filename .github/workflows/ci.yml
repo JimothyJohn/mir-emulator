@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Sync (locked)
+        run: uv sync --locked --all-packages
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Type check
+        run: uv run ty check packages
+
+      - name: Unit + conformance tests (all tracked MiR versions)
+        run: uv run pytest -q -m "not integration and not live_portal"
+
+      - name: Integration tests (real servers over TCP)
+        run: uv run pytest -q -m integration
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Build one wheel per tracked MiR version
+        run: |
+          uv sync --locked --all-packages
+          uv run python scripts/build_versioned.py --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mir-emulator-wheels
+          path: dist/
+          retention-days: 30

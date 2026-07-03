@@ -1,0 +1,39 @@
+# Virtual workspace root — the installable packages live under packages/.
+# `uv sync --all-packages` installs every member plus the dev group.
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+    "hypothesis>=6.100",
+    "ruff>=0.8",
+    "ty>=0.0.1a5",
+]
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+    "packages/mir-emulator/tests",
+    "packages/mir-spec-scraper/tests",
+]
+markers = [
+    "integration: tests that boot a real emulator server over TCP",
+    "live_portal: tests that hit the real MiR support portal (needs MIR_PORTAL_EMAIL/MIR_PORTAL_PASSWORD)",
+]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "S", "SIM", "RUF"]
+ignore = [
+    "S101", # assert is the point of pytest
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S105", "S106", "S310"] # hardcoded test creds / test URLs are intentional

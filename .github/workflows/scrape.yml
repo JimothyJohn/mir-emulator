@@ -1,0 +1,73 @@
+name: Scrape MiR portal for new API versions
+
+# The self-updating loop: check the MiR support portal weekly, and if the
+# tracked-version selection changes (new major/minor/patch), download the new
+# API files, update the bundled registry, and open a PR. CI on that PR runs
+# the full conformance suite against the new specs, so a new MiR release is
+# "accounted for" before it merges.
+
+on:
+  schedule:
+    - cron: "17 5 * * 1" # Mondays 05:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check portal credentials
+        id: creds
+        env:
+          MIR_PORTAL_EMAIL: ${{ secrets.MIR_PORTAL_EMAIL }}
+        run: |
+          if [ -z "$MIR_PORTAL_EMAIL" ]; then
+            echo "::notice::MIR_PORTAL_EMAIL/MIR_PORTAL_PASSWORD secrets are not set; skipping scrape. Create a free account at supportportal.mobile-industrial-robots.com and add the secrets to enable self-updating."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sync (locked)
+        if: steps.creds.outputs.available == 'true'
+        run: uv sync --locked --all-packages
+
+      - name: Live portal smoke test (login + listing parse)
+        if: steps.creds.outputs.available == 'true'
+        env:
+          MIR_PORTAL_EMAIL: ${{ secrets.MIR_PORTAL_EMAIL }}
+          MIR_PORTAL_PASSWORD: ${{ secrets.MIR_PORTAL_PASSWORD }}
+        run: uv run pytest -q -m live_portal
+
+      - name: Scrape and update specs
+        if: steps.creds.outputs.available == 'true'
+        id: scrape
+        env:
+          MIR_PORTAL_EMAIL: ${{ secrets.MIR_PORTAL_EMAIL }}
+          MIR_PORTAL_PASSWORD: ${{ secrets.MIR_PORTAL_PASSWORD }}
+        run: uv run mir-spec-scraper sync
+
+      - name: Open PR with new API versions
+        if: steps.creds.outputs.available == 'true' && steps.scrape.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: scrape/update-specs
+          commit-message: "feat(specs): ${{ steps.scrape.outputs.summary }}"
+          title: "Track new MiR REST API versions"
+          body: |
+            Automated spec sync from the [MiR support portal](https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/).
+
+            ${{ steps.scrape.outputs.summary }}
+
+            CI on this PR runs the full conformance + security suite against the
+            updated spec set. Merge only when green.
+          labels: specs, automated

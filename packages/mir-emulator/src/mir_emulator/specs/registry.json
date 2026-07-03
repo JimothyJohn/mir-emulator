@@ -1,0 +1,34 @@
+{
+  "source": "https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/",
+  "selection_rule": {
+    "majors": 3,
+    "policy": "Track the latest minor.patch of each of the newest 3 major versions that publish REST API files. If fewer than 3 majors publish files, fill the remaining slots with the previous minor lines of the newest major."
+  },
+  "updated": "2026-07-02",
+  "tracked": [
+    {
+      "mir_version": "3.5.4",
+      "api_path_version": "v2.0.0",
+      "format": "swagger-2.0",
+      "file": "3.5.4/swagger.json",
+      "sha256": "0eb3d15345500f9c78129be7c54afb3c014fdeb834d10bef8cb4457ede94d01d",
+      "official": true,
+      "provenance": "Official MiR250 3.5.4 swagger.json, mirrored from github.com/processrobotics/mir-api@master"
+    },
+    {
+      "mir_version": "2.7.0",
+      "api_path_version": "v2.0.0",
+      "format": "openapi-3.0",
+      "file": "2.7.0/openapi.yaml",
+      "sha256": "d9eeaee2663e72a236a7a78193a9f9c50ca9d374c58dbfc158c9710b40329970",
+      "official": false,
+      "provenance": "Community conversion of the official MiR100 2.7.0 REST API PDF, from github.com/osrf/mir100-client@master"
+    }
+  ],
+  "wanted": [
+    "Latest 2.14.x official file (replaces the 2.7.0 community seed)",
+    "Latest 3.5.x+ official file if newer than 3.5.4",
+    "Third slot per selection rule (3.4.x, or a 4.x/1.x major if the portal lists one)"
+  ],
+  "notes": "The support portal requires a (free) account; anonymous scraping is blocked by a server-side login wall. The scrape workflow fills 'wanted' entries once MIR_PORTAL_EMAIL/MIR_PORTAL_PASSWORD secrets are configured."
+}

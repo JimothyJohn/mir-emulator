@@ -1,0 +1,176 @@
+#!/usr/bin/env bash
+
+set -e
+set -o nounset
+set -o pipefail
+
+export ENV="${ENV:-dev}"
+
+if [[ -f ".env.${ENV}" ]]; then
+    set -a
+    . ".env.${ENV}"
+    set +a
+fi
+
+if [[ "${TRACE-0}" == "1" ]]; then
+    set -o xtrace
+fi
+
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
+}
+
+command_exists() {
+    type "$1" &> /dev/null
+}
+
+help_function() {
+    cat <<EOF
+
+Usage: $(basename "$0") [-h] [-u] [-i] [-t] [-s] [--scrape] [--build]
+
+Manages the MiR REST API emulator monorepo: install -> lint -> unit ->
+integration -> (optional) live portal scrape / versioned wheel builds.
+
+Options:
+  -h, --help              This message
+  -u, --unit-test         Lint + unit tests (fast, no network)
+  -i, --integration-test  Boot real emulator servers and test over TCP
+  -t, --test              Everything: lint, unit, integration
+  -s, --serve             Run the emulator (SERVE_ARGS to customize)
+      --scrape            Sync specs from the MiR portal (needs MIR_PORTAL_EMAIL/PASSWORD)
+      --build             Build one mir-emulator wheel per tracked MiR version
+
+Examples:
+  ./Quickstart -t
+  ./Quickstart -s                              # newest tracked version on :8080
+  SERVE_ARGS="--mir-version 2.7.0" ./Quickstart -s
+
+EOF
+}
+
+check_dependencies() {
+    if ! command_exists "uv"; then
+        log "uv not found. Installing..."
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        if [[ -f "$HOME/.local/bin/env" ]]; then
+            . "$HOME/.local/bin/env"
+        fi
+    fi
+}
+
+validate_and_build() {
+    log "Syncing environment"
+    if ! uv sync --locked --all-packages -q; then
+        log "ERROR: uv sync --locked failed (lockfile drift?)"
+        return 1
+    fi
+
+    if ! uv run ruff check -q .; then
+        log "ERROR: lint failed"
+        return 1
+    fi
+
+    if ! uv run ruff format -q --check .; then
+        log "ERROR: formatting check failed (run: uv run ruff format .)"
+        return 1
+    fi
+
+    if ! uv run ty check packages; then
+        log "ERROR: type check failed"
+        return 1
+    fi
+
+    return 0
+}
+
+test_unit() {
+    log "Running unit + conformance tests..."
+    if ! uv run pytest -q -m "not integration and not live_portal"; then
+        log "ERROR: unit tests failed"
+        return 1
+    fi
+    return 0
+}
+
+test_integration() {
+    log "Running integration tests (real servers over TCP)..."
+    if ! uv run pytest -q -m integration; then
+        log "ERROR: integration tests failed"
+        return 1
+    fi
+    return 0
+}
+
+scrape() {
+    log "Scraping MiR support portal for new REST API files..."
+    uv run mir-spec-scraper sync
+    log "Review changes with: git status && git diff"
+}
+
+serve() {
+    # SERVE_ARGS example: "--mir-version 2.7.0 --port 9090 --no-auth"
+    uv run mir-emulator ${SERVE_ARGS:-}
+}
+
+build_wheels() {
+    log "Building versioned wheels..."
+    uv run python scripts/build_versioned.py
+}
+
+main() {
+    check_dependencies
+
+    if [[ "$#" -eq 0 ]]; then
+        help_function
+        exit 0
+    fi
+
+    while [[ "$#" -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                help_function
+                exit 0
+                ;;
+            -u|--unit-test)
+                validate_and_build || exit 1
+                test_unit || exit 1
+                exit 0
+                ;;
+            -i|--integration-test)
+                validate_and_build || exit 1
+                test_integration || exit 1
+                exit 0
+                ;;
+            -t|--test)
+                validate_and_build || exit 1
+                test_unit || exit 1
+                test_integration || exit 1
+                log "All checks passed"
+                exit 0
+                ;;
+            -s|--serve)
+                validate_and_build || exit 1
+                serve
+                exit 0
+                ;;
+            --scrape)
+                validate_and_build || exit 1
+                scrape
+                exit 0
+                ;;
+            --build)
+                validate_and_build || exit 1
+                build_wheels
+                exit 0
+                ;;
+            *)
+                echo "Unknown parameter passed: $1"
+                help_function
+                exit 1
+                ;;
+        esac
+    done
+}
+
+main "$@"
