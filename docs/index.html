@@ -250,6 +250,27 @@ pre.resp .b { color: #e08cc8; }
 .connect-btn[disabled] { opacity: .45; cursor: wait; }
 .hint.warn { color: #f0b6b6; }
 .hint.ok { color: var(--green); }
+.auth label .dim { color: var(--ink-faint); text-transform: none; letter-spacing: 0; }
+
+/* ---------- telemetry strip ---------- */
+.telemetry {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 14px; padding: 9px 12px;
+  background: #0b0e11; border: 1px solid var(--line); border-radius: 8px;
+  font-size: 12px; color: var(--ink-dim);
+}
+.telemetry button {
+  cursor: pointer; flex: none;
+  font-family: var(--display); font-weight: 700; font-size: 10.5px;
+  letter-spacing: .12em; text-transform: uppercase;
+  background: transparent; color: var(--ink-dim);
+  border: 1px solid var(--line-bright); border-radius: 6px; padding: 5px 10px;
+}
+.telemetry button:hover { color: var(--yellow); border-color: var(--yellow-dim); }
+.telemetry button.live { color: var(--green); border-color: var(--green); }
+#tele-read { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#tele-read b { color: var(--yellow); font-weight: 600; }
+#tele-read .exec { color: var(--green); }
 .token b { color: var(--ink-dim); }
 
 /* ---------- footer ---------- */
@@ -337,6 +358,18 @@ footer .hazard-mini { height: 3px; margin-bottom: 16px; opacity: .5;
             <div style="flex:1"><label for="user">user</label><input type="text" id="user" value="distributor" autocomplete="off"></div>
             <div style="flex:1"><label for="pass">password</label><input type="text" id="pass" value="distributor" autocomplete="off"></div>
           </div>
+          <div class="row">
+            <div style="flex:1">
+              <label for="session">virtual robot session <span class="dim">(emulator only)</span></label>
+              <input type="text" id="session" spellcheck="false" autocomplete="off" maxlength="64">
+            </div>
+            <div style="flex:none; align-self:flex-end">
+              <button class="connect-btn" id="new-session" style="padding:9px 12px" title="fresh isolated robot">NEW</button>
+            </div>
+          </div>
+          <div class="hint">Your session id gets its own robot &mdash; queue, registers, status &mdash; so
+            everyone on this demo simulates independently. Clear it to share the default robot.
+            Real robots ignore the header.</div>
           <div class="token" id="token-view"></div>
         </div>
       </section>
@@ -345,6 +378,10 @@ footer .hazard-mini { height: 3px; margin-bottom: 16px; opacity: .5;
     <section class="panel">
       <div class="panel-head">&#9881; Request console <span class="tag" id="target-tag"></span></div>
       <div class="panel-body">
+        <div class="telemetry">
+          <button id="tele-toggle" title="poll GET /status every 2s">&#9654; TELEMETRY</button>
+          <span id="tele-read">off &mdash; enqueue a mission, then watch your robot run it</span>
+        </div>
         <div class="presets" id="presets"></div>
         <div class="reqline">
           <select id="method"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select>
@@ -442,6 +479,22 @@ async function authToken() {
   return btoa(user + ":" + hash);
 }
 
+/* ---------- virtual robot session ---------- */
+const SESSION_KEY = "mir-console-session";
+function newSessionId() {
+  const bytes = new Uint8Array(4);
+  crypto.getRandomValues(bytes);
+  return "web-" + [...bytes].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+function sessionId() {
+  return $("session").value.trim();
+}
+async function requestHeaders(extra = {}) {
+  const headers = { Authorization: "Basic " + await authToken(), ...extra };
+  if (sessionId()) headers["X-MiR-Session"] = sessionId();
+  return headers;
+}
+
 /* ---------- helpers ---------- */
 function apiRoot(v)   { return MODE === "robot" ? BASE : BASE + "/" + v; }
 function fullPath(v, p) { return apiRoot(v) + "/api/v2.0.0" + (p.startsWith("/") ? p : "/" + p); }
@@ -462,6 +515,8 @@ function highlight(json) {
 async function refreshCurl() {
   const m = $("method").value, p = $("path").value || "/";
   let cmd = "curl -X " + m + " \\\n  '" + fullPath(currentVersion || "latest", p) + "' \\\n  -H 'Authorization: Basic " + await authToken() + "'";
+  if (sessionId())
+    cmd += " \\\n  -H 'X-MiR-Session: " + sessionId().replace(/'/g, "") + "'";
   const body = $("body").value.trim();
   if (body && (m === "POST" || m === "PUT"))
     cmd += " \\\n  -H 'Content-Type: application/json' \\\n  -d '" + body.replace(/'/g, "'\\''") + "'";
@@ -503,9 +558,7 @@ async function loadVersionMeta() {
   try {
     // Fleet mode and a locally-run `mir-emulator` both serve a JSON index and
     // their spec files; a real robot serves neither — hide the panel then.
-    const r = await fetchT(apiRoot(currentVersion) + "/", {
-      headers: { Authorization: "Basic " + await authToken() },
-    });
+    const r = await fetchT(apiRoot(currentVersion) + "/", { headers: await requestHeaders() });
     if (!r.ok) return;
     const j = await r.json();
     if (!j.api_title && !j.emulated_mir_version) return;
@@ -551,7 +604,7 @@ async function transmit() {
   btn.disabled = true;
   const m = $("method").value;
   const url = fullPath(currentVersion, $("path").value || "/");
-  const opts = { method: m, headers: { Authorization: "Basic " + await authToken() } };
+  const opts = { method: m, headers: await requestHeaders() };
   const body = $("body").value.trim();
   if (body && (m === "POST" || m === "PUT")) {
     opts.headers["Content-Type"] = "application/json";
@@ -590,6 +643,44 @@ async function transmit() {
   btn.disabled = false;
 }
 
+/* ---------- telemetry: watch the mission run ---------- */
+let teleTimer = null;
+
+async function teleTick() {
+  if (!BASE) return;
+  try {
+    const r = await fetchT(fullPath(currentVersion, "/status"), { headers: await requestHeaders() }, 4000);
+    const s = await r.json();
+    if (!r.ok) throw new Error(s.error_human || r.status);
+    const executing = s.state_text === "Executing";
+    const pos = s.position || {};
+    $("tele-read").innerHTML =
+      '<span class="' + (executing ? "exec" : "") + '">' + esc(String(s.state_text ?? "?")) + "</span>" +
+      " &middot; bat <b>" + esc(String(s.battery_percentage ?? "?")) + "%</b>" +
+      (pos.x !== undefined ? " &middot; pos <b>(" + esc(String(pos.x)) + ", " + esc(String(pos.y)) + ")</b>" : "") +
+      (s.mission_queue_id ? " &middot; queue <b>#" + esc(String(s.mission_queue_id)) + "</b>" : "") +
+      (s.mission_text ? " &middot; " + esc(String(s.mission_text)) : "");
+  } catch (e) {
+    $("tele-read").textContent = "telemetry error: " + e.message;
+  }
+}
+
+function setTelemetry(on) {
+  const btn = $("tele-toggle");
+  if (on && !teleTimer) {
+    btn.classList.add("live");
+    btn.innerHTML = "&#9632; TELEMETRY";
+    teleTick();
+    teleTimer = setInterval(teleTick, 2000);
+  } else if (!on && teleTimer) {
+    clearInterval(teleTimer);
+    teleTimer = null;
+    btn.classList.remove("live");
+    btn.innerHTML = "&#9654; TELEMETRY";
+    $("tele-read").textContent = "off — enqueue a mission, then watch your robot run it";
+  }
+}
+
 /* ---------- endpoint selection / probe ---------- */
 function syncMixedContentWarning(base) {
   const blocked = location.protocol === "https:" && /^http:\/\//i.test(base);
@@ -598,6 +689,7 @@ function syncMixedContentWarning(base) {
 }
 
 async function connectTo(rawBase) {
+  setTelemetry(false); // don't poll a stale endpoint
   const led = $("led"), lt = $("led-text"), st = $("ep-status");
   const base = normalizeBase(rawBase);
   if (!base) { st.className = "hint warn"; st.textContent = "enter an endpoint first"; return; }
@@ -689,6 +781,20 @@ syncBodyVisibility();
 $("send").onclick = transmit;
 $("path").addEventListener("keydown", (e) => { if (e.key === "Enter") transmit(); });
 $("connect").onclick = () => connectTo(selectedEndpoint());
+$("tele-toggle").onclick = () => setTelemetry(!teleTimer);
+$("new-session").onclick = () => {
+  $("session").value = newSessionId();
+  try { localStorage.setItem(SESSION_KEY, $("session").value); } catch { /* private mode */ }
+  refreshCurl();
+};
+$("session").addEventListener("input", () => {
+  try { localStorage.setItem(SESSION_KEY, sessionId()); } catch { /* private mode */ }
+  refreshCurl();
+});
+try {
+  $("session").value = localStorage.getItem(SESSION_KEY) ?? newSessionId();
+  localStorage.setItem(SESSION_KEY, $("session").value);
+} catch { $("session").value = newSessionId(); }
 $("ep-demo").addEventListener("change", () => { syncEndpointForm(); connectTo(DEFAULT_BASE); });
 $("ep-custom").addEventListener("change", () => { syncEndpointForm(); $("custom-url").focus(); });
 $("custom-url").addEventListener("input", syncEndpointForm);
