@@ -26,6 +26,19 @@ def load_registry() -> dict:
     return json.loads((_specs_dir() / "registry.json").read_text())
 
 
+def primary_source() -> str:
+    """The MiR support portal page the tracked specs are scraped from."""
+    return load_registry()["source"]
+
+
+def tracked_entry(mir_version: str) -> dict:
+    """The raw registry record for one tracked version (provenance, hashes)."""
+    for entry in load_registry()["tracked"]:
+        if entry["mir_version"] == mir_version:
+            return entry
+    raise KeyError(f"MiR version {mir_version!r} is not tracked")
+
+
 def tracked_specs() -> list[TrackedSpec]:
     return [
         TrackedSpec(

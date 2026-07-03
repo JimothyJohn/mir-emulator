@@ -83,11 +83,11 @@ def test_console_404s_when_not_bundled(call):
     assert response["statusCode"] == 404
 
 
-def test_index_stays_json_for_api_clients_even_when_landing_bundled(call, tmp_path, monkeypatch):
-    # curl sends Accept: */* — the JSON contract must survive the landing page.
-    page = tmp_path / "landing.html"
-    page.write_text("<!DOCTYPE html><title>landing</title>", encoding="utf-8")
-    monkeypatch.setattr(serverless, "LANDING_FILE", page)
+def test_index_stays_json_for_api_clients_even_when_console_bundled(call, tmp_path, monkeypatch):
+    # curl sends Accept: */* — the JSON contract must survive the HTML page.
+    page = tmp_path / "console.html"
+    page.write_text("<!DOCTYPE html><title>console</title>", encoding="utf-8")
+    monkeypatch.setattr(serverless, "CONSOLE_FILE", page)
     for accept in ({}, {"accept": "*/*"}, {"accept": "application/json"}):
         response = call(event("GET", "/", headers=accept))
         assert response["statusCode"] == 200
@@ -95,28 +95,42 @@ def test_index_stays_json_for_api_clients_even_when_landing_bundled(call, tmp_pa
         assert "versions" in body_json(response)
 
 
-def test_index_serves_landing_page_to_browsers(call, tmp_path, monkeypatch):
-    page = tmp_path / "landing.html"
-    page.write_text("<!DOCTYPE html><title>landing</title>", encoding="utf-8")
-    monkeypatch.setattr(serverless, "LANDING_FILE", page)
+def test_index_serves_console_page_to_browsers(call, tmp_path, monkeypatch):
+    # Landing page and console are the same document — parity by construction.
+    page = tmp_path / "console.html"
+    page.write_text("<!DOCTYPE html><title>console</title>", encoding="utf-8")
+    monkeypatch.setattr(serverless, "CONSOLE_FILE", page)
     browser_accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-    response = call(event("GET", "/", headers={"accept": browser_accept}))
-    assert response["statusCode"] == 200
-    assert "text/html" in response["headers"]["content-type"]
-    assert "landing" in response["body"]
-    assert response["headers"]["vary"] == "Accept"
-    csp = response["headers"]["content-security-policy"]
+    landing = call(event("GET", "/", headers={"accept": browser_accept}))
+    assert landing["statusCode"] == 200
+    assert "text/html" in landing["headers"]["content-type"]
+    assert "console" in landing["body"]
+    assert landing["headers"]["vary"] == "Accept"
+    csp = landing["headers"]["content-security-policy"]
     assert "default-src 'none'" in csp
-    assert "connect-src 'self'" in csp
     assert "frame-ancestors 'none'" in csp
-    assert response["headers"]["x-content-type-options"] == "nosniff"
+    assert landing["headers"]["x-content-type-options"] == "nosniff"
+    console = call(event("GET", "/console"))
+    assert console["body"] == landing["body"]
+    assert console["headers"]["content-security-policy"] == csp
 
 
-def test_index_serves_json_to_browsers_when_landing_not_bundled(call, monkeypatch):
-    monkeypatch.setattr(serverless, "LANDING_FILE", serverless.LANDING_FILE.parent / "absent.html")
+def test_index_serves_json_to_browsers_when_console_not_bundled(call, monkeypatch):
+    monkeypatch.setattr(serverless, "CONSOLE_FILE", serverless.CONSOLE_FILE.parent / "absent.html")
     response = call(event("GET", "/", headers={"accept": "text/html"}))
     assert response["statusCode"] == 200
     assert "application/json" in response["headers"]["content-type"]
+
+
+def test_index_json_names_the_primary_source(call):
+    doc = body_json(call(event("GET", "/")))
+    assert doc["primary_source"].startswith("https://")
+    for version in registry.supported_versions():
+        version_index = body_json(call(event("GET", f"/{version}/")))
+        source = version_index["source"]
+        assert source["primary_source"] == doc["primary_source"]
+        assert source["provenance"]
+        assert source["official"] is True
 
 
 def test_console_serves_bundled_page_with_csp(call, tmp_path, monkeypatch):
@@ -170,13 +184,22 @@ def test_unknown_version_prefix_is_404_json(call):
     assert body_json(response)["error_code"] == "404"
 
 
+def seeded_mission_guid(call, version: str) -> str:
+    """A mission the emulated robot actually knows — enqueueing anything else
+    is rejected with 400, exactly like a real robot."""
+    listing = call(event("GET", f"/{version}/api/v2.0.0/missions", headers={"authorization": AUTH}))
+    assert listing["statusCode"] == 200
+    return json.loads(listing["body"])[0]["guid"]
+
+
 def test_state_survives_across_invocations_within_container(call):
+    mission = seeded_mission_guid(call, "3.8.1")
     enqueue = call(
         event(
             "POST",
             "/3.8.1/api/v2.0.0/mission_queue",
             headers={"authorization": AUTH, "content-type": "application/json"},
-            body=json.dumps({"mission_id": "mission-guid-from-test"}),
+            body=json.dumps({"mission_id": mission}),
         )
     )
     assert enqueue["statusCode"] == 201
@@ -188,21 +211,36 @@ def test_state_survives_across_invocations_within_container(call):
 
 
 def test_versions_do_not_share_state(call):
-    call(
+    enqueue = call(
         event(
             "POST",
             "/3.7.2/api/v2.0.0/mission_queue",
             headers={"authorization": AUTH},
-            body=json.dumps({"mission_id": "isolated"}),
+            body=json.dumps({"mission_id": seeded_mission_guid(call, "3.7.2")}),
         )
     )
+    assert enqueue["statusCode"] == 201
     old = call(event("GET", "/2.14.7/api/v2.0.0/mission_queue", headers={"authorization": AUTH}))
     assert old["statusCode"] == 200
-    assert all(entry.get("mission_id") != "isolated" for entry in json.loads(old["body"]))
+    assert json.loads(old["body"]) == [], "3.7.2's queue entry must not appear on 2.14.7"
+
+
+def test_unknown_mission_id_is_rejected_like_a_real_robot(call):
+    response = call(
+        event(
+            "POST",
+            "/3.8.1/api/v2.0.0/mission_queue",
+            headers={"authorization": AUTH},
+            body=json.dumps({"mission_id": "no-such-mission-guid"}),
+        )
+    )
+    assert response["statusCode"] == 400
+    assert "Argument error" in body_json(response)["error_human"]
 
 
 def test_base64_encoded_body_is_decoded(call):
-    payload = base64.b64encode(json.dumps({"mission_id": "b64"}).encode()).decode()
+    mission = seeded_mission_guid(call, "3.8.1")
+    payload = base64.b64encode(json.dumps({"mission_id": mission}).encode()).decode()
     response = call(
         event(
             "POST",
@@ -213,7 +251,7 @@ def test_base64_encoded_body_is_decoded(call):
         )
     )
     assert response["statusCode"] == 201
-    assert body_json(response)["mission_id"] == "b64"
+    assert body_json(response)["mission_id"] == mission
 
 
 def test_malformed_base64_body_is_400_not_crash(call):

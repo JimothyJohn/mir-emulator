@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MiR Emulator — Fleet Console</title>
-<meta name="description" content="Live demo console for the mir-emulator — a spec-faithful emulator of the MiR robot REST API, every tracked version on one serverless endpoint.">
+<title>MiR Emulator — a spec-faithful emulator of the MiR robot REST API</title>
+<meta name="description" content="Develop and harden MiR robot integrations without a robot: every tracked MiR software version of the REST API on one public endpoint, with a live console built from the official MiR API documentation.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%2300bfff'/><rect x='18' y='34' width='64' height='32' rx='6' fill='white'/><circle cx='34' cy='50' r='7' fill='%2300bfff'/><circle cx='66' cy='50' r='7' fill='%2300bfff'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -324,6 +324,51 @@ footer a { color: var(--tint-2); }
 footer code { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.18); color: var(--tint-2); }
 
 @media (prefers-reduced-motion: reduce) { .led.on { animation: none; } }
+
+/* ---------- landing sections (hero, docs, quickstart, endpoints) ---------- */
+#console, #docs, #quickstart { scroll-margin-top: 96px; } /* clear the sticky header */
+.topnav { display: flex; align-items: center; gap: 18px; font-size: 14px; }
+.topnav a { color: var(--ink-dim); }
+.topnav a:hover { color: var(--blue-deep); text-decoration: none; }
+.hero { padding: 56px 0 10px; max-width: 860px; }
+.hero h2 { font-size: 42px; line-height: 50px; font-weight: 300; margin: 0; }
+.hero h2 span { color: var(--brand); font-weight: 400; }
+.hero p { margin-top: 16px; font-size: 16.5px; color: var(--ink-dim); max-width: 66ch; }
+.cta { margin-top: 26px; display: flex; gap: 12px; flex-wrap: wrap; }
+.btn {
+  display: inline-block; cursor: pointer;
+  font-weight: 600; font-size: 14px; font-family: var(--sans);
+  border-radius: 999px; padding: 10px 26px;
+  transition: background-color .3s ease, color .3s ease, border-color .3s ease;
+}
+.btn-primary { background: var(--blue); border: 1px solid var(--blue); color: #fff; }
+.btn-primary:hover { background: var(--blue-deep); border-color: var(--blue-deep); color: #fff; text-decoration: none; }
+.btn-ghost { background: #fff; border: 1px solid var(--blue); color: var(--blue); }
+.btn-ghost:hover { background: var(--tint); color: var(--blue-deep); border-color: var(--blue-deep); text-decoration: none; }
+.sect-title { font-size: 28px; line-height: 34px; font-weight: 300; margin: 54px 0 6px; }
+.lead { color: var(--ink-dim); max-width: 72ch; }
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
+@media (max-width: 860px) { .cards { grid-template-columns: 1fr; } }
+.card {
+  border: 1px solid var(--line); border-radius: .4rem; padding: 20px;
+  background: #fff; transition: box-shadow .3s ease;
+}
+.card:hover { box-shadow: 0 0 15px var(--tint-2); }
+.card h3 { font-size: 16.5px; font-weight: 600; margin-bottom: 8px; }
+.card h3::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--brand); margin-right: 9px; vertical-align: 1px; }
+.card p { font-size: 13.5px; color: var(--ink-dim); }
+.quick { margin-top: 20px; border: 1px solid var(--tint-2); border-left: 4px solid var(--brand); border-radius: .4rem; background: var(--tint); padding: 20px; }
+.quick .steps { display: grid; gap: 14px; margin-top: 6px; font-size: 14px; color: var(--ink-dim); }
+pre.snippet {
+  background: var(--code-bg); border: 1px solid var(--line); border-radius: .4rem;
+  padding: 12px 14px; font-family: var(--mono); font-size: 12.5px; color: var(--ink);
+  overflow-x: auto; line-height: 1.6; margin-top: 6px;
+}
+table.plain { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13.5px; }
+table.plain th, table.plain td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.plain th { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+table.plain td:first-child { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; color: var(--blue-deep); }
+table.plain td:last-child { color: var(--ink-dim); }
 </style>
 </head>
 <body>
@@ -338,6 +383,11 @@ footer code { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,
       <h1>MiR Emulator <span>/</span> Fleet Console</h1>
       <div class="sub">Spec-faithful MiR robot REST API &mdash; every tracked version, one serverless endpoint</div>
     </div>
+    <nav class="topnav">
+      <a href="#console">Console</a>
+      <a href="#docs">Documentation</a>
+      <a href="https://github.com/JimothyJohn/mir-emulator" rel="noopener">GitHub</a>
+    </nav>
     <div class="head-right">
       <div class="led-box"><span class="led" id="led"></span><span id="led-text">probing&hellip;</span></div>
       <div class="led-box" id="endpoint-box" title="API endpoint">&#9096; <span id="endpoint-label">&mdash;</span></div>
@@ -347,7 +397,48 @@ footer code { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,
 
 <div class="wrap">
 
-  <div class="intro">
+  <div class="hero">
+    <h2>Build against a MiR robot<br><span>without a MiR robot.</span></h2>
+    <p>
+      A spec-faithful, open-source emulator of the
+      <a href="https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/" rel="noopener">Mobile Industrial Robots REST API</a>
+      &mdash; every endpoint generated from MiR's official API documentation (<a href="#docs">primary sources below</a>).
+      Every tracked MiR software version is served from this endpoint, so you can develop, harden, and
+      regression-test your fleet integration before it ever touches hardware &mdash; then point the same
+      code at a real robot's IP.
+    </p>
+    <div class="cta">
+      <a class="btn btn-primary" href="#console">Use the live console</a>
+      <a class="btn btn-ghost" href="#quickstart">Start in 30 seconds</a>
+      <a class="btn btn-ghost" href="https://github.com/JimothyJohn/mir-emulator" rel="noopener">View on GitHub</a>
+    </div>
+  </div>
+
+  <h2 class="sect-title">Why an emulator</h2>
+  <p class="lead">Robot time is scarce and mistakes on real hardware are expensive. This endpoint gives you the API surface with none of the blast radius.</p>
+  <div class="cards">
+    <div class="card">
+      <h3>Every tracked version</h3>
+      <p>Each MiR software generation is mounted at its own prefix &mdash; <code>/&lt;version&gt;/api/v2.0.0/&hellip;</code> &mdash;
+        so you can diff behavior across releases from one URL and catch upgrade breakage early.
+        Pick the version in the console's <a href="#console">software version panel</a>.</p>
+    </div>
+    <div class="card">
+      <h3>Real behavior, real auth</h3>
+      <p>Missions execute over simulated time: the queue drains FIFO with real <code>ordered/started/finished</code>
+        timestamps, battery drains, position moves, PLC registers hold writes, and unknown mission ids are
+        rejected with <code>400</code> like a factory robot. Auth mirrors one too &mdash;
+        <code>Basic BASE64(user:SHA-256(password))</code>, default <code>distributor/distributor</code>.</p>
+    </div>
+    <div class="card">
+      <h3>Made for hardening</h3>
+      <p>Deterministic responses generated from the official API definitions, documented error paths
+        (400/404/409) you can trigger on purpose, and per-session virtual robots &mdash; send an
+        <code>X-MiR-Session</code> header and you get your own isolated fleet state.</p>
+    </div>
+  </div>
+
+  <div class="intro" id="console">
     <b>&#9888; Shared demo unit</b>
     <p>
       This console talks to a live, public emulator of the
@@ -469,12 +560,88 @@ footer code { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,
     </section>
   </div>
 
+  <h2 class="sect-title" id="quickstart">Start in thirty seconds</h2>
+  <div class="quick">
+    <div class="steps">
+      <div>
+        <b>1 &mdash; From your terminal.</b> The demo speaks plain HTTPS; the only trick is MiR's hashed-password Basic auth.
+        A robot only queues missions it knows, so list them first &mdash; exactly like a real one:
+<pre class="snippet">TOKEN=$(printf 'distributor:%s' "$(printf 'distributor' | shasum -a 256 | cut -d' ' -f1)" | base64 | tr -d '\n')
+curl -H "Authorization: Basic $TOKEN" https://mir.advin.io/latest/api/v2.0.0/status
+MISSION=$(curl -s -H "Authorization: Basic $TOKEN" https://mir.advin.io/latest/api/v2.0.0/missions | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["guid"])')
+curl -X POST -H "Authorization: Basic $TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"mission_id\": \"$MISSION\"}" https://mir.advin.io/latest/api/v2.0.0/mission_queue</pre>
+      </div>
+      <div>
+        <b>2 &mdash; Or skip the terminal.</b> The <a href="#console">console above</a> has the full API catalog,
+        generated request bodies, live telemetry, and a curl mirror of every request it sends.
+      </div>
+      <div>
+        <b>3 &mdash; Run it yourself.</b> The emulator is a Python package: clone
+        <a href="https://github.com/JimothyJohn/mir-emulator" rel="noopener">the repo</a> and
+        <code>uv run mir-emulator --mir-version 3.8.1</code> for a robot on <code>localhost</code>,
+        CI, or an air-gapped bench.
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sect-title" id="docs">Documentation &amp; primary sources</h2>
+  <p class="lead">
+    Everything this emulator serves is derived from <b>MiR's official REST API documentation</b> — no invented
+    endpoints, no guessed schemas. Check its answers against the primary sources yourself:
+  </p>
+  <div class="cards">
+    <div class="card">
+      <h3>The official MiR API docs</h3>
+      <p>Mobile Industrial Robots publishes the REST API reference on its
+        <a href="https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/" rel="noopener">support
+        portal ("REST API files")</a> — one PDF per product per software version, behind a free account.
+        That page is the primary source for every spec used here.</p>
+    </div>
+    <div class="card">
+      <h3>PDF &rarr; machine-readable spec</h3>
+      <p>MiR ships the API definition as PDFs only. A weekly scraper converts each tracked version's MIR250 PDF
+        back to Swagger 2.0, gated by a correctness oracle: the one machine-readable spec MiR ever published
+        (3.5.4 <code>swagger.json</code>) must re-convert with <b>zero structural differences</b> on every run.
+        See the <a href="https://github.com/JimothyJohn/mir-emulator#how-it-stays-current" rel="noopener">README</a>
+        for the full pipeline.</p>
+    </div>
+    <div class="card">
+      <h3>Verifiable provenance</h3>
+      <p>The <a href="https://github.com/JimothyJohn/mir-emulator/blob/master/packages/mir-emulator/src/mir_emulator/specs/registry.json" rel="noopener">spec
+        registry</a> records, for every tracked version, the source PDF URL and SHA-256 of both the PDF and the
+        converted spec. The emulator serves its own definitions at <code>/&lt;version&gt;/swagger.json</code> and
+        <code>/&lt;version&gt;/openapi.json</code>, so contract-testing tools can point straight at it.</p>
+    </div>
+  </div>
+  <table class="plain" id="prov-table" style="display:none">
+    <thead>
+    <tr><th>MiR version</th><th>Derived from</th><th>Official source document</th><th>Served spec</th></tr>
+    </thead>
+    <tbody id="prov-body"></tbody>
+  </table>
+  <div class="hint" id="prov-hint">connect to the demo endpoint to load per-version provenance&hellip;</div>
+
+  <h2 class="sect-title">Endpoints</h2>
+  <table class="plain">
+    <tr><th>Path</th><th>What it serves</th></tr>
+    <tr><td>/console</td><td>This page (also served at <code>/</code> to browsers) — catalog, telemetry, virtual robot sessions.</td></tr>
+    <tr><td>/&lt;version&gt;/api/v2.0.0/&hellip;</td><td>The emulated MiR REST API for that software version (also <code>/latest/&hellip;</code>).</td></tr>
+    <tr><td>/&lt;version&gt;/swagger.json</td><td>Machine-readable spec, Swagger 2.0 (and <code>/&lt;version&gt;/openapi.json</code> for OpenAPI 3.0).</td></tr>
+    <tr><td>/&lt;version&gt;/</td><td>Per-version JSON index: operation count, auth, session header, spec provenance.</td></tr>
+    <tr><td>/</td><td>JSON index of everything above — browsers get this page instead.</td></tr>
+    <tr><td>/healthz</td><td>Liveness + the list of tracked versions.</td></tr>
+  </table>
+
   <footer>
     <div>
       MiR Emulator is an independent open-source emulator; not affiliated with Mobile Industrial Robots A/S.
-      The endpoint is rate-limited and concurrency-capped; responses are deterministic examples generated from the
-      official API definitions. Machine-readable specs per version:
+      The endpoint is rate-limited and concurrency-capped; responses are deterministic, stateful simulations
+      generated from the <a href="https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/" rel="noopener">official
+      MiR API definitions</a>. State is in-memory per runtime instance and resets on cold start — don't store
+      anything you need to keep. Machine-readable specs per version:
       <code>/&lt;version&gt;/swagger.json</code> (Swagger 2.0) &middot; <code>/&lt;version&gt;/openapi.json</code> (OpenAPI 3.0).
+      Source, issues, and local install: <a href="https://github.com/JimothyJohn/mir-emulator" rel="noopener">github.com/JimothyJohn/mir-emulator</a>.
     </div>
   </footer>
 </div>
@@ -514,12 +681,16 @@ function fetchT(url, opts = {}, ms = 6000) {
 const PRESETS = [
   { m: "GET",    p: "/status",             body: null, note: "robot state" },
   { m: "PUT",    p: "/status",             body: { name: "renamed-from-console" }, note: "rename robot" },
+  { m: "PUT",    p: "/status",             body: { state_id: 4 }, note: "pause" },
+  { m: "PUT",    p: "/status",             body: { state_id: 3 }, note: "resume" },
   { m: "GET",    p: "/missions",           body: null, note: "list missions" },
-  { m: "POST",   p: "/mission_queue",      body: { mission_id: "demo-mission-guid" }, note: "enqueue" },
+  // The robot rejects unknown mission ids (400, like real hardware) — the
+  // click handler swaps the placeholder for a mission it actually has.
+  { m: "POST",   p: "/mission_queue",      body: { mission_id: "pick-one-from-GET-missions" }, note: "enqueue", resolveMission: true },
   { m: "GET",    p: "/mission_queue",      body: null, note: "queue" },
   { m: "DELETE", p: "/mission_queue",      body: null, note: "clear queue" },
   { m: "GET",    p: "/registers/1",        body: null, note: "PLC register" },
-  { m: "PUT",    p: "/registers/1",        body: { value: 42 }, note: "write register" },
+  { m: "PUT",    p: "/registers/1",        body: { value: 42, label: "from console" }, note: "write register" },
   { m: "GET",    p: "/system/info",        body: null, note: "system" },
 ];
 
@@ -627,14 +798,58 @@ async function loadVersionMeta() {
     const j = await r.json();
     if (!j.api_title && !j.emulated_mir_version) return;
     const rows = [
-      ["title", j.api_title],
-      ["operations", j.operations],
+      ["title", esc(String(j.api_title ?? "—"))],
+      ["operations", esc(String(j.operations ?? "—"))],
       ["swagger 2.0", '<a href="' + apiRoot(currentVersion) + '/swagger.json" rel="noopener">swagger.json</a>'],
       ["openapi 3.0", '<a href="' + apiRoot(currentVersion) + '/openapi.json" rel="noopener">openapi.json</a>'],
     ];
-    dl.innerHTML = rows.map(([k, v]) =>
-      "<div><dt>" + k + "</dt><dd>" + (k.includes("swagger") || k.includes("openapi") ? v : esc(String(v ?? "—"))) + "</dd></div>").join("");
+    // Provenance: the official MiR document this version's spec was built from.
+    const src = j.source || {};
+    if (src.source_url)
+      rows.push(["source", '<a href="' + encodeURI(src.source_url) + '" rel="noopener" title="' +
+        esc(String(src.provenance || "")) + '">official MiR PDF</a>']);
+    else if (src.provenance)
+      rows.push(["source", '<span title="' + esc(String(src.provenance)) + '">' +
+        (src.pinned ? "official swagger.json (pinned oracle)" : esc(String(src.provenance)).slice(0, 60)) + "</span>"]);
+    dl.innerHTML = rows.map(([k, v]) => "<div><dt>" + k + "</dt><dd>" + v + "</dd></div>").join("");
   } catch { /* index is cosmetic */ }
+}
+
+/* ---------- provenance table (documentation section) ---------- */
+async function loadProvenance() {
+  const table = $("prov-table"), tbody = $("prov-body"), hint = $("prov-hint");
+  tbody.innerHTML = "";
+  if (MODE !== "fleet" || !versions.length) {
+    table.style.display = "none";
+    hint.style.display = "";
+    hint.textContent = MODE === "robot"
+      ? "connected to a robot directly — provenance applies to the emulator fleet endpoint"
+      : "connect to the demo endpoint to load per-version provenance…";
+    return;
+  }
+  const rows = await Promise.all(versions.map(async (v) => {
+    try {
+      const r = await fetchT(BASE + "/" + encodeURIComponent(v) + "/");
+      const src = (await r.json()).source || {};
+      return { v, src };
+    } catch { return { v, src: {} }; }
+  }));
+  rows.forEach(({ v, src }) => {
+    const tr = document.createElement("tr");
+    const doc = src.source_url
+      ? '<a href="' + encodeURI(src.source_url) + '" rel="noopener">MiR PDF (portal login)</a>' +
+        (src.source_sha256 ? ' <span title="SHA-256 of the source PDF">&middot; sha256 ' + esc(src.source_sha256.slice(0, 12)) + '&hellip;</span>' : "")
+      : esc(String(src.provenance || "—"));
+    const derived = src.pinned
+      ? "official swagger.json — the converter's oracle"
+      : (src.source_url ? "converted from the official REST API PDF" : "official");
+    tr.innerHTML = "<td>" + esc(v) + "</td><td>" + derived + "</td><td>" + doc + "</td>" +
+      '<td><a href="' + BASE + "/" + encodeURIComponent(v) + '/swagger.json" rel="noopener">swagger.json</a> &middot; ' +
+      '<a href="' + BASE + "/" + encodeURIComponent(v) + '/openapi.json" rel="noopener">openapi.json</a></td>';
+    tbody.appendChild(tr);
+  });
+  hint.style.display = "none";
+  table.style.display = "";
 }
 
 /* ---------- presets ---------- */
@@ -644,11 +859,20 @@ function renderPresets() {
     const b = document.createElement("button");
     b.className = "preset";
     b.innerHTML = "<b>" + pr.m + "</b>" + esc(pr.p) + " · " + esc(pr.note);
-    b.onclick = () => {
+    b.onclick = async () => {
       clearOperation();
       $("method").value = pr.m;
       $("path").value = pr.p;
-      $("body").value = pr.body ? JSON.stringify(pr.body, null, 2) : "";
+      let body = pr.body;
+      if (pr.resolveMission && BASE) {
+        try {
+          const r = await fetchT(fullPath(currentVersion, "/missions"), { headers: await requestHeaders() });
+          const missions = await r.json();
+          if (r.ok && Array.isArray(missions) && missions.length)
+            body = { ...body, mission_id: missions[0].guid };
+        } catch { /* placeholder body still shows the idea */ }
+      }
+      $("body").value = body ? JSON.stringify(body, null, 2) : "";
       syncBodyVisibility();
       refreshCurl();
     };
@@ -990,7 +1214,7 @@ async function connectTo(rawBase) {
   st.textContent = mode === "fleet"
     ? "connected — emulator fleet, " + versions.length + " versions"
     : "connected — direct MiR API at " + base.replace(/^https?:\/\//, "") + "/api/v2.0.0";
-  renderVersions(); loadVersionMeta(); loadSpec(); refreshCurl();
+  renderVersions(); loadVersionMeta(); loadSpec(); loadProvenance(); refreshCurl();
 }
 
 function selectedEndpoint() {

@@ -41,6 +41,23 @@ def test_every_operation_answers_with_a_declared_status(client, spec):
     assert not failures, "\n".join(failures[:30])
 
 
+def _validate_success_body(spec, op, response, failures):
+    if response.status_code != op.success_status:
+        return
+    schema = spec.deref(op.success_schema)
+    if not schema:
+        return
+    body = response.json()
+    # MiR specs often declare list endpoints with the element's object
+    # schema; real robots return arrays. Validate elements individually.
+    instances = body if isinstance(body, list) and schema.get("type") == "object" else [body]
+    try:
+        for instance in instances:
+            Draft4Validator(schema).validate(instance)
+    except Exception as exc:
+        failures.append(f"{op.method} {op.path}: {str(exc)[:150]}")
+
+
 def test_get_success_bodies_validate_against_response_schemas(client, spec):
     failures = []
     for op in spec.operations.values():
@@ -48,20 +65,20 @@ def test_get_success_bodies_validate_against_response_schemas(client, spec):
             continue
         url = spec.base_path + _fill_path(op, op.path)
         response = client.get(url, headers=AUTH_HEADER)
-        if response.status_code != op.success_status:
+        _validate_success_body(spec, op, response, failures)
+    assert not failures, "\n".join(failures[:30])
+
+
+def test_write_success_bodies_validate_against_response_schemas(client, spec):
+    """POST/PUT answers must honor their declared schemas too — the stateful
+    overrides (status, mission queue, registers) are the risky ones."""
+    failures = []
+    for op in spec.operations.values():
+        if op.method not in ("POST", "PUT") or "application/json" not in op.produces[0]:
             continue
-        schema = spec.deref(op.success_schema)
-        if not schema:
-            continue
-        body = response.json()
-        # MiR specs often declare list endpoints with the element's object
-        # schema; real robots return arrays. Validate elements individually.
-        instances = body if isinstance(body, list) and schema.get("type") == "object" else [body]
-        try:
-            for instance in instances:
-                Draft4Validator(schema).validate(instance)
-        except Exception as exc:
-            failures.append(f"{op.method} {op.path}: {str(exc)[:150]}")
+        url = spec.base_path + _fill_path(op, op.path)
+        response = client.request(op.method, url, **_request_kwargs(spec, op))
+        _validate_success_body(spec, op, response, failures)
     assert not failures, "\n".join(failures[:30])
 
 
@@ -108,13 +125,32 @@ def test_status_reflects_put(client, spec):
     original = client.get(f"{base}/status", headers=AUTH_HEADER).json()
     assert original["robot_name"] == "MiR_Emulated"
 
-    renamed = client.put(
-        f"{base}/status", json={"robot_name": "conformance-bot"}, headers=AUTH_HEADER
-    )
+    # PutStatus declares `name` as the rename field; undeclared fields
+    # (like the GET-side robot_name) are ignored, as on a real robot.
+    renamed = client.put(f"{base}/status", json={"name": "conformance-bot"}, headers=AUTH_HEADER)
     assert renamed.status_code == 200
     assert client.get(f"{base}/status", headers=AUTH_HEADER).json()["robot_name"] == (
         "conformance-bot"
     )
+
+
+def test_put_status_choices_are_enforced(client, spec):
+    base = spec.base_path
+    for body in ({"state_id": 99}, {"mode_id": 1}, {"clear_error": False}):
+        response = client.put(f"{base}/status", json=body, headers=AUTH_HEADER)
+        assert response.status_code == 400, body
+        assert "error_human" in response.json()
+
+
+def test_unknown_mission_id_cannot_be_enqueued(client, spec):
+    base = spec.base_path
+    response = client.post(
+        f"{base}/mission_queue",
+        json={"mission_id": "definitely-not-a-mission"},
+        headers=AUTH_HEADER,
+    )
+    assert response.status_code == 400
+    assert "Argument error" in response.json()["error_human"]
 
 
 def test_generic_crud_round_trip(client, spec):

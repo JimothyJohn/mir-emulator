@@ -208,14 +208,16 @@ class Emulator:
             if error:
                 return _respond(400, _error_body(400, error))
 
+        state = self.state_for(session_id)
         ctx = RequestCtx(
             spec=self.spec,
-            state=self.state_for(session_id),
+            state=state,
             op=op,
             path_params=dict(request.path_params),
             query=dict(request.query_params),
             body=body,
             mission_duration=self.mission_duration,
+            seed_collection=lambda key, path: self._seed_collection(state, key, path),
         )
 
         override = OVERRIDES.get((op.method, op.path))
@@ -268,7 +270,13 @@ class Emulator:
             if not isinstance(item, dict):
                 return op.success_status, item
             if isinstance(ctx.body, dict):
-                item.update(ctx.body)
+                # Echo body fields only where they fit the response schema —
+                # MiR's files sometimes type a field differently in the body
+                # and the response (e.g. parameters: array in, string out).
+                if item:
+                    overlay_compatible(item, ctx.body)
+                else:
+                    item.update(ctx.body)
             if "id" in item and isinstance(item.get("id"), int):
                 new_id: str | int = ctx.state.next_int_id()
             else:
@@ -388,6 +396,8 @@ def create_app(
     async def openapi_json(_request: Request) -> JSONResponse:
         return JSONResponse(openapi3_doc)
 
+    entry = registry.tracked_entry(version)
+
     async def index(_request: Request) -> JSONResponse:
         return JSONResponse(
             {
@@ -402,6 +412,15 @@ def create_app(
                     "virtual robot; omit it for the shared default robot"
                 ),
                 "specs": {"swagger2": "/swagger.json", "openapi3": "/openapi.json"},
+                "source": {
+                    "primary_source": registry.primary_source(),
+                    "provenance": entry["provenance"],
+                    "source_url": entry.get("source_url"),
+                    "source_sha256": entry.get("source_sha256"),
+                    "spec_sha256": entry["sha256"],
+                    "official": entry["official"],
+                    "pinned": entry.get("pinned", False),
+                },
             }
         )
 
