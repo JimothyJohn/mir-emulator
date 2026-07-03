@@ -6,6 +6,12 @@ updates:
       interval: weekly
       day: monday
     labels: [dependencies, automated]
+    groups:
+      # init and analyze must move in lockstep: CodeQL rejects a run whose
+      # steps mix majors, so split PRs each fail on their own (see PRs #1/#2).
+      codeql-action:
+        patterns:
+          - github/codeql-action*
 
   - package-ecosystem: uv
     directory: /
