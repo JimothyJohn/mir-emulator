@@ -3,85 +3,85 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MIR-EMULATOR // fleet console</title>
+<title>MiR Emulator — Fleet Console</title>
 <meta name="description" content="Live demo console for the mir-emulator — a spec-faithful emulator of the MiR robot REST API, every tracked version on one serverless endpoint.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='12' fill='%23101418'/><rect x='18' y='34' width='64' height='32' rx='6' fill='%23f5c518'/><circle cx='34' cy='50' r='7' fill='%23101418'/><circle cx='66' cy='50' r='7' fill='%23101418'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%2300bfff'/><rect x='18' y='34' width='64' height='32' rx='6' fill='white'/><circle cx='34' cy='50' r='7' fill='%2300bfff'/><circle cx='66' cy='50' r='7' fill='%2300bfff'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <style>
+/* MiR brand system — palette and type lifted from mobile-industrial-robots.com:
+   cyan #00bfff accent, blue #1a76bc/#105aa8 actions, ink #0c0931, pale cyan
+   tints #effafe/#cbeefa, .4rem radii, card hover glow, light 300 headings. */
 :root {
-  --bg: #0c0f12;
-  --panel: #12161b;
-  --panel-2: #171c22;
-  --line: #242b33;
-  --line-bright: #39434e;
-  --ink: #d7dde3;
-  --ink-dim: #7c8791;
-  --ink-faint: #4b555f;
-  --yellow: #f5c518;
-  --yellow-dim: #8a7215;
-  --blue: #4aa3ff;
-  --green: #3ddc84;
-  --red: #ff5c5c;
+  --brand: #00bfff;
+  --blue: #1a76bc;
+  --blue-deep: #105aa8;
+  --ink: #0c0931;
+  --ink-dim: #565b74;
+  --ink-faint: #8a8fa5;
+  --tint: #effafe;
+  --tint-2: #cbeefa;
+  --line: #e4e9f0;
+  --code-bg: #f6f9fc;
+  --green: #1d9e61;
+  --amber: #c77700;
+  --red: #cf3228;
+  --focus: #72c7e7;
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --display: "Chakra Petch", var(--mono);
+  --sans: "Open Sans", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { -webkit-text-size-adjust: 100%; }
 body {
-  background: var(--bg);
+  background: #fff;
   color: var(--ink);
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.6;
   min-height: 100vh;
-  background-image:
-    linear-gradient(var(--line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size: 48px 48px;
-  background-position: -1px -1px;
-}
-body::after { /* scanline grain */
-  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9;
-  background: repeating-linear-gradient(0deg, rgba(255,255,255,.016) 0 1px, transparent 1px 3px);
 }
 a { color: var(--blue); text-decoration: none; }
-a:hover { text-decoration: underline; }
-::selection { background: var(--yellow); color: #10130a; }
+a:hover { color: var(--blue-deep); text-decoration: underline; }
+::selection { background: var(--brand); color: #fff; }
+code {
+  font-family: var(--mono); font-size: .92em;
+  background: var(--tint); border: 1px solid var(--tint-2);
+  border-radius: 4px; padding: 0 4px; color: var(--blue-deep);
+}
+button { font-family: var(--sans); }
+:is(button, input, select, textarea):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px 80px; }
 
 /* ---------- header ---------- */
 header {
-  border-bottom: 1px solid var(--line-bright);
-  background: linear-gradient(180deg, #14181d, #0e1116);
+  border-bottom: 1px solid var(--line);
+  background: #fff;
   position: sticky; top: 0; z-index: 20;
 }
-.hazard { height: 6px; background: repeating-linear-gradient(-45deg, var(--yellow) 0 14px, #14181d 14px 28px); }
+.brandbar { height: 4px; background: var(--brand); }
 .masthead {
-  max-width: 1180px; margin: 0 auto; padding: 14px 20px;
+  max-width: 1180px; margin: 0 auto; padding: 16px 20px;
   display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
 }
 .mark {
-  width: 40px; height: 40px; border-radius: 8px; flex: none;
-  background: var(--yellow);
+  width: 42px; height: 42px; border-radius: 10px; flex: none;
+  background: var(--brand);
   display: grid; place-items: center;
-  box-shadow: 0 0 0 1px #000, 0 0 24px rgba(245,197,24,.25);
 }
 .mark svg { display: block; }
 h1 {
-  font-family: var(--display);
-  font-size: 20px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  font-size: 26px; font-weight: 300; line-height: 1.2; color: var(--ink);
 }
-h1 span { color: var(--yellow); }
-.sub { font-size: 11px; color: var(--ink-dim); letter-spacing: .08em; text-transform: uppercase; }
-.head-right { margin-left: auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+h1 span { color: var(--brand); }
+.sub { font-size: 12.5px; color: var(--ink-dim); }
+.head-right { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .led-box {
   display: flex; align-items: center; gap: 8px;
-  border: 1px solid var(--line-bright); border-radius: 6px;
-  padding: 6px 12px; background: var(--panel);
-  font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-dim);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 14px; background: #fff;
+  font-size: 12px; color: var(--ink-dim);
 }
 .led { width: 9px; height: 9px; border-radius: 50%; background: var(--ink-faint); flex: none; }
 .led.on  { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2.2s infinite; }
@@ -92,136 +92,140 @@ h1 span { color: var(--yellow); }
 .grid { display: grid; grid-template-columns: 340px 1fr; gap: 18px; margin-top: 26px; align-items: start; }
 @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 .panel {
-  background: var(--panel);
-  border: 1px solid var(--line-bright);
-  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: .4rem;
   overflow: hidden;
-  box-shadow: 0 14px 40px rgba(0,0,0,.35);
+  box-shadow: 0 1px 3px rgba(12, 9, 49, .06);
+  transition: box-shadow .3s ease;
 }
+.panel:hover { box-shadow: 0 0 15px var(--tint-2); }
 .panel-head {
   display: flex; align-items: center; gap: 10px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--line-bright);
-  background: var(--panel-2);
-  font-family: var(--display);
-  font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase;
-  color: var(--ink-dim);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+  font-size: 15px; font-weight: 600;
+  color: var(--ink);
 }
-.panel-head .tag { margin-left: auto; color: var(--yellow-dim); font-size: 10px; }
-.panel-body { padding: 16px 14px; }
+.panel-head::before {
+  content: ""; width: 8px; height: 8px; border-radius: 2px;
+  background: var(--brand); flex: none;
+}
+.panel-head .tag { margin-left: auto; color: var(--ink-faint); font-size: 11px; font-family: var(--mono); font-weight: 400; }
+.panel-body { padding: 16px; }
 
 /* ---------- intro strip ---------- */
 .intro {
   margin-top: 26px; padding: 18px 20px;
-  border: 1px solid var(--line-bright); border-left: 4px solid var(--yellow);
-  border-radius: 10px; background: var(--panel);
+  border: 1px solid var(--tint-2); border-left: 4px solid var(--brand);
+  border-radius: .4rem; background: var(--tint);
   display: flex; gap: 20px; flex-wrap: wrap; align-items: baseline;
 }
-.intro b { font-family: var(--display); letter-spacing: .06em; text-transform: uppercase; font-size: 13px; }
-.intro p { color: var(--ink-dim); font-size: 13px; max-width: 72ch; }
-.intro code { color: var(--yellow); }
+.intro b { font-size: 14px; font-weight: 600; }
+.intro p { color: var(--ink-dim); font-size: 13.5px; max-width: 72ch; }
+.intro code { background: #fff; }
 
 /* ---------- version picker ---------- */
 .versions { display: flex; flex-direction: column; gap: 8px; }
 .vbtn {
   display: flex; align-items: center; gap: 12px;
   width: 100%; text-align: left; cursor: pointer;
-  background: var(--panel-2); color: var(--ink);
-  border: 1px solid var(--line-bright); border-radius: 8px;
-  padding: 12px 14px; font-family: var(--mono); font-size: 14px;
-  transition: border-color .15s, background .15s, transform .1s;
+  background: #fff; color: var(--ink);
+  border: 1px solid var(--line); border-radius: .4rem;
+  padding: 12px 14px; font-size: 14px;
+  transition: border-color .15s, background .15s, box-shadow .3s ease;
 }
-.vbtn:hover { border-color: var(--yellow-dim); }
-.vbtn.active { border-color: var(--yellow); background: #1b1f16; }
-.vbtn .vnum { font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: .04em; }
-.vbtn.active .vnum { color: var(--yellow); }
-.vbtn .vpath { margin-left: auto; font-size: 10px; color: var(--ink-faint); }
+.vbtn:hover { border-color: var(--tint-2); box-shadow: 0 0 15px var(--tint-2); }
+.vbtn.active { border-color: var(--brand); background: var(--tint); }
+.vbtn .vnum { font-weight: 600; font-size: 16px; }
+.vbtn.active .vnum { color: var(--blue-deep); }
+.vbtn .vpath { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--ink-faint); }
 .vbtn .chip {
   font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
-  border: 1px solid var(--line-bright); border-radius: 999px; padding: 2px 8px; color: var(--ink-dim);
+  border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; color: var(--ink-dim);
 }
-.vbtn.active .chip.latest { border-color: var(--yellow); color: var(--yellow); }
-.kv { margin-top: 16px; font-size: 12px; color: var(--ink-dim); display: grid; gap: 6px; }
+.vbtn.active .chip.latest { border-color: var(--brand); color: var(--blue-deep); background: #fff; }
+.kv { margin-top: 16px; font-size: 12.5px; color: var(--ink-dim); display: grid; gap: 6px; }
 .kv div { display: flex; gap: 10px; }
 .kv dt { color: var(--ink-faint); min-width: 82px; text-transform: uppercase; font-size: 10px; letter-spacing: .1em; padding-top: 2px; }
 .kv dd { word-break: break-all; }
-.kv a { color: var(--blue); }
 
 /* ---------- console ---------- */
 .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .preset {
   cursor: pointer; font-family: var(--mono); font-size: 11.5px;
-  background: transparent; color: var(--ink-dim);
-  border: 1px solid var(--line-bright); border-radius: 999px; padding: 5px 12px;
+  background: #fff; color: var(--ink-dim);
+  border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px;
   transition: color .15s, border-color .15s;
 }
-.preset:hover { color: var(--yellow); border-color: var(--yellow-dim); }
+.preset:hover { color: var(--blue-deep); border-color: var(--brand); }
 .preset b { color: var(--ink); font-weight: 600; margin-right: 6px; }
-.preset:hover b { color: var(--yellow); }
+.preset:hover b { color: var(--blue-deep); }
 
 .reqline { display: flex; gap: 10px; flex-wrap: wrap; }
 select, input[type=text], textarea {
-  background: #0b0e11; color: var(--ink);
-  border: 1px solid var(--line-bright); border-radius: 8px;
+  background: #fff; color: var(--ink);
+  border: 1px solid #c9d3de; border-radius: .4rem;
   font-family: var(--mono); font-size: 13.5px; padding: 10px 12px;
   outline: none;
 }
-select:focus, input:focus, textarea:focus { border-color: var(--yellow); }
+select:focus, input:focus, textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--tint-2); }
 select { cursor: pointer; font-weight: 600; }
 #method { width: 108px; flex: none; }
 #path { flex: 1; min-width: 240px; }
 textarea { width: 100%; min-height: 96px; resize: vertical; line-height: 1.5; margin-top: 10px; }
 .send {
   flex: none; cursor: pointer;
-  font-family: var(--display); font-weight: 700; font-size: 13px;
-  letter-spacing: .14em; text-transform: uppercase;
-  background: var(--yellow); color: #14120a;
-  border: 1px solid var(--yellow); border-radius: 8px; padding: 10px 22px;
-  transition: transform .08s, box-shadow .15s;
-  box-shadow: 0 0 0 rgba(245,197,24,0);
+  font-weight: 600; font-size: 14px;
+  background: var(--blue); color: #fff;
+  border: 1px solid var(--blue); border-radius: 999px; padding: 10px 26px;
+  transition: background-color .3s ease, transform .08s;
 }
-.send:hover { box-shadow: 0 0 22px rgba(245,197,24,.35); }
+.send:hover { background: var(--blue-deep); border-color: var(--blue-deep); }
 .send:active { transform: translateY(1px); }
-.send[disabled] { opacity: .45; cursor: wait; box-shadow: none; }
+.send[disabled] { opacity: .5; cursor: wait; }
 .body-label, .curl-label {
   margin-top: 14px; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint);
   display: flex; align-items: center; gap: 10px;
 }
 .curl {
   margin-top: 8px; position: relative;
-  background: #0b0e11; border: 1px solid var(--line); border-radius: 8px;
-  padding: 12px 44px 12px 12px; font-size: 12px; color: var(--ink-dim);
+  background: var(--code-bg); border: 1px solid var(--line); border-radius: .4rem;
+  padding: 12px 60px 12px 12px; font-family: var(--mono); font-size: 12px; color: var(--ink-dim);
   white-space: pre-wrap; word-break: break-all;
 }
 .copy {
   position: absolute; top: 8px; right: 8px; cursor: pointer;
-  background: var(--panel-2); color: var(--ink-dim);
-  border: 1px solid var(--line-bright); border-radius: 6px;
-  font-family: var(--mono); font-size: 10px; padding: 4px 8px;
+  background: #fff; color: var(--ink-dim);
+  border: 1px solid var(--line); border-radius: 4px;
+  font-size: 11px; font-weight: 600; padding: 4px 10px;
 }
-.copy:hover { color: var(--yellow); border-color: var(--yellow-dim); }
+.copy:hover { color: var(--blue-deep); border-color: var(--brand); }
 
 /* ---------- response ---------- */
 .resp-meta {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line-bright);
+  margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line);
   font-size: 12px; color: var(--ink-dim);
 }
-.status-big { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: .04em; }
+.status-big { font-weight: 700; font-size: 22px; }
 .status-big.s2 { color: var(--green); }
-.status-big.s4 { color: var(--yellow); }
+.status-big.s4 { color: var(--amber); }
 .status-big.s5, .status-big.s0 { color: var(--red); }
 pre.resp {
-  margin-top: 10px; background: #0b0e11;
-  border: 1px solid var(--line); border-radius: 8px;
-  padding: 14px; font-size: 12.5px; line-height: 1.6;
+  margin-top: 10px; background: var(--code-bg);
+  border: 1px solid var(--line); border-radius: .4rem;
+  padding: 14px; font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
   max-height: 460px; overflow: auto; white-space: pre-wrap; word-break: break-word;
 }
-pre.resp .k { color: var(--blue); }
-pre.resp .s { color: #c8e08c; }
-pre.resp .n { color: var(--yellow); }
-pre.resp .b { color: #e08cc8; }
-.hint { color: var(--ink-faint); font-size: 11.5px; margin-top: 10px; }
+pre.resp .k { color: var(--blue-deep); }
+pre.resp .s { color: #1d7a4f; }
+pre.resp .n { color: #b3541e; }
+pre.resp .b { color: #8a3ea8; }
+.hint { color: var(--ink-faint); font-size: 12px; margin-top: 10px; }
+.hint.warn { color: var(--red); }
+.hint.ok { color: var(--green); }
 
 /* ---------- auth strip ---------- */
 .auth { display: grid; gap: 8px; font-size: 12px; }
@@ -229,54 +233,54 @@ pre.resp .b { color: #e08cc8; }
 .auth .row { display: flex; gap: 8px; }
 .auth .row > div { flex: 1; min-width: 0; }
 .auth input { width: 100%; padding: 8px 10px; font-size: 12.5px; }
-.token { font-size: 10.5px; color: var(--ink-faint); word-break: break-all; line-height: 1.5; }
+.token { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); word-break: break-all; line-height: 1.5; }
+.token b { color: var(--ink-dim); }
 
 /* ---------- endpoint selector ---------- */
 .auth label.radio {
   display: flex; gap: 9px; align-items: center; cursor: pointer;
   font-size: 12.5px; color: var(--ink); text-transform: none; letter-spacing: 0;
 }
-.auth label.radio input[type=radio] { accent-color: var(--yellow); width: auto; flex: none; }
+.auth label.radio input[type=radio] { accent-color: var(--blue); width: auto; flex: none; }
 .auth label.radio .dim { color: var(--ink-faint); font-size: 11px; }
 .connect-btn {
   cursor: pointer; width: 100%;
-  font-family: var(--display); font-weight: 700; font-size: 12px;
-  letter-spacing: .14em; text-transform: uppercase;
-  background: transparent; color: var(--yellow);
-  border: 1px solid var(--yellow-dim); border-radius: 8px; padding: 9px 0;
-  transition: box-shadow .15s, border-color .15s;
+  font-weight: 600; font-size: 13px;
+  background: #fff; color: var(--blue);
+  border: 1px solid var(--blue); border-radius: 999px; padding: 8px 0;
+  transition: color .3s ease, border-color .3s ease, background-color .3s ease;
 }
-.connect-btn:hover { border-color: var(--yellow); box-shadow: 0 0 16px rgba(245,197,24,.2); }
-.connect-btn[disabled] { opacity: .45; cursor: wait; }
-.hint.warn { color: #f0b6b6; }
-.hint.ok { color: var(--green); }
+.connect-btn:hover { color: var(--blue-deep); border-color: var(--blue-deep); background: var(--tint); }
+.connect-btn[disabled] { opacity: .5; cursor: wait; }
 .auth label .dim { color: var(--ink-faint); text-transform: none; letter-spacing: 0; }
 
 /* ---------- telemetry strip ---------- */
 .telemetry {
   display: flex; align-items: center; gap: 12px;
   margin-bottom: 14px; padding: 9px 12px;
-  background: #0b0e11; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--tint); border: 1px solid var(--tint-2); border-radius: .4rem;
   font-size: 12px; color: var(--ink-dim);
 }
 .telemetry button {
   cursor: pointer; flex: none;
-  font-family: var(--display); font-weight: 700; font-size: 10.5px;
-  letter-spacing: .12em; text-transform: uppercase;
-  background: transparent; color: var(--ink-dim);
-  border: 1px solid var(--line-bright); border-radius: 6px; padding: 5px 10px;
+  font-weight: 600; font-size: 11px;
+  background: #fff; color: var(--ink-dim);
+  border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px;
 }
-.telemetry button:hover { color: var(--yellow); border-color: var(--yellow-dim); }
+.telemetry button:hover { color: var(--blue-deep); border-color: var(--brand); }
 .telemetry button.live { color: var(--green); border-color: var(--green); }
 #tele-read { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#tele-read b { color: var(--yellow); font-weight: 600; }
+#tele-read b { color: var(--blue-deep); font-weight: 600; }
 #tele-read .exec { color: var(--green); }
-.token b { color: var(--ink-dim); }
 
 /* ---------- footer ---------- */
-footer { margin-top: 46px; color: var(--ink-faint); font-size: 11.5px; line-height: 1.8; }
-footer .hazard-mini { height: 3px; margin-bottom: 16px; opacity: .5;
-  background: repeating-linear-gradient(-45deg, var(--yellow) 0 10px, transparent 10px 20px); }
+footer {
+  margin-top: 46px; padding: 22px 24px;
+  background: var(--ink); border-radius: .4rem;
+  color: #b9bdd1; font-size: 12.5px; line-height: 1.8;
+}
+footer a { color: var(--tint-2); }
+footer code { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.18); color: var(--tint-2); }
 
 @media (prefers-reduced-motion: reduce) { .led.on { animation: none; } }
 </style>
@@ -284,14 +288,14 @@ footer .hazard-mini { height: 3px; margin-bottom: 16px; opacity: .5;
 <body>
 
 <header>
-  <div class="hazard"></div>
+  <div class="brandbar"></div>
   <div class="masthead">
     <div class="mark">
-      <svg width="24" height="24" viewBox="0 0 100 100"><rect x="8" y="30" width="84" height="40" rx="8" fill="#101418"/><circle cx="30" cy="50" r="9" fill="#f5c518"/><circle cx="70" cy="50" r="9" fill="#f5c518"/></svg>
+      <svg width="26" height="26" viewBox="0 0 100 100"><rect x="8" y="30" width="84" height="40" rx="8" fill="white"/><circle cx="30" cy="50" r="9" fill="#00bfff"/><circle cx="70" cy="50" r="9" fill="#00bfff"/></svg>
     </div>
     <div>
-      <h1>MIR<span>-</span>EMULATOR <span>//</span> FLEET CONSOLE</h1>
-      <div class="sub">spec-faithful MiR robot REST API &mdash; every tracked version, one serverless endpoint</div>
+      <h1>MiR Emulator <span>/</span> Fleet Console</h1>
+      <div class="sub">Spec-faithful MiR robot REST API &mdash; every tracked version, one serverless endpoint</div>
     </div>
     <div class="head-right">
       <div class="led-box"><span class="led" id="led"></span><span id="led-text">probing&hellip;</span></div>
@@ -319,7 +323,7 @@ footer .hazard-mini { height: 3px; margin-bottom: 16px; opacity: .5;
   <div class="grid">
     <div style="display:grid; gap:18px;">
       <section class="panel">
-        <div class="panel-head">&#8644; Endpoint</div>
+        <div class="panel-head">Endpoint</div>
         <div class="panel-body auth">
           <label class="radio">
             <input type="radio" name="ep" id="ep-demo" checked>
@@ -344,7 +348,7 @@ footer .hazard-mini { height: 3px; margin-bottom: 16px; opacity: .5;
       </section>
 
       <section class="panel">
-        <div class="panel-head">&#9635; Software version <span class="tag" id="vcount"></span></div>
+        <div class="panel-head">Software version <span class="tag" id="vcount"></span></div>
         <div class="panel-body">
           <div class="versions" id="versions"><div class="hint">loading version manifest&hellip;</div></div>
           <dl class="kv" id="vmeta"></dl>
@@ -352,7 +356,7 @@ footer .hazard-mini { height: 3px; margin-bottom: 16px; opacity: .5;
       </section>
 
       <section class="panel">
-        <div class="panel-head">&#9919; Robot credentials</div>
+        <div class="panel-head">Robot credentials</div>
         <div class="panel-body auth">
           <div class="row">
             <div style="flex:1"><label for="user">user</label><input type="text" id="user" value="distributor" autocomplete="off"></div>
@@ -364,7 +368,7 @@ footer .hazard-mini { height: 3px; margin-bottom: 16px; opacity: .5;
               <input type="text" id="session" spellcheck="false" autocomplete="off" maxlength="64">
             </div>
             <div style="flex:none; align-self:flex-end">
-              <button class="connect-btn" id="new-session" style="padding:9px 12px" title="fresh isolated robot">NEW</button>
+              <button class="connect-btn" id="new-session" style="padding:8px 14px" title="fresh isolated robot">New</button>
             </div>
           </div>
           <div class="hint">Your session id gets its own robot &mdash; queue, registers, status &mdash; so
@@ -376,38 +380,37 @@ footer .hazard-mini { height: 3px; margin-bottom: 16px; opacity: .5;
     </div>
 
     <section class="panel">
-      <div class="panel-head">&#9881; Request console <span class="tag" id="target-tag"></span></div>
+      <div class="panel-head">Request console <span class="tag" id="target-tag"></span></div>
       <div class="panel-body">
         <div class="telemetry">
-          <button id="tele-toggle" title="poll GET /status every 2s">&#9654; TELEMETRY</button>
+          <button id="tele-toggle" title="poll GET /status every 2s">&#9654; Telemetry</button>
           <span id="tele-read">off &mdash; enqueue a mission, then watch your robot run it</span>
         </div>
         <div class="presets" id="presets"></div>
         <div class="reqline">
           <select id="method"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select>
           <input type="text" id="path" value="/status" spellcheck="false" autocomplete="off">
-          <button class="send" id="send">Transmit</button>
+          <button class="send" id="send">Send request</button>
         </div>
         <div class="body-label" id="body-label">request body &mdash; JSON</div>
         <textarea id="body" spellcheck="false"></textarea>
         <div class="curl-label">curl equivalent</div>
-        <div class="curl"><span id="curl"></span><button class="copy" id="copy">COPY</button></div>
+        <div class="curl"><span id="curl"></span><button class="copy" id="copy">Copy</button></div>
         <div class="resp-meta" id="resp-meta" style="display:none">
           <span class="status-big" id="resp-status"></span>
           <span id="resp-time"></span>
           <span id="resp-type"></span>
         </div>
         <pre class="resp" id="resp" style="display:none"></pre>
-        <div class="hint" id="resp-hint">Pick a preset or type a path (relative to <code>/api/v2.0.0</code>), then transmit.
+        <div class="hint" id="resp-hint">Pick a preset or type a path (relative to <code>/api/v2.0.0</code>), then send.
           Writes are welcome — it's an emulator. Try enqueueing a mission, then listing the queue.</div>
       </div>
     </section>
   </div>
 
   <footer>
-    <div class="hazard-mini"></div>
     <div>
-      MIR-EMULATOR is an independent open-source emulator; not affiliated with Mobile Industrial Robots A/S.
+      MiR Emulator is an independent open-source emulator; not affiliated with Mobile Industrial Robots A/S.
       The endpoint is rate-limited and concurrency-capped; responses are deterministic examples generated from the
       official API definitions. Machine-readable specs per version:
       <code>/&lt;version&gt;/swagger.json</code> (Swagger 2.0) &middot; <code>/&lt;version&gt;/openapi.json</code> (OpenAPI 3.0).
@@ -531,7 +534,7 @@ function renderVersions() {
   if (MODE === "robot") {
     const b = document.createElement("button");
     b.className = "vbtn active";
-    b.innerHTML = '<span class="vnum">ROBOT</span><span class="chip latest">direct</span>' +
+    b.innerHTML = '<span class="vnum">Robot</span><span class="chip latest">direct</span>' +
       '<span class="vpath">/api/v2.0.0</span>';
     box.appendChild(b);
     $("vcount").textContent = "direct connection";
@@ -669,14 +672,14 @@ function setTelemetry(on) {
   const btn = $("tele-toggle");
   if (on && !teleTimer) {
     btn.classList.add("live");
-    btn.innerHTML = "&#9632; TELEMETRY";
+    btn.innerHTML = "&#9632; Telemetry";
     teleTick();
     teleTimer = setInterval(teleTick, 2000);
   } else if (!on && teleTimer) {
     clearInterval(teleTimer);
     teleTimer = null;
     btn.classList.remove("live");
-    btn.innerHTML = "&#9654; TELEMETRY";
+    btn.innerHTML = "&#9654; Telemetry";
     $("tele-read").textContent = "off — enqueue a mission, then watch your robot run it";
   }
 }
@@ -801,7 +804,7 @@ $("custom-url").addEventListener("input", syncEndpointForm);
 $("custom-url").addEventListener("keydown", (e) => { if (e.key === "Enter") connectTo(selectedEndpoint()); });
 $("copy").onclick = async () => {
   await navigator.clipboard.writeText($("curl").textContent);
-  $("copy").textContent = "COPIED"; setTimeout(() => ($("copy").textContent = "COPY"), 1200);
+  $("copy").textContent = "Copied"; setTimeout(() => ($("copy").textContent = "Copy"), 1200);
 };
 probe(); refreshCurl();
 </script>
