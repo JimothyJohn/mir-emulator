@@ -110,7 +110,8 @@ def test_internal_fields_never_leak(clock, client):
 def test_delete_clears_queue_and_status(clock, client):
     enqueue(client)
     clock.tick(2.0)
-    assert client.delete("/api/v2.0.0/mission_queue", headers=AUTH).status_code == 204
+    deleted = client.delete("/api/v2.0.0/mission_queue", headers=AUTH)
+    assert deleted.status_code == 204
     assert client.get("/api/v2.0.0/mission_queue", headers=AUTH).json() == []
     assert status(client)["state_text"] == "Ready"
 
@@ -158,7 +159,8 @@ def test_metrics_reflect_simulation(clock, client):
 def test_pause_freezes_mission_and_resume_completes_it(clock, client):
     qid = enqueue(client)["id"]
     clock.tick(5.0)  # 4s executed
-    assert client.put("/api/v2.0.0/status", json={"state_id": 4}, headers=AUTH).status_code == 200
+    pause = client.put("/api/v2.0.0/status", json={"state_id": 4}, headers=AUTH)
+    assert pause.status_code == 200
     paused = status(client)
     assert paused["state_text"] == "Pause"
     assert paused["state_id"] == 4
@@ -167,7 +169,8 @@ def test_pause_freezes_mission_and_resume_completes_it(clock, client):
     assert q_state(client, qid) == "Executing"
     assert status(client)["state_text"] == "Pause"
 
-    assert client.put("/api/v2.0.0/status", json={"state_id": 3}, headers=AUTH).status_code == 200
+    resume = client.put("/api/v2.0.0/status", json={"state_id": 3}, headers=AUTH)
+    assert resume.status_code == 200
     clock.tick(5.0)  # 4s + 5s = 9s executed, still going
     assert q_state(client, qid) == "Executing"
     clock.tick(2.0)  # 11s > 10s: done

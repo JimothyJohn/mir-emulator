@@ -8,7 +8,7 @@ difference must not.
 
 import copy
 
-from hypothesis import given
+from hypothesis import example, given
 from hypothesis import strategies as st
 from mir_spec_scraper.validate import compare, schema_signature
 
@@ -200,15 +200,20 @@ def _docs(draw):
     return {"swagger": "2.0", "paths": paths, "definitions": definitions}
 
 
-def _sprinkle_prose(node) -> None:
+def _sprinkle_prose(node, *, bare_map: bool = False) -> None:
     """Add description prose everywhere it is legal swagger — not inside bare
-    maps (paths, properties, responses) where 'description' would be a name."""
+    maps (paths, properties, responses) where 'description' would be a name.
+    Bare maps are tracked by position, not by key sniffing: a property named
+    "type" must not make its properties map look like a schema."""
     if not isinstance(node, dict):
         return
-    if any(k in node for k in ("type", "$ref", "enum", "schema", "responses")):
+    if not bare_map and any(k in node for k in ("type", "$ref", "enum", "schema", "responses")):
         node.setdefault("description", "prose the comparison must ignore")
-    for value in node.values():
-        _sprinkle_prose(value)
+    for key, value in node.items():
+        _sprinkle_prose(
+            value,
+            bare_map=not bare_map and key in ("paths", "properties", "responses", "definitions"),
+        )
 
 
 @given(_docs())
@@ -217,6 +222,17 @@ def test_any_document_equals_itself(doc):
 
 
 @given(_docs())
+@example(
+    # A property literally named "type" must not make its bare properties map
+    # look like a schema and receive prose as a phantom property.
+    {
+        "swagger": "2.0",
+        "paths": {"/0": {"get": {"responses": {"200": {"schema": {"type": "string"}}}}}},
+        "definitions": {
+            "0": {"type": "object", "properties": {"type": {"$ref": "#/definitions/Robot"}}}
+        },
+    }
+)
 def test_prose_never_affects_equivalence(doc):
     prosed = copy.deepcopy(doc)
     _sprinkle_prose(prosed["paths"])
