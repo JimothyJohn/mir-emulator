@@ -29,6 +29,10 @@ LOGIN_ENDPOINT = "/umbraco/surface/user/LoginWebsite"
 FILE_HINT_RE = re.compile(r"(rest[-_ ]?api|swagger|openapi)", re.IGNORECASE)
 SPEC_EXTENSIONS = (".json", ".yaml", ".yml", ".zip")
 
+# Largest observed portal PDF is ~9 MB; 64 MB leaves headroom while bounding
+# memory if the portal (or a tampered listing) ever serves something huge.
+MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
+
 
 @dataclass(frozen=True)
 class PortalFile:
@@ -93,7 +97,16 @@ def parse_file_listing(html: str, base_url: str = PORTAL_BASE + FILES_PAGE) -> l
 
 
 class PortalClient:
-    def __init__(self, email: str, password: str, base_url: str = PORTAL_BASE) -> None:
+    def __init__(
+        self,
+        email: str,
+        password: str,
+        base_url: str = PORTAL_BASE,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
+        """`transport` is a test seam (httpx.MockTransport) so the sync state
+        machine can be exercised offline; live behavior is covered by the
+        live_portal-marked tests."""
         self.base_url = base_url
         self._email = email
         self._password = password
@@ -102,6 +115,7 @@ class PortalClient:
             follow_redirects=True,
             timeout=30.0,
             headers={"User-Agent": "mir-emulatro-spec-scraper/1.0"},
+            transport=transport,
         )
 
     def login(self) -> None:
@@ -127,9 +141,26 @@ class PortalClient:
         return parse_file_listing(response.text, str(response.url))
 
     def download(self, file: PortalFile) -> bytes:
-        response = self._http.get(file.url)
-        response.raise_for_status()
-        return response.content
+        """Fetch a listed file — only over HTTPS from the portal's own host,
+        and never more than MAX_DOWNLOAD_BYTES (the listing is scraped HTML;
+        treat every URL in it as attacker-influenced until proven otherwise)."""
+        url = httpx.URL(file.url)
+        allowed_host = httpx.URL(self.base_url).host
+        if url.scheme != "https" or url.host != allowed_host:
+            raise ValueError(f"refusing to download from {file.url!r}: not https://{allowed_host}")
+        with self._http.stream("GET", file.url) as response:
+            response.raise_for_status()
+            declared = int(response.headers.get("content-length") or 0)
+            if declared > MAX_DOWNLOAD_BYTES:
+                raise ValueError(f"{file.url} declares {declared} bytes (cap {MAX_DOWNLOAD_BYTES})")
+            chunks: list[bytes] = []
+            received = 0
+            for chunk in response.iter_bytes():
+                received += len(chunk)
+                if received > MAX_DOWNLOAD_BYTES:
+                    raise ValueError(f"{file.url} exceeded {MAX_DOWNLOAD_BYTES} byte cap")
+                chunks.append(chunk)
+        return b"".join(chunks)
 
     def close(self) -> None:
         self._http.close()

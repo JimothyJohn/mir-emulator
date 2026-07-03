@@ -13,6 +13,9 @@ from typing import Any
 from jsonschema import Draft4Validator
 from jsonschema.exceptions import SchemaError, ValidationError
 from starlette.applications import Starlette
+from starlette.datastructures import MutableHeaders
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
@@ -20,6 +23,7 @@ from starlette.routing import Route
 from mir_emulator import auth, registry
 from mir_emulator.behaviors import OVERRIDES, RequestCtx
 from mir_emulator.examples import example_from_schema, overlay_compatible
+from mir_emulator.openapi3 import to_openapi3
 from mir_emulator.spec import Operation, Spec, load_spec
 from mir_emulator.state import StateStore
 
@@ -280,6 +284,30 @@ class Emulator:
         return op.success_status, self._example(op.success_schema)
 
 
+class _SecurityHeadersMiddleware:
+    """nosniff/no-store/deny-frame on every response — the emulator often runs
+    on shared CI hosts and dev laptops; don't let responses be cached or
+    content-sniffed into something they aren't."""
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers.setdefault("X-Content-Type-Options", "nosniff")
+                headers.setdefault("Cache-Control", "no-store")
+                headers.setdefault("X-Frame-Options", "DENY")
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
 def create_app(
     mir_version: str | None = None,
     *,
@@ -287,6 +315,7 @@ def create_app(
     username: str = auth.DEFAULT_USERNAME,
     password: str = auth.DEFAULT_PASSWORD,
     seed: bool = True,
+    cors: bool = False,
 ) -> Starlette:
     version, path = registry.spec_path(mir_version)
     spec = load_spec(path, version)
@@ -303,6 +332,17 @@ def create_app(
         for op in spec.operations.values()
     ]
 
+    # Serve the API definition itself, both flavors, so SDK generators and
+    # contract-testing tools can point straight at the emulator.
+    raw_doc = spec.document
+    openapi3_doc = to_openapi3(raw_doc) if raw_doc.get("swagger") == "2.0" else raw_doc
+
+    async def swagger_json(_request: Request) -> JSONResponse:
+        return JSONResponse(raw_doc)
+
+    async def openapi_json(_request: Request) -> JSONResponse:
+        return JSONResponse(openapi3_doc)
+
     async def index(_request: Request) -> JSONResponse:
         return JSONResponse(
             {
@@ -312,15 +352,33 @@ def create_app(
                 "base_path": spec.base_path,
                 "operations": len(spec.operations),
                 "auth": "Basic BASE64(user:SHA-256(password))" if enforce_auth else "disabled",
+                "specs": {"swagger2": "/swagger.json", "openapi3": "/openapi.json"},
             }
         )
 
     async def not_found(_request: Request, _exc: Exception) -> JSONResponse:
         return JSONResponse(_error_body(404, "Not found"), status_code=404)
 
+    middleware = [Middleware(_SecurityHeadersMiddleware)]
+    if cors:
+        middleware.append(
+            Middleware(
+                CORSMiddleware,
+                allow_origins=["*"],
+                allow_methods=["*"],
+                allow_headers=["*"],
+            )
+        )
+
     app = Starlette(
-        routes=[Route("/", index), *routes],
+        routes=[
+            Route("/", index),
+            Route("/swagger.json", swagger_json),
+            Route("/openapi.json", openapi_json),
+            *routes,
+        ],
         exception_handlers={404: not_found},
+        middleware=middleware,
     )
     app.state.emulator = emulator
     app.state.mir_version = version

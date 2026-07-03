@@ -68,11 +68,17 @@ authoritative list (versions, hashes, provenance, source PDF URLs). Currently:
 - **MiR-style auth**: `Authorization: Basic BASE64(user:SHA-256(password))`,
   default account `distributor`/`distributor` like a factory robot. Override
   with `--username/--password` or disable with `--no-auth`.
+- **Middleware-ready**: serves its own API definition at `/swagger.json`
+  (Swagger 2.0, verbatim) and `/openapi.json` (OpenAPI 3.0, converted and
+  round-trip-validated) so SDK generators and contract-testing tools can point
+  straight at it; `--cors` for browser dashboards; `--export openapi3` to dump
+  the definition; `Dockerfile` + `compose.yaml` for CI service stacks
+  (`docker compose up` → MiR 3.8.1 on :8080 and 2.14.7 on :8081).
 
 ```python
 from mir_emulator import create_app, supported_versions
 
-app = create_app("3.5.4")   # ASGI app: run under uvicorn, or hit with httpx/TestClient
+app = create_app("3.8.1")   # ASGI app: run under uvicorn, or hit with httpx/TestClient
 ```
 
 ## Layout
@@ -84,6 +90,30 @@ app = create_app("3.5.4")   # ASGI app: run under uvicorn, or hit with httpx/Tes
 - `tests/` — cross-version conformance, adversarial/negative-path, and
   real-TCP integration suites, parametrized over every tracked version.
 - `scripts/build_versioned.py` — stamps and builds one wheel per MiR version.
+
+## Hardening
+
+Test harness: every tracked version runs the conformance suite (every
+operation answered with a declared status, every GET body validated against
+its response schema), an adversarial suite (auth bypass, injection, traversal,
+oversized payloads, concurrency races), and a deterministic hypothesis fuzz
+suite whose invariant is *no input produces a 5xx or a non-JSON error* — plus
+real-TCP integration tests and an offline test of the full scraper state
+machine (pinning, dropping, broken-file fallback). CI gates coverage at 82%
+offline; the PDF converter's full-document path is gated live by the 3.5.4
+oracle on every scrape.
+
+Supply chain: SHA-pinned actions, `permissions: {}` + least-privilege jobs,
+locked installs everywhere, Dependabot (uv + actions), CodeQL, PR dependency
+review, and build-provenance attestations on release wheels. Details and hard
+limits: [SECURITY.md](SECURITY.md).
+
+Self-improvement loop: the weekly scrape opens PRs whose body is an **API
+changelog** (added/removed/changed operations and definitions), re-validates
+the converter against the pinned oracle first, survives individually broken
+portal files by falling back to the last good spec of that major, and files a
+`scraper-attention` issue whenever anything needed human eyes — a new major,
+a new file format, or a PDF shape the converter can't parse cleanly.
 
 ## Dependencies (why each exists)
 

@@ -117,22 +117,65 @@ def _spec_from_payload(data: bytes, version_str: str) -> tuple[bytes, str, str, 
     return data, ext, fmt, []
 
 
-def sync(specs_dir: Path, majors: int, dry_run: bool, force: bool = False) -> tuple[bool, str]:
-    email = os.environ.get("MIR_PORTAL_EMAIL", "")
-    password = os.environ.get("MIR_PORTAL_PASSWORD", "")
-    if not email or not password:
-        return False, (
-            "skipped: MIR_PORTAL_EMAIL/MIR_PORTAL_PASSWORD not set "
-            "(free account: supportportal.mobile-industrial-robots.com)"
-        )
+_VERSION_DIR_RE = re.compile(r"^\d+(\.\d+){2,3}$")
+
+
+def _previous_spec(specs_dir: Path, existing: dict, version_str: str) -> tuple[str, dict] | None:
+    """Best predecessor for a changelog: same version (re-conversion), else the
+    closest older tracked version."""
+    candidates = []
+    for v, entry in existing.items():
+        path = specs_dir / entry["file"]
+        if not path.is_file() or path.suffix != ".json":
+            continue
+        key = tuple(int(p) for p in v.split("."))
+        candidates.append((key, v, path))
+    target = tuple(int(p) for p in version_str.split("."))
+    same = [c for c in candidates if c[1] == version_str]
+    older = sorted((c for c in candidates if c[0] < target), reverse=True)
+    pick = same[0] if same else (older[0] if older else None)
+    if pick is None:
+        return None
+    return pick[1], json.loads(pick[2].read_text())
+
+
+def _fallback_entry(existing: dict, version_str: str, tracked: list[dict]) -> dict | None:
+    """Closest already-known version of the same major — keeps a major line
+    covered when its newest file turns out to be broken."""
+    major = version_str.split(".")[0]
+    taken = {t["mir_version"] for t in tracked}
+    candidates = [
+        (tuple(int(p) for p in v.split(".")), v)
+        for v in existing
+        if v.split(".")[0] == major and v not in taken
+    ]
+    return existing[max(candidates)[1]] if candidates else None
+
+
+def sync(
+    specs_dir: Path,
+    majors: int,
+    dry_run: bool,
+    force: bool = False,
+    report_path: Path | None = None,
+    client: PortalClient | None = None,
+) -> tuple[bool, str]:
+    if client is None:
+        email = os.environ.get("MIR_PORTAL_EMAIL", "")
+        password = os.environ.get("MIR_PORTAL_PASSWORD", "")
+        if not email or not password:
+            return False, (
+                "skipped: MIR_PORTAL_EMAIL/MIR_PORTAL_PASSWORD not set "
+                "(free account: supportportal.mobile-industrial-robots.com)"
+            )
+        client = PortalClient(email, password)
 
     registry_path = specs_dir / "registry.json"
     registry = json.loads(registry_path.read_text())
     existing = {t["mir_version"]: t for t in registry["tracked"]}
     pinned = {v: t for v, t in existing.items() if t.get("pinned")}
-
-    client = PortalClient(email, password)
     lines: list[str] = []
+    report: list[str] = []
     changed = False
     try:
         client.login()
@@ -140,10 +183,17 @@ def sync(specs_dir: Path, majors: int, dry_run: bool, force: bool = False) -> tu
         if not files:
             return False, "portal listing parsed to zero API files; parser may need updating"
 
+        latest_seen = format_version(max(f.version for f in files))
+        majors_seen = sorted({f.version[0] for f in files}, reverse=True)
+        lines.append(f"portal: {len(files)} files, latest {latest_seen}, majors {majors_seen}")
+
         targets = select_tracked([f.version for f in files], majors=majors)
         tracked = []
         for version in targets:
             version_str = format_version(version)
+            if not _VERSION_DIR_RE.fullmatch(version_str):
+                lines.append(f"refusing suspicious version string {version_str!r}")
+                continue
             if version_str in pinned:
                 continue  # pinned entries are authoritative for their version
             portal_file = _pick_file(files, version)
@@ -153,24 +203,42 @@ def sync(specs_dir: Path, majors: int, dry_run: bool, force: bool = False) -> tu
                     tracked.append(existing[version_str])
                 continue
 
-            payload = client.download(portal_file)
-            source_sha = hashlib.sha256(payload).hexdigest()
             entry = existing.get(version_str)
-            if entry and entry.get("source_sha256") == source_sha and not force:
-                tracked.append(entry)
+            try:
+                payload = client.download(portal_file)
+                source_sha = hashlib.sha256(payload).hexdigest()
+                if entry and entry.get("source_sha256") == source_sha and not force:
+                    tracked.append(entry)
+                    continue
+                stored, ext, fmt, warnings = _spec_from_payload(payload, version_str)
+            except (ValueError, OSError) as exc:
+                # One broken file must not kill the whole sync — keep prior
+                # coverage of this version (or its major) and say so loudly.
+                lines.append(f"kept previous spec for {version_str}; error: {exc}")
+                kept = entry or _fallback_entry(existing, version_str, tracked)
+                if kept:
+                    tracked.append(kept)
                 continue
-
-            stored, ext, fmt, warnings = _spec_from_payload(payload, version_str)
             if warnings:
                 lines.append(
                     f"kept previous spec for {version_str}; conversion warnings: "
                     + "; ".join(warnings)
                 )
-                if entry:
-                    tracked.append(entry)
+                kept = entry or _fallback_entry(existing, version_str, tracked)
+                if kept:
+                    tracked.append(kept)
                 continue
 
             rel = f"{version_str}/swagger{ext}"
+            if ext == ".json":
+                previous = _previous_spec(specs_dir, existing, version_str)
+                if previous:
+                    from mir_spec_scraper.diff import api_diff_markdown
+
+                    old_label, old_doc = previous
+                    report.append(
+                        api_diff_markdown(old_doc, json.loads(stored), old_label, version_str)
+                    )
             if not dry_run:
                 target_path = specs_dir / rel
                 target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -216,7 +284,13 @@ def sync(specs_dir: Path, majors: int, dry_run: bool, force: bool = False) -> tu
             old = existing[version_str]["file"].split("/")[0]
             shutil.rmtree(specs_dir / old, ignore_errors=True)
 
-    summary = "; ".join(lines) if lines else "no changes: portal matches tracked specs"
+    if report_path is not None:
+        body = "\n\n".join(report) if report else "_No spec changes this run._\n"
+        report_path.write_text(f"## Scrape report\n\n{'; '.join(lines)}\n\n{body}")
+
+    if not changed:
+        lines.append("no spec changes: portal matches tracked specs")
+    summary = "; ".join(lines)
     return changed, summary
 
 
@@ -232,6 +306,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="re-convert even when the source file is unchanged (converter upgrades)",
     )
+    p_sync.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help="write a markdown scrape report (API changelog) to this path",
+    )
     args = parser.parse_args(argv)
 
     if not (args.specs_dir / "registry.json").is_file():
@@ -241,7 +321,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
-    changed, summary = sync(args.specs_dir, args.majors, args.dry_run, force=args.force)
+    changed, summary = sync(
+        args.specs_dir, args.majors, args.dry_run, force=args.force, report_path=args.report
+    )
     print(summary)
     _github_output(changed, summary)
     return 0

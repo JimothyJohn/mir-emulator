@@ -85,8 +85,11 @@ validate_and_build() {
 }
 
 test_unit() {
-    log "Running unit + conformance tests..."
-    if ! uv run pytest -q -m "not integration and not live_portal"; then
+    log "Running unit + conformance + fuzz tests (coverage-gated, same as CI)..."
+    if ! uv run pytest -q -m "not integration and not live_portal" \
+        --cov=packages/mir-emulator/src/mir_emulator \
+        --cov=packages/mir-spec-scraper/src/mir_spec_scraper \
+        --cov-report=term --cov-fail-under=82; then
         log "ERROR: unit tests failed"
         return 1
     fi

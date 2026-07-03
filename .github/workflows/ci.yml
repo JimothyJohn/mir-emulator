@@ -5,20 +5,28 @@ on:
     branches: [main, master]
   pull_request:
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -33,26 +41,75 @@ jobs:
       - name: Type check
         run: uv run ty check packages
 
-      - name: Unit + conformance tests (all tracked MiR versions)
-        run: uv run pytest -q -m "not integration and not live_portal"
+      - name: Unit + conformance + fuzz (all tracked MiR versions), coverage-gated
+        # pdf_convert's full-document path and both CLI mains are exercised by
+        # the live-portal and integration suites; 82 is the offline floor.
+        run: >
+          uv run pytest -q -m "not integration and not live_portal"
+          --cov=packages/mir-emulator/src/mir_emulator
+          --cov=packages/mir-spec-scraper/src/mir_spec_scraper
+          --cov-report=term --cov-fail-under=82
 
       - name: Integration tests (real servers over TCP)
         run: uv run pytest -q -m integration
 
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     needs: test
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           python-version: "3.12"
       - name: Build one wheel per tracked MiR version
         run: |
           uv sync --locked --all-packages
           uv run python scripts/build_versioned.py --out dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mir-emulator-wheels
           path: dist/
           retention-days: 30
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    needs: test
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Build image
+        run: docker build -t mir-emulator:ci .
+      - name: Smoke test container
+        run: |
+          docker run -d --name emulator -p 8080:8080 mir-emulator:ci --mir-version 3.8.1
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/ > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/ | grep -q '"emulated_mir_version":"3.8.1"'
+          curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/v2.0.0/status | grep -q 401
+          docker logs emulator
+          docker rm -f emulator
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: low

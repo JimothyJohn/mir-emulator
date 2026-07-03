@@ -1,27 +1,34 @@
 name: Scrape MiR portal for new API versions
 
-# The self-updating loop: check the MiR support portal weekly, and if the
-# tracked-version selection changes (new major/minor/patch), download the new
-# API files, update the bundled registry, and open a PR. CI on that PR runs
-# the full conformance suite against the new specs, so a new MiR release is
-# "accounted for" before it merges.
+# The self-updating loop: check the MiR support portal weekly. New or changed
+# API files are converted (PDF -> Swagger 2.0), oracle-validated, and land as
+# a PR whose body carries an API changelog. Anything the pipeline could not
+# handle (conversion warnings, unusable files) is filed as an issue instead of
+# being silently skipped.
 
 on:
   schedule:
     - cron: "17 5 * * 1" # Mondays 05:17 UTC
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
+
+concurrency:
+  group: scrape
+  cancel-in-progress: false
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           python-version: "3.12"
 
@@ -41,7 +48,7 @@ jobs:
         if: steps.creds.outputs.available == 'true'
         run: uv sync --locked --all-packages
 
-      - name: Live portal smoke test (login + listing parse)
+      - name: Live portal gate (login, listing parse, PDF->swagger oracle)
         if: steps.creds.outputs.available == 'true'
         env:
           MIR_PORTAL_EMAIL: ${{ secrets.MIR_PORTAL_EMAIL }}
@@ -54,20 +61,40 @@ jobs:
         env:
           MIR_PORTAL_EMAIL: ${{ secrets.MIR_PORTAL_EMAIL }}
           MIR_PORTAL_PASSWORD: ${{ secrets.MIR_PORTAL_PASSWORD }}
-        run: uv run mir-spec-scraper sync
+        run: uv run mir-spec-scraper sync --report scrape-report.md
+
+      - name: Test against the updated spec set before proposing it
+        if: steps.creds.outputs.available == 'true' && steps.scrape.outputs.changed == 'true'
+        run: uv run pytest -q -m "not integration and not live_portal"
 
       - name: Open PR with new API versions
         if: steps.creds.outputs.available == 'true' && steps.scrape.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           branch: scrape/update-specs
+          add-paths: packages/mir-emulator/src/mir_emulator/specs
           commit-message: "feat(specs): ${{ steps.scrape.outputs.summary }}"
           title: "Track new MiR REST API versions"
-          body: |
-            Automated spec sync from the [MiR support portal](https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/).
-
-            ${{ steps.scrape.outputs.summary }}
-
-            CI on this PR runs the full conformance + security suite against the
-            updated spec set. Merge only when green.
+          body-path: scrape-report.md
           labels: specs, automated
+
+      - name: File an issue when the pipeline needs attention
+        if: >
+          steps.creds.outputs.available == 'true' &&
+          (contains(steps.scrape.outputs.summary, 'kept previous') ||
+           contains(steps.scrape.outputs.summary, 'no usable') ||
+           contains(steps.scrape.outputs.summary, 'refusing'))
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUMMARY: ${{ steps.scrape.outputs.summary }}
+          REPO: ${{ github.repository }}
+        run: |
+          existing=$(gh issue list --repo "$REPO" --label scraper-attention --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$REPO" --body "Scrape run needs attention: $SUMMARY"
+          else
+            gh issue create --repo "$REPO" \
+              --title "Spec scraper needs attention" \
+              --label scraper-attention \
+              --body "The weekly scrape could not fully process the portal listing. Summary: $SUMMARY"
+          fi

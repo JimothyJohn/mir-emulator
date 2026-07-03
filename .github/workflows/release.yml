@@ -1,26 +1,32 @@
 name: Release versioned wheels
 
-# Builds one mir-emulator distribution per tracked MiR version, so the
-# published package versions match the robot software versions they emulate
-# (pip install mir-emulator==3.5.4). Publishes to PyPI only when the
-# PYPI_API_TOKEN secret exists; otherwise the wheels land as workflow
-# artifacts.
+# One mir-emulator distribution per tracked MiR version, so package versions
+# match the robot software they emulate (pip install mir-emulator==3.8.1).
+# Wheels get build-provenance attestations. Publishing to PyPI happens only
+# when PYPI_API_TOKEN is configured (switch to PyPI trusted publishing by
+# replacing the publish step with pypa/gh-action-pypi-publish + id-token).
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           python-version: "3.12"
 
@@ -32,7 +38,12 @@ jobs:
       - name: Build one wheel per tracked MiR version
         run: uv run python scripts/build_versioned.py --out dist
 
-      - uses: actions/upload-artifact@v4
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: "dist/*"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-wheels
           path: dist/
@@ -42,7 +53,7 @@ jobs:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           if [ -z "$UV_PUBLISH_TOKEN" ]; then
-            echo "::notice::PYPI_API_TOKEN not set; wheels are available as workflow artifacts only."
+            echo "::notice::PYPI_API_TOKEN not set; wheels are available as attested workflow artifacts only."
             exit 0
           fi
           uv publish dist/*

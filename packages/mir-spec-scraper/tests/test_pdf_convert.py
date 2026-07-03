@@ -74,6 +74,32 @@ def test_front_matter_version_falls_back_to_title():
     assert _front_matter("2.14.7 MIR250 REST API\n")[1] == "2.14.7"
 
 
+def test_excerpt_pdf_converts_offline():
+    """3 real pages of the official 3.5.4 PDF (cover, one operation, start of
+    Definitions) committed as a fixture — offline regression for the parsing
+    core. The full-document oracle runs live (below)."""
+    from pathlib import Path
+
+    from mir_spec_scraper.pdf_convert import convert_pdf
+
+    fixture = Path(__file__).parent / "fixtures" / "mir_354_excerpt.pdf"
+    doc = convert_pdf(str(fixture))
+
+    assert doc["info"]["version"] == "3.5.4"
+    assert doc["basePath"] == "/api/v2.0.0"
+    op = doc["paths"]["/cart_calibrations"]["post"]
+    body = next(p for p in op["parameters"] if p["in"] == "body")
+    assert body["schema"] == {"$ref": "#/definitions/PostCart_calibrations"}
+    assert set(op["responses"]) == {"201", "400", "409"}
+    assert op["responses"]["201"]["schema"] == {"$ref": "#/definitions/GetCart_calibrations"}
+
+    error = doc["definitions"]["Error"]
+    assert set(error["properties"]) == {"error_code", "error_human"}
+    assert error["properties"]["error_code"]["type"] == "string"
+    # dangling refs are expected (we only kept 3 pages) and must be *flagged*
+    assert any("dangling" in w for w in doc.get("x-mir-converter-warnings", []))
+
+
 @pytest.mark.live_portal
 @pytest.mark.skipif(
     not os.environ.get("MIR_PORTAL_EMAIL"),

@@ -75,7 +75,11 @@ def parse_schema_token(cell: str | None) -> dict[str, Any] | None:
         if basic.group(2):
             schema["format"] = basic.group(2)
         return schema
-    return {"$ref": f"#/definitions/{token}"}
+    if _DEF_NAME_RE.match(token):
+        return {"$ref": f"#/definitions/{token}"}
+    # A notation this converter doesn't know (future swagger2markup change?).
+    # Degrade to a permissive schema and let convert_pdf flag it loudly.
+    return {"type": "object", "x-mir-unparsed": token}
 
 
 def _join_text(cell: str | None) -> str:
@@ -354,10 +358,40 @@ def convert_pdf(path: str) -> dict:
         "paths": builder.paths,
         "definitions": builder.definitions,
     }
-    if builder.redefined:
-        doc["x-mir-converter-warnings"] = [
-            f"inline sub-schema {name!r} defined more than once; shapes merged"
-            for name in sorted(builder.redefined)
-        ]
+    warnings = [
+        f"inline sub-schema {name!r} defined more than once; shapes merged"
+        for name in sorted(builder.redefined)
+    ]
     _inline_sub_schemas(doc)
+    warnings.extend(_consistency_warnings(doc))
+    if warnings:
+        doc["x-mir-converter-warnings"] = warnings
     return doc
+
+
+def _consistency_warnings(doc: dict) -> list[str]:
+    """Post-conversion sanity: unknown notations and dangling $refs mean the
+    PDF used a shape this converter doesn't understand — fail loudly rather
+    than ship a silently-degraded spec."""
+    unparsed: set[str] = set()
+    dangling: set[str] = set()
+    known = set(doc.get("definitions", {}))
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            if "x-mir-unparsed" in node:
+                unparsed.add(str(node.pop("x-mir-unparsed")))
+            ref = node.get("$ref", "")
+            if ref.startswith("#/definitions/") and ref.rsplit("/", 1)[-1] not in known:
+                dangling.add(ref.rsplit("/", 1)[-1])
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(doc.get("paths", {}))
+    walk(doc.get("definitions", {}))
+    warnings = [f"unrecognized schema notation {t!r}" for t in sorted(unparsed)]
+    warnings.extend(f"dangling $ref to undefined {name!r}" for name in sorted(dangling))
+    return warnings

@@ -25,6 +25,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-auth", action="store_true", help="Disable Authorization header checks"
     )
     parser.add_argument(
+        "--cors", action="store_true", help="Allow cross-origin requests (browser dashboards)"
+    )
+    parser.add_argument(
+        "--export",
+        choices=("swagger2", "openapi3"),
+        default=None,
+        help="Print the selected version's API definition to stdout and exit",
+    )
+    parser.add_argument(
         "--username",
         default=os.environ.get("MIR_EMULATOR_USERNAME", auth.DEFAULT_USERNAME),
         help="Accepted username (env: MIR_EMULATOR_USERNAME)",
@@ -41,6 +50,26 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
+    if args.export:
+        import json
+
+        from mir_emulator.spec import load_spec
+
+        version, path = registry.spec_path(args.mir_version)
+        doc = load_spec(path, version).document
+        if args.export == "openapi3" and doc.get("swagger") == "2.0":
+            from mir_emulator.openapi3 import to_openapi3
+
+            doc = to_openapi3(doc)
+        try:
+            print(json.dumps(doc, indent=1))
+        except BrokenPipeError:  # e.g. piped into `head` — not an error
+            import os
+            import sys
+
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        return 0
+
     import uvicorn
 
     from mir_emulator.app import create_app
@@ -50,6 +79,7 @@ def main(argv: list[str] | None = None) -> int:
         enforce_auth=not args.no_auth,
         username=args.username,
         password=args.password,
+        cors=args.cors,
     )
     version = app.state.mir_version
     print(f"mir-emulator: MiR {version} REST API on http://{args.host}:{args.port}/api/v2.0.0")
