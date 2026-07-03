@@ -8,7 +8,7 @@ Description: >
 Parameters:
   GitHubRepo:
     Type: String
-    Default: JimothyJohn/mir-emulatro
+    Default: JimothyJohn/mir-emulator
     Description: owner/repo allowed to assume the deploy role
   GitHubBranch:
     Type: String
