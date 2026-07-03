@@ -7,28 +7,49 @@
   "updated": "2026-07-02",
   "tracked": [
     {
+      "mir_version": "3.8.1",
+      "api_path_version": "v2.0.0",
+      "format": "swagger-2.0",
+      "file": "3.8.1/swagger.json",
+      "sha256": "280688948ee2e966bd6d3a1dda3d0c7250019acad5a012a5de624f50673e3a45",
+      "official": true,
+      "provenance": "Converted from the official MiR REST API PDF: https://supportportal.mobile-industrial-robots.com/support-files/manuals/PDF/rest_api/MiR_MIR250_REST_API_3.8.1.pdf",
+      "source_url": "https://supportportal.mobile-industrial-robots.com/support-files/manuals/PDF/rest_api/MiR_MIR250_REST_API_3.8.1.pdf",
+      "source_sha256": "1f494d8742866758623c3111ee298582cc36c27fd3c6b94ff09c49ac91ce4ad3"
+    },
+    {
+      "mir_version": "3.7.2",
+      "api_path_version": "v2.0.0",
+      "format": "swagger-2.0",
+      "file": "3.7.2/swagger.json",
+      "sha256": "b08b2d6f927f36dd3b13a9ce70b9b8e549f3023b9805fd949df94aeb6182dee1",
+      "official": true,
+      "provenance": "Converted from the official MiR REST API PDF: https://supportportal.mobile-industrial-robots.com/support-files/manuals/PDF/rest_api/MiR_MIR250_REST_API_3.7.2.pdf",
+      "source_url": "https://supportportal.mobile-industrial-robots.com/support-files/manuals/PDF/rest_api/MiR_MIR250_REST_API_3.7.2.pdf",
+      "source_sha256": "e965404aee1dba219088ce1b43e6a00512595278dec12d2cb60b2f576dc7fa1a"
+    },
+    {
       "mir_version": "3.5.4",
       "api_path_version": "v2.0.0",
       "format": "swagger-2.0",
       "file": "3.5.4/swagger.json",
       "sha256": "0eb3d15345500f9c78129be7c54afb3c014fdeb834d10bef8cb4457ede94d01d",
       "official": true,
-      "provenance": "Official MiR250 3.5.4 swagger.json, mirrored from github.com/processrobotics/mir-api@master"
+      "pinned": true,
+      "provenance": "Official MiR250 3.5.4 swagger.json, mirrored from github.com/processrobotics/mir-api@master. Pinned: the only machine-readable spec MiR ever published \u2014 the correctness oracle for the PDF converter."
     },
     {
-      "mir_version": "2.7.0",
+      "mir_version": "2.14.7",
       "api_path_version": "v2.0.0",
-      "format": "openapi-3.0",
-      "file": "2.7.0/openapi.yaml",
-      "sha256": "d9eeaee2663e72a236a7a78193a9f9c50ca9d374c58dbfc158c9710b40329970",
-      "official": false,
-      "provenance": "Community conversion of the official MiR100 2.7.0 REST API PDF, from github.com/osrf/mir100-client@master"
+      "format": "swagger-2.0",
+      "file": "2.14.7/swagger.json",
+      "sha256": "26055524511cf8c8745d1066f99d5f3adc797beb9bfc03dbed13fd077127b51b",
+      "official": true,
+      "provenance": "Converted from the official MiR REST API PDF: https://supportportal.mobile-industrial-robots.com/support-files/manuals/PDF/rest_api/MiR_MIR250_REST_API_2.14.7.pdf",
+      "source_url": "https://supportportal.mobile-industrial-robots.com/support-files/manuals/PDF/rest_api/MiR_MIR250_REST_API_2.14.7.pdf",
+      "source_sha256": "a1381316eaac11bf88c8986f5c0ec9697e693c8e46b7c284d5636655aa483bc6"
     }
   ],
-  "wanted": [
-    "Latest 2.14.x official file (replaces the 2.7.0 community seed)",
-    "Latest 3.5.x+ official file if newer than 3.5.4",
-    "Third slot per selection rule (3.4.x, or a 4.x/1.x major if the portal lists one)"
-  ],
-  "notes": "The support portal requires a (free) account; anonymous scraping is blocked by a server-side login wall. The scrape workflow fills 'wanted' entries once MIR_PORTAL_EMAIL/MIR_PORTAL_PASSWORD secrets are configured."
+  "wanted": [],
+  "notes": "The portal (free account required; MIR_PORTAL_EMAIL/MIR_PORTAL_PASSWORD) publishes the API definitions as PDFs only. The scraper converts the preferred robot PDF (MIR250 first; FLEET/HOOK excluded) to Swagger 2.0; the converter is validated against the pinned official 3.5.4 swagger.json every scrape run."
 }

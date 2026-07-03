@@ -15,49 +15,51 @@ curl -H "Authorization: Basic $(printf '%s:%s' distributor "$(printf distributor
 ## How it stays current
 
 1. **`scrape.yml`** runs weekly: logs into the MiR support portal, parses the
-   REST API files listing, and applies the **selection rule** — *the latest
-   minor.patch of each of the newest 3 major versions* (filling remaining
-   slots with the newest major's previous minor lines if fewer than 3 majors
-   publish files).
-2. New or changed files are downloaded, hashed, and committed to
-   `packages/mir-emulator/src/mir_emulator/specs/` alongside
-   `registry.json`, and a PR is opened.
-3. **`ci.yml`** on that PR runs the full conformance + adversarial suite
-   against every tracked spec — every endpoint answered with a declared
-   status code, every GET body validated against its response schema — so a
-   new MiR release is proven before it merges.
-4. **`release.yml`** builds one `mir-emulator` distribution per tracked MiR
-   version: `pip install mir-emulator==3.5.4` gets a 3.5.4 robot.
+   REST API files listing (~500 PDFs, one per product per version), and
+   applies the **selection rule** — *the latest minor.patch of each of the
+   newest 3 major versions* (filling remaining slots with the newest major's
+   previous minor lines if fewer than 3 majors publish files).
+2. MiR publishes the API definitions **as PDFs only** (swagger2markup +
+   Asciidoctor renderings of their internal swagger doc). The scraper picks
+   one robot PDF per selected version (MIR250 preferred; FLEET/HOOK are
+   different APIs and excluded) and **converts it back to Swagger 2.0**
+   (`mir_spec_scraper/pdf_convert.py`).
+3. The converter is gated by a **correctness oracle**: MiR published exactly
+   one machine-readable spec ever (3.5.4 `swagger.json`, pinned in the
+   registry). Every scrape run re-converts the 3.5.4 PDF and requires zero
+   structural differences (operations, parameters, response schemas,
+   definition property types) against that official document.
+4. New or changed specs land in
+   `packages/mir-emulator/src/mir_emulator/specs/` + `registry.json` via an
+   automated PR; **`ci.yml`** proves every tracked version against the full
+   conformance + adversarial suite before it merges.
+5. **`release.yml`** builds one `mir-emulator` distribution per tracked MiR
+   version: `pip install mir-emulator==3.8.1` gets a 3.8.1 robot.
 
-### Enabling the scraper
+### Secrets
 
-The portal has a login wall (free account). Add two repo secrets and the loop
-is live:
-
-- `MIR_PORTAL_EMAIL` / `MIR_PORTAL_PASSWORD` — portal credentials
-- `PYPI_API_TOKEN` (optional) — to publish wheels from `release.yml`
-
-Until then the scrape workflow no-ops with a notice, and the repo serves the
-seed specs below.
+- `MIR_PORTAL_EMAIL` / `MIR_PORTAL_PASSWORD` — portal credentials (free
+  account); without them the scrape workflow no-ops with a notice.
+- `PYPI_API_TOKEN` (optional) — to publish wheels from `release.yml`.
 
 ## Tracked versions
 
-See `packages/mir-emulator/src/mir_emulator/specs/registry.json` for the
-authoritative list (versions, hashes, provenance). Seeded with:
+`packages/mir-emulator/src/mir_emulator/specs/registry.json` is the
+authoritative list (versions, hashes, provenance, source PDF URLs). Currently:
 
-| MiR version | Source | Notes |
-|---|---|---|
-| 3.5.4 | Official MiR250 `swagger.json` (mirrored from [processrobotics/mir-api](https://github.com/processrobotics/mir-api)) | newest 3.x line known publicly |
-| 2.7.0 | Community OpenAPI conversion of the official 2.7.0 PDF ([osrf/mir100-client](https://github.com/osrf/mir100-client)) | stand-in until the scraper fetches the latest official 2.14.x |
-
-The first authenticated scrape replaces the stand-ins with the portal's
-official files per the selection rule (e.g. `3.5.x`, `3.4.x`, `2.14.x`).
+| MiR version | Source |
+|---|---|
+| 3.8.1 | Converted from the official MiR250 3.8.1 REST API PDF |
+| 3.7.2 | Converted from the official MiR250 3.7.2 REST API PDF |
+| 3.5.4 | Official `swagger.json` (pinned — the converter's oracle) |
+| 2.14.7 | Converted from the official MiR250 2.14.7 REST API PDF |
 
 ## What the emulator does
 
 - Serves **every operation** in the loaded spec under `/api/v2.0.0`
-  (157 paths in 3.5.4), with responses that validate against the spec's
-  response schemas. Deterministic: same requests, same answers.
+  (289 operations across 159 paths in 3.8.1), with responses that validate
+  against the spec's response schemas. Deterministic: same requests, same
+  answers.
 - **Stateful** where it matters: `/status` (PUT merges), `/mission_queue`
   (POST enqueues `Pending` entries with monotonic ids, DELETE clears),
   `/registers` (200 PLC registers, read/write), generic CRUD with
@@ -87,5 +89,7 @@ app = create_app("3.5.4")   # ASGI app: run under uvicorn, or hit with httpx/Tes
 
 Runtime: `starlette` + `uvicorn` (ASGI routing/serving), `jsonschema`
 (request/response validation against the spec), `pyyaml` (YAML specs),
-`httpx` (scraper HTTP + test client). Dev: `pytest`, `hypothesis`
-(property tests on the input-handling paths), `ruff`, `ty`.
+`httpx` (scraper HTTP + test client), `pdfplumber` (scraper only: the portal
+publishes PDFs, and its ruled-table extraction is what makes the PDF→swagger
+conversion reliable). Dev: `pytest`, `hypothesis` (property tests on the
+input-handling paths), `ruff`, `ty`.
