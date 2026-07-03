@@ -28,6 +28,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--cors", action="store_true", help="Allow cross-origin requests (browser dashboards)"
     )
     parser.add_argument(
+        "--mission-duration",
+        type=float,
+        default=10.0,
+        help="Seconds a queued mission spends Executing before it is Done (default: 10)",
+    )
+    parser.add_argument(
         "--export",
         choices=("swagger2", "openapi3"),
         default=None,
@@ -80,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         username=args.username,
         password=args.password,
         cors=args.cors,
+        mission_duration=args.mission_duration,
     )
     version = app.state.mir_version
     print(f"mir-emulator: MiR {version} REST API on http://{args.host}:{args.port}/api/v2.0.0")

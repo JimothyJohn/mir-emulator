@@ -116,6 +116,10 @@ def build_app() -> Starlette:
                 ),
                 "specs": {v: f"{base}/{v}/swagger.json" for v in versions},
                 "console": f"{base}/console",
+                "sessions": (
+                    "Send X-MiR-Session: <1-64 chars of A-Za-z0-9._-> to control your own "
+                    "isolated virtual robot; omit it for the shared default robot"
+                ),
                 "notes": (
                     "Shared demo instance: state is in-memory, per runtime instance, "
                     "and reset on cold start. Do not store anything you need to keep."
