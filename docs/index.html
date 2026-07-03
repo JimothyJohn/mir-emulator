@@ -273,6 +273,47 @@ pre.resp .b { color: #8a3ea8; }
 #tele-read b { color: var(--blue-deep); font-weight: 600; }
 #tele-read .exec { color: var(--green); }
 
+/* ---------- API catalog ---------- */
+.cat-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+#op-filter { flex: 1; min-width: 160px; }
+#op-select { flex: 2; min-width: 240px; max-width: 100%; }
+.op-params { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.op-params > div { display: grid; gap: 2px; }
+.op-params label { color: var(--ink-faint); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.op-params label span { text-transform: none; letter-spacing: 0; }
+.op-params input { width: 190px; padding: 7px 10px; font-size: 12.5px; }
+.op-info { margin: -2px 0 12px; }
+.op-info .code { font-family: var(--mono); font-weight: 600; color: var(--blue-deep); }
+
+/* ---------- history ---------- */
+.history { display: grid; gap: 6px; max-height: 320px; overflow: auto; }
+.hrow {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  cursor: pointer; text-align: left;
+  background: #fff; color: var(--ink-dim);
+  border: 1px solid var(--line); border-radius: .4rem;
+  padding: 6px 10px; font-family: var(--mono); font-size: 11px;
+}
+.hrow:hover { border-color: var(--brand); color: var(--blue-deep); }
+.hrow .hm { font-weight: 600; color: var(--ink); flex: none; }
+.hrow .hp { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hrow .hs { margin-left: auto; font-weight: 600; flex: none; }
+.hrow .hs.s2 { color: var(--green); }
+.hrow .hs.s4 { color: var(--amber); }
+.hrow .hs.s5, .hrow .hs.s0 { color: var(--red); }
+
+/* ---------- response headers ---------- */
+details.resp-headers { margin-top: 8px; }
+details.resp-headers summary {
+  cursor: pointer; font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-faint);
+}
+details.resp-headers pre {
+  margin-top: 6px; background: var(--code-bg); border: 1px solid var(--line); border-radius: .4rem;
+  padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; color: var(--ink-dim);
+  white-space: pre-wrap; word-break: break-all;
+}
+
 /* ---------- footer ---------- */
 footer {
   margin-top: 46px; padding: 22px 24px;
@@ -377,6 +418,13 @@ footer code { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,
           <div class="token" id="token-view"></div>
         </div>
       </section>
+
+      <section class="panel">
+        <div class="panel-head">History <span class="tag" id="hist-count"></span></div>
+        <div class="panel-body">
+          <div class="history" id="history"></div>
+        </div>
+      </section>
     </div>
 
     <section class="panel">
@@ -386,9 +434,17 @@ footer code { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,
           <button id="tele-toggle" title="poll GET /status every 2s">&#9654; Telemetry</button>
           <span id="tele-read">off &mdash; enqueue a mission, then watch your robot run it</span>
         </div>
+        <div class="body-label" style="margin-top:0">API catalog <span id="op-count"></span></div>
+        <div class="cat-row">
+          <input type="text" id="op-filter" placeholder="filter operations&hellip; e.g. mission, registers, PUT" spellcheck="false" autocomplete="off">
+          <select id="op-select" disabled><option value="">browse all operations&hellip;</option></select>
+        </div>
+        <div class="op-params" id="op-params"></div>
+        <div class="hint op-info" id="op-info" style="display:none"></div>
+        <div class="body-label" style="margin-top:0">Quick actions</div>
         <div class="presets" id="presets"></div>
         <div class="reqline">
-          <select id="method"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select>
+          <select id="method"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select>
           <input type="text" id="path" value="/status" spellcheck="false" autocomplete="off">
           <button class="send" id="send">Send request</button>
         </div>
@@ -402,8 +458,13 @@ footer code { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,
           <span id="resp-type"></span>
         </div>
         <pre class="resp" id="resp" style="display:none"></pre>
-        <div class="hint" id="resp-hint">Pick a preset or type a path (relative to <code>/api/v2.0.0</code>), then send.
-          Writes are welcome — it's an emulator. Try enqueueing a mission, then listing the queue.</div>
+        <details class="resp-headers" id="resp-headers" style="display:none">
+          <summary>response headers</summary>
+          <pre id="resp-headers-pre"></pre>
+        </details>
+        <div class="hint" id="resp-hint">Pick an operation from the catalog, hit a quick action, or type a path
+          (relative to <code>/api/v2.0.0</code>), then send. Writes are welcome — it's an emulator.
+          Try enqueueing a mission, then listing the queue.</div>
       </div>
     </section>
   </div>
@@ -521,7 +582,7 @@ async function refreshCurl() {
   if (sessionId())
     cmd += " \\\n  -H 'X-MiR-Session: " + sessionId().replace(/'/g, "") + "'";
   const body = $("body").value.trim();
-  if (body && (m === "POST" || m === "PUT"))
+  if (body && (m === "POST" || m === "PUT" || m === "PATCH"))
     cmd += " \\\n  -H 'Content-Type: application/json' \\\n  -d '" + body.replace(/'/g, "'\\''") + "'";
   $("curl").textContent = cmd;
   $("token-view").innerHTML = "<b>Authorization:</b> Basic " + esc(await authToken());
@@ -547,7 +608,7 @@ function renderVersions() {
     b.innerHTML = '<span class="vnum">' + esc(v) + "</span>" +
       (i === 0 ? '<span class="chip latest">latest</span>' : "") +
       '<span class="vpath">/' + esc(v) + "/api/v2.0.0</span>";
-    b.onclick = () => { currentVersion = v; renderVersions(); loadVersionMeta(); refreshCurl(); };
+    b.onclick = () => { currentVersion = v; renderVersions(); loadVersionMeta(); loadSpec(); refreshCurl(); };
     box.appendChild(b);
   });
   $("vcount").textContent = versions.length + " tracked";
@@ -584,6 +645,7 @@ function renderPresets() {
     b.className = "preset";
     b.innerHTML = "<b>" + pr.m + "</b>" + esc(pr.p) + " · " + esc(pr.note);
     b.onclick = () => {
+      clearOperation();
       $("method").value = pr.m;
       $("path").value = pr.p;
       $("body").value = pr.body ? JSON.stringify(pr.body, null, 2) : "";
@@ -594,9 +656,190 @@ function renderPresets() {
   });
 }
 function syncBodyVisibility() {
-  const writable = ["POST", "PUT"].includes($("method").value);
+  const writable = ["POST", "PUT", "PATCH"].includes($("method").value);
   $("body").style.display = writable ? "" : "none";
   $("body-label").style.display = writable ? "" : "none";
+}
+
+/* ---------- API catalog: the full swagger, browsable ---------- */
+let spec = null;         // { ops: [...], defs: {...} } for the active version
+let pathTemplate = null; // e.g. "/registers/{register_id}" while an op is selected
+
+function indexSpec(doc) {
+  const ops = [];
+  for (const [p, item] of Object.entries(doc.paths || {})) {
+    for (const [m, op] of Object.entries(item)) {
+      if (!["get", "post", "put", "patch", "delete"].includes(m)) continue;
+      const body = (op.parameters || []).find((pa) => pa.in === "body");
+      ops.push({
+        m: m.toUpperCase(),
+        p,
+        group: "/" + (p.split("/")[1] || ""),
+        params: (op.parameters || []).filter((pa) => pa.in === "path"),
+        bodySchema: body ? body.schema : null,
+        responses: Object.entries(op.responses || {}).map(([c, r]) => [c, r.description || ""]),
+      });
+    }
+  }
+  ops.sort((a, b) => a.p.localeCompare(b.p) || a.m.localeCompare(b.m));
+  return { ops, defs: doc.definitions || {} };
+}
+
+/* A minimal, valid-shaped body from a swagger schema: required props first,
+   zero values by type. Depth-capped against self-referential definitions. */
+function exampleFromSchema(schema, defs, depth = 0) {
+  if (!schema || depth > 6) return null;
+  if (schema.$ref) return exampleFromSchema(defs[schema.$ref.split("/").pop()], defs, depth + 1);
+  if (schema.type === "object" || schema.properties) {
+    const req = schema.required || [];
+    const props = schema.properties || {};
+    const out = {};
+    for (const name of Object.keys(props).sort((a, b) => req.includes(b) - req.includes(a)))
+      out[name] = exampleFromSchema(props[name], defs, depth + 1);
+    return out;
+  }
+  if (schema.type === "array") {
+    const item = exampleFromSchema(schema.items, defs, depth + 1);
+    return item === null ? [] : [item];
+  }
+  if (schema.type === "integer" || schema.type === "number") return 0;
+  if (schema.type === "boolean") return false;
+  if (schema.type === "string") return "string";
+  return null;
+}
+
+async function loadSpec() {
+  spec = null;
+  clearOperation();
+  renderCatalog();
+  if (MODE === "fleet" && !currentVersion) return;
+  try {
+    // Fleet mode and a local `mir-emulator` serve swagger.json; a real robot
+    // may not — the catalog quietly stays disabled and free-form still works.
+    const r = await fetchT(apiRoot(currentVersion) + "/swagger.json", {}, 10000);
+    if (!r.ok) return;
+    spec = indexSpec(await r.json());
+  } catch { /* catalog is progressive enhancement */ }
+  renderCatalog();
+}
+
+function renderCatalog() {
+  const sel = $("op-select");
+  const q = $("op-filter").value.trim().toLowerCase();
+  sel.innerHTML = '<option value="">browse all operations&hellip;</option>';
+  sel.disabled = !spec;
+  $("op-count").textContent = spec ? "— " + spec.ops.length + " operations" : "";
+  if (!spec) return;
+  let shown = 0;
+  let og = null, ogGroup = null;
+  spec.ops.forEach((op, i) => {
+    if (q && !(op.m + " " + op.p).toLowerCase().includes(q)) return;
+    if (op.group !== ogGroup) {
+      og = document.createElement("optgroup");
+      og.label = op.group;
+      ogGroup = op.group;
+      sel.appendChild(og);
+    }
+    const o = document.createElement("option");
+    o.value = i;
+    o.textContent = op.m + "  " + op.p;
+    og.appendChild(o);
+    shown++;
+  });
+  if (q) $("op-count").textContent = "— " + shown + " of " + spec.ops.length + " operations";
+}
+
+function clearOperation() {
+  pathTemplate = null;
+  $("op-params").innerHTML = "";
+  $("op-info").style.display = "none";
+  $("op-select").value = "";
+}
+
+function applyOperation(i) {
+  const op = spec && spec.ops[i];
+  if (!op) { clearOperation(); return; }
+  pathTemplate = op.p;
+  $("op-params").innerHTML = "";
+  $("method").value = op.m;
+  $("path").value = op.p;
+  op.params.forEach((pa) => {
+    const box = document.createElement("div");
+    const label = document.createElement("label");
+    label.textContent = pa.name + " ";
+    if (pa.type) {
+      const t = document.createElement("span");
+      t.textContent = "(" + pa.type + ")";
+      label.appendChild(t);
+    }
+    const inp = document.createElement("input");
+    inp.type = "text"; inp.spellcheck = false; inp.autocomplete = "off";
+    inp.dataset.param = pa.name;
+    inp.placeholder = pa.type === "integer" ? "1" : pa.name;
+    inp.addEventListener("input", rebuildPath);
+    box.appendChild(label); box.appendChild(inp);
+    $("op-params").appendChild(box);
+  });
+  const body = op.bodySchema ? exampleFromSchema(op.bodySchema, spec.defs) : null;
+  $("body").value = body === null ? "" : JSON.stringify(body, null, 2);
+  const info = $("op-info");
+  if (op.responses.length) {
+    info.style.display = "";
+    info.innerHTML = "expected: " + op.responses.map(([c, d]) =>
+      '<span class="code">' + esc(c) + "</span> " + esc(String(d).split(" or ")[0])).join(" &middot; ");
+  } else {
+    info.style.display = "none";
+  }
+  syncBodyVisibility();
+  refreshCurl();
+}
+
+function rebuildPath() {
+  if (!pathTemplate) return;
+  let p = pathTemplate;
+  $("op-params").querySelectorAll("input").forEach((inp) => {
+    const v = inp.value.trim();
+    if (v) p = p.replaceAll("{" + inp.dataset.param + "}", encodeURIComponent(v));
+  });
+  $("path").value = p;
+  refreshCurl();
+}
+
+/* ---------- request history ---------- */
+const HIST_KEY = "mir-console-history";
+let hist = [];
+
+function renderHistory() {
+  const box = $("history");
+  $("hist-count").textContent = hist.length ? hist.length + " sent" : "";
+  if (!hist.length) {
+    box.innerHTML = '<div class="hint" style="margin-top:0">requests you send appear here &mdash; click one to reload it</div>';
+    return;
+  }
+  box.innerHTML = "";
+  hist.forEach((h) => {
+    const b = document.createElement("button");
+    b.className = "hrow";
+    b.title = h.ms + " ms — click to reload into the console";
+    b.innerHTML = '<span class="hm">' + esc(h.m) + '</span><span class="hp">' + esc(h.p) + "</span>" +
+      '<span class="hs s' + String(h.status)[0] + '">' + (h.status || "ERR") + "</span>";
+    b.onclick = () => {
+      clearOperation();
+      $("method").value = h.m;
+      $("path").value = h.p;
+      $("body").value = h.body || "";
+      syncBodyVisibility();
+      refreshCurl();
+    };
+    box.appendChild(b);
+  });
+}
+
+function pushHistory(h) {
+  hist.unshift(h);
+  hist = hist.slice(0, 30);
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(hist)); } catch { /* private mode */ }
+  renderHistory();
 }
 
 /* ---------- transmit ---------- */
@@ -609,16 +852,17 @@ async function transmit() {
   const url = fullPath(currentVersion, $("path").value || "/");
   const opts = { method: m, headers: await requestHeaders() };
   const body = $("body").value.trim();
-  if (body && (m === "POST" || m === "PUT")) {
+  if (body && (m === "POST" || m === "PUT" || m === "PATCH")) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = body;
   }
   const t0 = performance.now();
-  let status = 0, text = "", ctype = "";
+  let status = 0, text = "", ctype = "", rhdrs = "";
   try {
     const r = await fetch(url, opts);
     status = r.status;
     ctype = r.headers.get("content-type") || "";
+    rhdrs = [...r.headers.entries()].map(([k, v]) => k + ": " + v).join("\n");
     text = await r.text();
   } catch (e) {
     text = "network error: " + e.message +
@@ -643,6 +887,9 @@ async function transmit() {
   } catch {
     pre.textContent = text || "(empty body)";
   }
+  $("resp-headers").style.display = "";
+  $("resp-headers-pre").textContent = rhdrs || "(none exposed to this page — same-origin requests show all)";
+  pushHistory({ m, p: $("path").value || "/", status, ms, body: opts.body || "" });
   btn.disabled = false;
 }
 
@@ -743,7 +990,7 @@ async function connectTo(rawBase) {
   st.textContent = mode === "fleet"
     ? "connected — emulator fleet, " + versions.length + " versions"
     : "connected — direct MiR API at " + base.replace(/^https?:\/\//, "") + "/api/v2.0.0";
-  renderVersions(); loadVersionMeta(); refreshCurl();
+  renderVersions(); loadVersionMeta(); loadSpec(); refreshCurl();
 }
 
 function selectedEndpoint() {
@@ -783,6 +1030,13 @@ syncBodyVisibility();
   $(id).addEventListener("input", () => { syncBodyVisibility(); refreshCurl(); }));
 $("send").onclick = transmit;
 $("path").addEventListener("keydown", (e) => { if (e.key === "Enter") transmit(); });
+$("op-filter").addEventListener("input", renderCatalog);
+$("op-select").addEventListener("change", () => {
+  const v = $("op-select").value;
+  if (v === "") clearOperation(); else applyOperation(Number(v));
+});
+try { hist = JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch { hist = []; }
+renderHistory();
 $("connect").onclick = () => connectTo(selectedEndpoint());
 $("tele-toggle").onclick = () => setTelemetry(!teleTimer);
 $("new-session").onclick = () => {
