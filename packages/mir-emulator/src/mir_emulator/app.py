@@ -3,11 +3,21 @@
 Every operation in the loaded MiR spec becomes a route under its base path
 (/api/v2.0.0). Behavior overlays (behaviors.py) handle the interesting
 stateful endpoints; everything else gets generic, schema-faithful CRUD.
+
+Sessions: every request may carry ``X-MiR-Session: <id>`` to get its own
+virtual robot — an isolated StateStore (own mission queue, registers, status
+overrides) — so many users can run simulations against one emulator without
+trampling each other. No header means the shared default robot. Session
+stores are LRU-capped so a public deployment can't be memory-exhausted by
+invented session ids.
 """
 
 from __future__ import annotations
 
 import json
+import re
+import threading
+from collections import OrderedDict
 from typing import Any
 
 from jsonschema import Draft4Validator
@@ -21,13 +31,16 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from mir_emulator import auth, registry
-from mir_emulator.behaviors import OVERRIDES, RequestCtx
+from mir_emulator.behaviors import MISSION_DURATION_S, OVERRIDES, RequestCtx
 from mir_emulator.examples import example_from_schema, overlay_compatible
 from mir_emulator.openapi3 import to_openapi3
 from mir_emulator.spec import Operation, Spec, load_spec
 from mir_emulator.state import StateStore
 
 MAX_BODY_BYTES = 2 * 1024 * 1024
+SESSION_HEADER = "x-mir-session"
+SESSION_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+MAX_SESSIONS = 256
 
 
 def _error_body(status: int, human: str) -> dict:
@@ -76,13 +89,31 @@ class Emulator:
         username: str = auth.DEFAULT_USERNAME,
         password: str = auth.DEFAULT_PASSWORD,
         seed: bool = True,
+        mission_duration: float = MISSION_DURATION_S,
     ) -> None:
         self.spec = spec
-        self.state = StateStore()
+        self.state = StateStore()  # the shared default robot (no session header)
         self.enforce_auth = enforce_auth
         self.username = username
         self.password = password
         self.seed = seed
+        self.mission_duration = mission_duration
+        self._sessions: OrderedDict[str, StateStore] = OrderedDict()
+        self._sessions_lock = threading.Lock()
+
+    def state_for(self, session_id: str) -> StateStore:
+        """The default store, or an isolated per-session virtual robot."""
+        if not session_id:
+            return self.state
+        with self._sessions_lock:
+            store = self._sessions.get(session_id)
+            if store is None:
+                store = StateStore()
+                self._sessions[session_id] = store
+            self._sessions.move_to_end(session_id)
+            while len(self._sessions) > MAX_SESSIONS:
+                self._sessions.popitem(last=False)
+            return store
 
     def _example(self, schema: dict | None) -> Any:
         return example_from_schema(self.spec.deref(schema))
@@ -112,21 +143,21 @@ class Emulator:
         elif "id" in item and isinstance(item.get("id"), int):
             item["id"] = int(item_id)
 
-    def _seed_collection(self, key: str, collection_path: str) -> None:
+    def _seed_collection(self, state: StateStore, key: str, collection_path: str) -> None:
         if not self.seed:
-            self.state.seed_once(key, [])
+            state.seed_once(key, [])
             return
         schema = self._item_schema_for(collection_path)
         item = self._example(schema)
         if not isinstance(item, dict):
-            self.state.seed_once(key, [])
+            state.seed_once(key, [])
             return
         if "id" in item and isinstance(item["id"], int):
-            item_id: str | int = self.state.next_int_id()
+            item_id: str | int = state.next_int_id()
         else:
-            item_id = self.state.next_guid()
+            item_id = state.next_guid()
         self._assign_ids(item, item_id)
-        self.state.seed_once(key, [(str(item_id), item)])
+        state.seed_once(key, [(str(item_id), item)])
 
     def _validate_body(self, op: Operation, body: Any) -> str | None:
         if body is None or not op.body_schema:
@@ -154,6 +185,13 @@ class Emulator:
         ):
             return _respond(401, _error_body(401, "Not authorized"))
 
+        session_id = request.headers.get(SESSION_HEADER, "")
+        if session_id and not SESSION_ID_RE.match(session_id):
+            return _respond(
+                400,
+                _error_body(400, "Invalid X-MiR-Session: 1-64 chars from [A-Za-z0-9._-]"),
+            )
+
         body: Any = None
         if op.method in ("POST", "PUT"):
             raw = await request.body()
@@ -172,11 +210,12 @@ class Emulator:
 
         ctx = RequestCtx(
             spec=self.spec,
-            state=self.state,
+            state=self.state_for(session_id),
             op=op,
             path_params=dict(request.path_params),
             query=dict(request.query_params),
             body=body,
+            mission_duration=self.mission_duration,
         )
 
         override = OVERRIDES.get((op.method, op.path))
@@ -198,12 +237,12 @@ class Emulator:
         is_array_response = success_schema.get("type") == "array"
 
         if op.method == "GET" and not is_item and (is_array_response or has_item_sibling):
-            self._seed_collection(key, collection_path)
-            return op.success_status, list(self.state.collection(key).values())
+            self._seed_collection(ctx.state, key, collection_path)
+            return op.success_status, list(ctx.state.collection(key).values())
 
         if op.method == "GET" and is_item:
-            self._seed_collection(key, collection_path)
-            stored = self.state.get(key, item_id or "")
+            self._seed_collection(ctx.state, key, collection_path)
+            stored = ctx.state.get(key, item_id or "")
             if stored is None:
                 return 404, _error_body(404, "Not found")
             full = self._example(op.success_schema)
@@ -220,7 +259,7 @@ class Emulator:
             # Singleton document (e.g. /system/info).
             doc = self._example(op.success_schema)
             if isinstance(doc, dict):
-                overlay = self.state.singleton(op.path, {})
+                overlay = ctx.state.singleton(op.path, {})
                 doc.update({k: v for k, v in overlay.items() if k in doc})
             return op.success_status, doc
 
@@ -231,9 +270,9 @@ class Emulator:
             if isinstance(ctx.body, dict):
                 item.update(ctx.body)
             if "id" in item and isinstance(item.get("id"), int):
-                new_id: str | int = self.state.next_int_id()
+                new_id: str | int = ctx.state.next_int_id()
             else:
-                new_id = self.state.next_guid()
+                new_id = ctx.state.next_guid()
             self._assign_ids(item, new_id)
             # Store a list-shaped element so GET-collection responses keep
             # validating even when the POST response schema types fields
@@ -246,17 +285,17 @@ class Emulator:
                 stored = element
             else:
                 stored = item
-            self.state.insert(key, str(item.get("guid", new_id)), stored)
+            ctx.state.insert(key, str(item.get("guid", new_id)), stored)
             return op.success_status, item
 
         if op.method == "PUT" and is_item:
-            self._seed_collection(key, collection_path)
-            existing = self.state.get(key, item_id or "")
+            self._seed_collection(ctx.state, key, collection_path)
+            existing = ctx.state.get(key, item_id or "")
             if existing is None:
                 return 404, _error_body(404, "Not found")
             patch = ctx.body if isinstance(ctx.body, dict) else {}
             updated = overlay_compatible(dict(existing), patch)
-            self.state.insert(key, item_id or "", updated)
+            ctx.state.insert(key, item_id or "", updated)
             full = self._example(op.success_schema)
             if isinstance(full, dict) and full:
                 overlay_compatible(full, updated)
@@ -267,18 +306,18 @@ class Emulator:
             # Singleton update (e.g. PUT /wifi/enabled).
             doc = self._example(op.success_schema)
             if isinstance(doc, dict) and isinstance(ctx.body, dict):
-                self.state.merge_singleton(op.path, {k: v for k, v in ctx.body.items() if k in doc})
-                doc.update(self.state.singleton(op.path, {}))
+                ctx.state.merge_singleton(op.path, {k: v for k, v in ctx.body.items() if k in doc})
+                doc.update(ctx.state.singleton(op.path, {}))
             return op.success_status, doc
 
         if op.method == "DELETE" and is_item:
-            self._seed_collection(key, collection_path)
-            if not self.state.delete(key, item_id or ""):
+            self._seed_collection(ctx.state, key, collection_path)
+            if not ctx.state.delete(key, item_id or ""):
                 return 404, _error_body(404, "Not found")
             return op.success_status, None if op.success_status == 204 else {}
 
         if op.method == "DELETE":
-            self.state.clear(key)
+            ctx.state.clear(key)
             return op.success_status, None if op.success_status == 204 else {}
 
         return op.success_status, self._example(op.success_schema)
@@ -316,11 +355,17 @@ def create_app(
     password: str = auth.DEFAULT_PASSWORD,
     seed: bool = True,
     cors: bool = False,
+    mission_duration: float = MISSION_DURATION_S,
 ) -> Starlette:
     version, path = registry.spec_path(mir_version)
     spec = load_spec(path, version)
     emulator = Emulator(
-        spec, enforce_auth=enforce_auth, username=username, password=password, seed=seed
+        spec,
+        enforce_auth=enforce_auth,
+        username=username,
+        password=password,
+        seed=seed,
+        mission_duration=mission_duration,
     )
 
     routes = [
@@ -352,6 +397,10 @@ def create_app(
                 "base_path": spec.base_path,
                 "operations": len(spec.operations),
                 "auth": "Basic BASE64(user:SHA-256(password))" if enforce_auth else "disabled",
+                "sessions": (
+                    "Send X-MiR-Session: <1-64 chars of A-Za-z0-9._-> for an isolated "
+                    "virtual robot; omit it for the shared default robot"
+                ),
                 "specs": {"swagger2": "/swagger.json", "openapi3": "/openapi.json"},
             }
         )
