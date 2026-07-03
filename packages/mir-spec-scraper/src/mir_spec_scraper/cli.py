@@ -47,6 +47,9 @@ def _github_output(changed: bool, summary: str) -> None:
     output_path = os.environ.get("GITHUB_OUTPUT")
     if not output_path:
         return
+    # $GITHUB_OUTPUT is line-oriented and the summary carries portal-derived
+    # text; collapse whitespace so a smuggled newline can't forge extra keys.
+    summary = " ".join(summary.split())
     with open(output_path, "a") as fh:
         fh.write(f"changed={'true' if changed else 'false'}\n")
         fh.write(f"summary={summary}\n")
