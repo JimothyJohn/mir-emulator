@@ -26,6 +26,19 @@ Parameters:
   LogRetentionDays:
     Type: Number
     Default: 14
+  DomainName:
+    Type: String
+    Default: ""
+    Description: Custom domain for the API (e.g. mir.advin.io); empty disables
+  HostedZoneId:
+    Type: String
+    Default: ""
+    Description: Route53 public hosted zone that owns DomainName's parent
+
+Conditions:
+  HasCustomDomain: !And
+    - !Not [!Equals [!Ref DomainName, ""]]
+    - !Not [!Equals [!Ref HostedZoneId, ""]]
 
 Resources:
   FunctionLogGroup:
@@ -121,6 +134,56 @@ Resources:
           "integrationLatencyMs":"$context.integrationLatency",
           "error":"$context.error.messageString"}
 
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+
+  ApiDomain:
+    Type: AWS::ApiGatewayV2::DomainName
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref DomainName
+      DomainNameConfigurations:
+        - CertificateArn: !Ref Certificate
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
+
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Condition: HasCustomDomain
+    Properties:
+      ApiId: !Ref HttpApi
+      DomainName: !Ref ApiDomain
+      Stage: !Ref Stage
+
+  DnsAliasA:
+    Type: AWS::Route53::RecordSet
+    Condition: HasCustomDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ApiDomain.RegionalDomainName
+        HostedZoneId: !GetAtt ApiDomain.RegionalHostedZoneId
+
+  DnsAliasAAAA:
+    Type: AWS::Route53::RecordSet
+    Condition: HasCustomDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt ApiDomain.RegionalDomainName
+        HostedZoneId: !GetAtt ApiDomain.RegionalHostedZoneId
+
   InvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -133,5 +196,8 @@ Outputs:
   ApiUrl:
     Description: Base URL of the public demo API ($default stage)
     Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
+  PublicUrl:
+    Description: Custom-domain URL (empty when no domain configured)
+    Value: !If [HasCustomDomain, !Sub "https://${DomainName}", ""]
   FunctionName:
     Value: !Ref Function

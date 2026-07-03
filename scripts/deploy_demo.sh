@@ -16,7 +16,17 @@ log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
 }
 
+sha256() { # portable: macOS has shasum, GitHub runners have both
+    if command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 | cut -d' ' -f1
+    else
+        sha256sum | cut -d' ' -f1
+    fi
+}
+
 STACK_NAME="${STACK_NAME:-mir-emulator-demo}"
+DOMAIN_NAME="${DOMAIN_NAME:-mir.advin.io}" # DOMAIN_NAME="" skips the custom domain
+CFN_ROLE_ARN="${CFN_ROLE_ARN:-}"           # optional CloudFormation service role
 REGION="${AWS_REGION:-$(aws configure get region)}"
 ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
 BUCKET="mir-emulator-artifacts-${ACCOUNT_ID}-${REGION}"
@@ -37,9 +47,12 @@ uv pip install \
 
 find "$BUILD_DIR/site" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
 
+# The fleet console ships inside the bundle and is served at /console.
+cp "$REPO_ROOT/docs/index.html" "$BUILD_DIR/site/mir_emulator/console.html"
+
 log "Zipping bundle"
 (cd "$BUILD_DIR/site" && zip -qr "$BUILD_DIR/code.zip" .)
-ZIP_SHA="$(shasum -a 256 "$BUILD_DIR/code.zip" | cut -d' ' -f1)"
+ZIP_SHA="$(sha256 < "$BUILD_DIR/code.zip")"
 S3_KEY="${STACK_NAME}/${ZIP_SHA}.zip"
 log "Bundle: $(du -h "$BUILD_DIR/code.zip" | cut -f1 | tr -d ' ') sha256=${ZIP_SHA}"
 
@@ -66,6 +79,25 @@ else
     log "Bundle already uploaded (content-addressed), skipping"
 fi
 
+DOMAIN_PARAMS=()
+if [[ -n "$DOMAIN_NAME" ]]; then
+    PARENT_DOMAIN="${DOMAIN_NAME#*.}"
+    HOSTED_ZONE_ID="$(aws route53 list-hosted-zones-by-name --dns-name "$PARENT_DOMAIN" \
+        --query "HostedZones[?Name=='${PARENT_DOMAIN}.'].Id | [0]" --output text)"
+    HOSTED_ZONE_ID="${HOSTED_ZONE_ID##*/}"
+    if [[ -z "$HOSTED_ZONE_ID" || "$HOSTED_ZONE_ID" == "None" ]]; then
+        log "ERROR: no public hosted zone found for ${PARENT_DOMAIN}"
+        exit 1
+    fi
+    log "Custom domain ${DOMAIN_NAME} in zone ${HOSTED_ZONE_ID}"
+    DOMAIN_PARAMS=("DomainName=${DOMAIN_NAME}" "HostedZoneId=${HOSTED_ZONE_ID}")
+fi
+
+ROLE_ARGS=()
+if [[ -n "$CFN_ROLE_ARN" ]]; then
+    ROLE_ARGS=(--role-arn "$CFN_ROLE_ARN")
+fi
+
 log "Deploying CloudFormation stack ${STACK_NAME}"
 aws cloudformation deploy \
     --region "$REGION" \
@@ -73,7 +105,9 @@ aws cloudformation deploy \
     --template-file "$REPO_ROOT/deploy/template.yaml" \
     --capabilities CAPABILITY_IAM \
     --no-fail-on-empty-changeset \
-    --parameter-overrides "CodeS3Bucket=${BUCKET}" "CodeS3Key=${S3_KEY}"
+    ${ROLE_ARGS[@]+"${ROLE_ARGS[@]}"} \
+    --parameter-overrides "CodeS3Bucket=${BUCKET}" "CodeS3Key=${S3_KEY}" \
+    ${DOMAIN_PARAMS[@]+"${DOMAIN_PARAMS[@]}"}
 
 API_URL="$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$STACK_NAME" \
     --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)"
@@ -84,13 +118,13 @@ if [[ "${SKIP_SMOKE:-0}" == "1" ]]; then
 fi
 
 log "Smoke testing"
-AUTH_TOKEN="$(printf '%s:%s' distributor "$(printf distributor | shasum -a 256 | cut -d' ' -f1)" | base64)"
+AUTH_TOKEN="$(printf '%s:%s' distributor "$(printf distributor | sha256)" | base64)"
 
 check() { # check <expected_status> <url> [curl args...]
     local expected="$1" url="$2"
     shift 2
     local status
-    status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$@" "$url")"
+    status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$@" "$url" || true)"
     if [[ "$status" != "$expected" ]]; then
         log "FAIL ${url} -> ${status} (wanted ${expected})"
         return 1
@@ -100,8 +134,26 @@ check() { # check <expected_status> <url> [curl args...]
 
 check 200 "${API_URL}/healthz"
 check 200 "${API_URL}/"
+check 200 "${API_URL}/console"
 check 401 "${API_URL}/latest/api/v2.0.0/status"
 for v in $(curl -s "${API_URL}/healthz" | python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin)["versions"]))'); do
     check 200 "${API_URL}/${v}/api/v2.0.0/status" -H "Authorization: Basic ${AUTH_TOKEN}"
 done
+
+if [[ -n "$DOMAIN_NAME" ]]; then
+    # Fresh alias records can take a moment to resolve everywhere.
+    for attempt in $(seq 1 10); do
+        if check 200 "https://${DOMAIN_NAME}/healthz" 2>/dev/null; then
+            break
+        fi
+        if [[ "$attempt" == "10" ]]; then
+            log "FAIL https://${DOMAIN_NAME}/healthz never came up"
+            exit 1
+        fi
+        log "waiting for DNS (${attempt}/10)"
+        sleep 15
+    done
+    check 200 "https://${DOMAIN_NAME}/console"
+    check 200 "https://${DOMAIN_NAME}/latest/api/v2.0.0/status" -H "Authorization: Basic ${AUTH_TOKEN}"
+fi
 log "Smoke test passed"

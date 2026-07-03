@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
@@ -25,7 +26,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
 from mir_emulator import registry
@@ -34,6 +35,23 @@ from mir_emulator.app import _SecurityHeadersMiddleware, create_app
 # The emulator itself caps request bodies at 2 MiB; reject anything larger
 # before it is even handed to the app (API Gateway allows up to 10 MB).
 MAX_EVENT_BODY_BYTES = 4 * 1024 * 1024
+
+# docs/index.html, bundled next to this module by scripts/deploy_demo.sh.
+# Absent in normal installs, where /console simply 404s.
+CONSOLE_FILE = Path(__file__).with_name("console.html")
+
+# The console is a single inline-script page (hence 'unsafe-inline'); it
+# fetches Google Fonts and, via its ?api= override, arbitrary user-chosen
+# emulator endpoints — hence the broad connect-src.
+CONSOLE_CSP = (
+    "default-src 'none'; "
+    "style-src 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src https://fonts.gstatic.com; "
+    "script-src 'unsafe-inline'; "
+    "img-src data:; "
+    "connect-src https: http://127.0.0.1:* http://localhost:*; "
+    "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+)
 
 
 class _HstsMiddleware:
@@ -97,6 +115,7 @@ def build_app() -> Starlette:
                     "factory default account distributor/distributor"
                 ),
                 "specs": {v: f"{base}/{v}/swagger.json" for v in versions},
+                "console": f"{base}/console",
                 "notes": (
                     "Shared demo instance: state is in-memory, per runtime instance, "
                     "and reset on cold start. Do not store anything you need to keep."
@@ -106,6 +125,17 @@ def build_app() -> Starlette:
 
     async def healthz(_request: Request) -> JSONResponse:
         return JSONResponse({"status": "ok", "versions": versions})
+
+    async def console(_request: Request) -> HTMLResponse | JSONResponse:
+        if not CONSOLE_FILE.is_file():
+            return JSONResponse(
+                {"error_code": "404", "error_human": "Console page not bundled in this build"},
+                status_code=404,
+            )
+        return HTMLResponse(
+            CONSOLE_FILE.read_text("utf-8"),
+            headers={"Content-Security-Policy": CONSOLE_CSP},
+        )
 
     async def not_found(_request: Request, _exc: Exception) -> JSONResponse:
         return JSONResponse(
@@ -119,6 +149,7 @@ def build_app() -> Starlette:
     routes: list[Route | Mount] = [
         Route("/", index),
         Route("/healthz", healthz),
+        Route("/console", console),
         Mount("/latest", app=version_apps[latest]),
         *[Mount(f"/{v}", app=app) for v, app in version_apps.items()],
     ]

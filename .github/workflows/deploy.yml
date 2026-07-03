@@ -1,0 +1,52 @@
+name: Deploy demo
+
+# Prod path for the public demo (mir.advin.io): master-only, OIDC-assumed
+# role that can only drive CloudFormation + the artifacts bucket. Resource
+# permissions live in the CloudFormation service role (deploy/github-oidc.yaml).
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - packages/mir-emulator/**
+      - deploy/template.yaml
+      - docs/index.html
+      - scripts/deploy_demo.sh
+      - .github/workflows/deploy.yml
+      - uv.lock
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AWS_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: "3.13"
+
+      - uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Build bundle, deploy stack, smoke test
+        env:
+          CFN_ROLE_ARN: ${{ vars.AWS_CFN_EXEC_ROLE_ARN }}
+          DOMAIN_NAME: mir.advin.io
+        run: ./scripts/deploy_demo.sh

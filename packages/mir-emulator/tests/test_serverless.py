@@ -66,12 +66,36 @@ def test_index_lists_every_tracked_version(call):
     for version in registry.supported_versions():
         assert doc["versions"][version].endswith(f"/{version}/api/v2.0.0")
     assert "/latest/api/v2.0.0" in doc["latest"]
+    assert doc["console"].endswith("/console")
 
 
 def test_healthz(call):
     response = call(event("GET", "/healthz"))
     assert response["statusCode"] == 200
     assert body_json(response)["status"] == "ok"
+
+
+def test_console_404s_when_not_bundled(call):
+    # Normal installs don't ship console.html; only the Lambda bundle does.
+    if serverless.CONSOLE_FILE.is_file():
+        pytest.skip("console.html present in this environment")
+    response = call(event("GET", "/console"))
+    assert response["statusCode"] == 404
+
+
+def test_console_serves_bundled_page_with_csp(call, tmp_path, monkeypatch):
+    page = tmp_path / "console.html"
+    page.write_text("<!DOCTYPE html><title>fleet console</title>", encoding="utf-8")
+    monkeypatch.setattr(serverless, "CONSOLE_FILE", page)
+    response = call(event("GET", "/console"))
+    assert response["statusCode"] == 200
+    assert "text/html" in response["headers"]["content-type"]
+    assert "fleet console" in response["body"]
+    csp = response["headers"]["content-security-policy"]
+    assert "default-src 'none'" in csp
+    assert "frame-ancestors 'none'" in csp
+    # security headers still apply to the console
+    assert response["headers"]["x-content-type-options"] == "nosniff"
 
 
 def test_every_version_serves_status_with_auth(call):
