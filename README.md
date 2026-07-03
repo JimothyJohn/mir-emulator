@@ -1,4 +1,4 @@
-# mir-emulatro
+# MiR emulator
 
 Self-updating emulator of the [Mobile Industrial Robots (MiR) robot REST API](https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/).
 Develop and test MiR integrations against a local, spec-faithful `/api/v2.0.0`
