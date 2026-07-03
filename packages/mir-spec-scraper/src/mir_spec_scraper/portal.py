@@ -114,7 +114,7 @@ class PortalClient:
             base_url=base_url,
             follow_redirects=True,
             timeout=30.0,
-            headers={"User-Agent": "mir-emulatro-spec-scraper/1.0"},
+            headers={"User-Agent": "mir-emulator-spec-scraper/1.0"},
             transport=transport,
         )
 
