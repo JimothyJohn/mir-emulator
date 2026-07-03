@@ -61,7 +61,7 @@ def summarize_report(
                 OPENROUTER_URL,
                 headers={
                     "Authorization": f"Bearer {api_key}",
-                    "X-Title": "mir-emulatro spec scraper",
+                    "X-Title": "mir-emulator spec scraper",
                 },
                 json=payload,
             )
