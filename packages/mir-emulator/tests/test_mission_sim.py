@@ -39,10 +39,16 @@ def client():
     return TestClient(create_app("3.8.1"))
 
 
+def mission_guid(client, headers=AUTH):
+    """The robot only queues missions it knows; use the seeded one."""
+    r = client.get("/api/v2.0.0/missions", headers=headers)
+    assert r.status_code == 200
+    return r.json()[0]["guid"]
+
+
 def enqueue(client, headers=AUTH, **body):
-    r = client.post(
-        "/api/v2.0.0/mission_queue", json={"mission_id": "generic", **body}, headers=headers
-    )
+    body.setdefault("mission_id", mission_guid(client, headers))
+    r = client.post("/api/v2.0.0/mission_queue", json=body, headers=headers)
     assert r.status_code == 201
     return r.json()
 
@@ -178,12 +184,22 @@ def test_pause_freezes_mission_and_resume_completes_it(clock, client):
 
 
 def test_user_status_writes_survive_simulation(clock, client):
-    client.put("/api/v2.0.0/status", json={"robot_name": "conveyor-7"}, headers=AUTH)
+    # Per the spec's PutStatus document, `name` is the field that renames.
+    client.put("/api/v2.0.0/status", json={"name": "conveyor-7"}, headers=AUTH)
     enqueue(client)
     clock.tick(3.0)
     doc = status(client)
     assert doc["robot_name"] == "conveyor-7"
     assert doc["state_text"] == "Executing"  # sim owns state, user owns name
+
+
+def test_undeclared_put_status_fields_are_ignored(clock, client):
+    # A real robot only honors PutStatus-declared fields; robot_name is the
+    # GET-side name of the `name` field, not a writable one.
+    client.put("/api/v2.0.0/status", json={"robot_name": "sneaky"}, headers=AUTH)
+    assert status(client)["robot_name"] == "MiR_Emulated"
+    client.put("/api/v2.0.0/status", json={"battery_percentage": 1.0}, headers=AUTH)
+    assert status(client)["battery_percentage"] == 92.5
 
 
 # --- sessions: many users, many robots --------------------------------------
@@ -263,3 +279,220 @@ def test_custom_mission_duration(clock):
     assert q_state(quick, qid) == "Executing"
     clock.tick(2.0)  # 3.5s > 1s lag + 2s run
     assert q_state(quick, qid) == "Done"
+
+
+# --- referential integrity: the robot only runs missions it knows -----------
+
+
+def test_unknown_mission_id_is_rejected(clock, client):
+    r = client.post("/api/v2.0.0/mission_queue", json={"mission_id": "no-such-guid"}, headers=AUTH)
+    assert r.status_code == 400
+    assert "Argument error" in r.json()["error_human"]
+    assert client.get("/api/v2.0.0/mission_queue", headers=AUTH).json() == []
+
+
+def test_created_mission_can_be_enqueued(clock, client):
+    created = client.post(
+        "/api/v2.0.0/missions",
+        json={"name": "patrol west wing", "group_id": "emulated-0000-0000-0001-000000000000"},
+        headers=AUTH,
+    )
+    assert created.status_code == 201
+    entry = enqueue(client, mission_id=created.json()["guid"])
+    assert entry["mission_id"] == created.json()["guid"]
+
+
+# --- queue entry lifecycle metadata ------------------------------------------
+
+
+def iso(ts: float) -> str:
+    import time as _time
+
+    return _time.strftime("%Y-%m-%dT%H:%M:%S", _time.gmtime(ts))
+
+
+def test_queue_entry_timestamps_follow_the_lifecycle(clock, client):
+    entry = enqueue(client)
+    qid = entry["id"]
+    assert entry["ordered"] == iso(T0)
+    assert "started" not in entry and "finished" not in entry
+
+    clock.tick(2.0)  # executing since T0+1
+    running = client.get(f"/api/v2.0.0/mission_queue/{qid}", headers=AUTH).json()
+    assert running["started"] == iso(T0 + 1)
+    assert "finished" not in running
+
+    clock.tick(10.0)  # done at T0+11
+    done = client.get(f"/api/v2.0.0/mission_queue/{qid}", headers=AUTH).json()
+    assert done["state"] == "Done"
+    assert done["ordered"] == iso(T0)
+    assert done["started"] == iso(T0 + 1)
+    assert done["finished"] == iso(T0 + 11)
+
+
+def test_queue_entry_links_back_to_its_mission(clock, client):
+    guid = mission_guid(client)
+    entry = enqueue(client, mission_id=guid)
+    if "mission" in entry:  # field exists in every tracked 3.x spec
+        assert entry["mission"] == f"/v2.0.0/missions/{guid}"
+
+
+def test_status_links_to_executing_queue_entry(clock, client):
+    qid = enqueue(client)["id"]
+    clock.tick(2.0)
+    doc = status(client)
+    if "mission_queue_url" in doc:
+        assert doc["mission_queue_url"] == f"/v2.0.0/mission_queue/{qid}"
+
+
+def test_deleting_one_entry_recomputes_the_timeline(clock, client):
+    first = enqueue(client)["id"]
+    second = enqueue(client)["id"]
+    clock.tick(2.0)
+    assert q_state(client, first) == "Executing"
+
+    gone = client.delete(f"/api/v2.0.0/mission_queue/{first}", headers=AUTH)
+    assert gone.status_code == 204
+    assert client.get(f"/api/v2.0.0/mission_queue/{first}", headers=AUTH).status_code == 404
+    # the executing mission stopped on the spot; the next one takes over
+    assert q_state(client, second) == "Executing"
+
+    missing = client.delete("/api/v2.0.0/mission_queue/9999", headers=AUTH)
+    assert missing.status_code == 404
+
+
+def test_delete_on_a_fresh_queue_is_404_not_a_phantom_entry(clock, client):
+    r = client.delete("/api/v2.0.0/mission_queue/1", headers=AUTH)
+    assert r.status_code == 404
+    assert client.get("/api/v2.0.0/mission_queue", headers=AUTH).json() == []
+
+
+# --- PUT /status: the spec's declared fields and choices ---------------------
+
+
+def test_manual_control_holds_the_robot(clock, client):
+    qid = enqueue(client)["id"]
+    clock.tick(3.0)  # 2s executed
+    r = client.put("/api/v2.0.0/status", json={"state_id": 11}, headers=AUTH)
+    assert r.status_code == 200
+    doc = status(client)
+    assert doc["state_id"] == 11
+    assert doc["state_text"] == "Manualcontrol"
+
+    clock.tick(600.0)  # manual control freezes the sim like pause does
+    assert q_state(client, qid) == "Executing"
+
+    client.put("/api/v2.0.0/status", json={"state_id": 3}, headers=AUTH)
+    clock.tick(9.0)  # 2s + 9s > 10s: finishes after release
+    assert q_state(client, qid) == "Done"
+
+
+def test_put_status_rejects_undeclared_choices(clock, client):
+    for body in ({"state_id": 5}, {"state_id": 99}, {"mode_id": 1}, {"clear_error": False}):
+        r = client.put("/api/v2.0.0/status", json=body, headers=AUTH)
+        assert r.status_code == 400, body
+        assert "Argument error" in r.json()["error_human"]
+
+
+def test_mode_switch_is_stateful(clock, client):
+    r = client.put("/api/v2.0.0/status", json={"mode_id": 3}, headers=AUTH)
+    assert r.status_code == 200
+    doc = status(client)
+    assert doc["mode_id"] == 3
+    client.put("/api/v2.0.0/status", json={"mode_id": 7}, headers=AUTH)
+    assert status(client)["mode_id"] == 7
+
+
+def test_clear_error_true_is_accepted(clock, client):
+    r = client.put("/api/v2.0.0/status", json={"clear_error": True}, headers=AUTH)
+    assert r.status_code == 200
+    assert status(client).get("errors", []) == []
+
+
+def test_put_position_relocalizes_the_robot(clock, client):
+    r = client.put(
+        "/api/v2.0.0/status",
+        json={"position": {"x": 10.0, "y": 3.0, "orientation": 90.0}},
+        headers=AUTH,
+    )
+    assert r.status_code == 200
+    pos = status(client)["position"]
+    assert (pos["x"], pos["y"], pos["orientation"]) == (10.0, 3.0, 90.0)
+
+    enqueue(client)
+    clock.tick(6.0)  # 5s executing at 0.5 m/s = 2.5 m from the new home
+    pos = status(client)["position"]
+    assert pos["x"] == pytest.approx(10.0 + 2.5)
+    assert pos["y"] == 3.0
+
+
+def test_uptime_advances_with_the_clock(clock, client):
+    assert status(client)["uptime"] == 3600
+    clock.tick(50.0)
+    assert status(client)["uptime"] == 3650
+    assert "mir_robot_uptime_seconds_total 3650" in (
+        client.get("/api/v2.0.0/metrics", headers=AUTH).text
+    )
+
+
+# --- registers: labels persist alongside values ------------------------------
+
+
+def test_register_label_and_value_round_trip(clock, client):
+    written = client.put(
+        "/api/v2.0.0/registers/5", json={"value": 1.5, "label": "conveyor flag"}, headers=AUTH
+    )
+    assert written.status_code == 200
+    doc = client.get("/api/v2.0.0/registers/5", headers=AUTH).json()
+    assert doc["value"] == 1.5
+    assert doc["label"] == "conveyor flag"
+
+    # POST /registers/{id} (declared in the spec) merges like PUT does.
+    client.post("/api/v2.0.0/registers/5", json={"value": 2.0}, headers=AUTH)
+    doc = client.get("/api/v2.0.0/registers/5", headers=AUTH).json()
+    assert doc["value"] == 2.0
+    assert doc["label"] == "conveyor flag"
+
+
+def test_register_bad_types_are_400(clock, client):
+    assert (
+        client.put("/api/v2.0.0/registers/5", json={"value": True}, headers=AUTH).status_code == 400
+    )
+
+
+# --- parallel developers, one emulator ---------------------------------------
+
+
+def test_parallel_sessions_run_full_lifecycles_without_crosstalk(clock):
+    app = create_app("3.8.1")
+    queue_ids: dict[str, int] = {}
+    errors: list[Exception] = []
+
+    def worker(name: str) -> None:
+        try:
+            c = TestClient(app)
+            entry = c.post(
+                "/api/v2.0.0/mission_queue",
+                json={"mission_id": mission_guid(c, sess(name))},
+                headers=sess(name),
+            )
+            assert entry.status_code == 201, entry.text
+            queue_ids[name] = entry.json()["id"]
+        except Exception as exc:  # surfaced after join
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker, args=(f"user-{i}",)) for i in range(12)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert not errors
+
+    clock.tick(3.0)
+    verify = TestClient(app)
+    for name, qid in queue_ids.items():
+        listing = verify.get("/api/v2.0.0/mission_queue", headers=sess(name)).json()
+        assert [e["id"] for e in listing] == [qid], f"{name} sees exactly its own queue"
+        assert status(verify, sess(name))["state_text"] == "Executing"
+    assert verify.get("/api/v2.0.0/mission_queue", headers=AUTH).json() == []
+    assert status(verify)["state_text"] == "Ready"

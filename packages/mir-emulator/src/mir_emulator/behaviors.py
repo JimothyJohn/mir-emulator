@@ -18,6 +18,7 @@ drains, and PUT /status {"state_id": 4} pauses the simulation clock
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,6 +27,15 @@ from mir_emulator.spec import Operation, Spec
 from mir_emulator.state import StateStore
 
 REGISTER_COUNT = 200
+
+# PUT /status choices, identical across every tracked spec (the swagger files
+# state them in the property descriptions, not as enums):
+#   state_id "Choices are: {3, 4, 11}, State: {Ready, Pause, Manualcontrol}"
+#   mode_id  "Choices are: {3, 7}"
+#   clear_error "Choices are: {True}"
+STATE_CHOICES = {3: "Ready", 4: "Pause", 11: "Manualcontrol"}
+MODE_CHOICES = {3: "Mapping", 7: "Mission"}
+UPTIME_START_S = 3600  # the emulated robot "booted" an hour before first contact
 
 # --- mission simulation tuning ----------------------------------------------
 MISSION_DURATION_S = 10.0  # each mission executes for this long
@@ -73,13 +83,19 @@ class RequestCtx:
     query: dict[str, str]
     body: Any
     mission_duration: float = MISSION_DURATION_S
+    # Bound by app.Emulator: seed_collection(key, collection_path) populates a
+    # generic collection exactly as a GET on it would, so overrides can check
+    # referential integrity against not-yet-touched collections.
+    seed_collection: Callable[[str, str], None] | None = None
 
 
 # --- mission simulation core -------------------------------------------------
 
 
 def _sim(ctx: RequestCtx) -> dict:
-    return ctx.state.singleton("/mission_sim", {"paused_at": None, "paused_total": 0.0})
+    return ctx.state.singleton(
+        "/mission_sim", {"paused_at": None, "paused_total": 0.0, "hold": None}
+    )
 
 
 def _sim_clock(ctx: RequestCtx) -> float:
@@ -95,9 +111,12 @@ def _is_paused(ctx: RequestCtx) -> bool:
     return _sim(ctx).get("paused_at") is not None
 
 
-def _pause_sim(ctx: RequestCtx) -> None:
+def _pause_sim(ctx: RequestCtx, hold: str) -> None:
+    """Freeze the sim clock. hold is 'pause' (state 4) or 'manual' (state 11);
+    a robot under manual control does not execute missions either."""
     if not _is_paused(ctx):
         ctx.state.merge_singleton("/mission_sim", {"paused_at": _now()})
+    ctx.state.merge_singleton("/mission_sim", {"hold": hold})
 
 
 def _resume_sim(ctx: RequestCtx) -> None:
@@ -108,6 +127,7 @@ def _resume_sim(ctx: RequestCtx) -> None:
             {
                 "paused_at": None,
                 "paused_total": sim.get("paused_total", 0.0) + (_now() - sim["paused_at"]),
+                "hold": None,
             },
         )
 
@@ -139,17 +159,41 @@ def _entry_state(start: float, finish: float, clock: float) -> str:
     return "Done"
 
 
+def _iso(ts: float) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(ts))
+
+
 def _public_entry(entry: dict, start: float, finish: float, clock: float) -> dict:
+    """Queue entry as the API returns it. Per the spec, `ordered`, `started`
+    and `finished` are 'the date and time when the mission was queued/started/
+    finished' — derived from the timeline; not-yet-reached ones are omitted,
+    exactly like a real robot leaves them unset until they happen."""
     public = {k: v for k, v in entry.items() if not k.startswith("_")}
     public["state"] = _entry_state(start, finish, clock)
+    public["ordered"] = _iso(float(entry.get("_queued_at", start)))
+    public.pop("started", None)
+    public.pop("finished", None)
+    if clock >= start:
+        public["started"] = _iso(start)
+    if clock >= finish:
+        public["finished"] = _iso(finish)
+    if public.get("id") is not None:
+        public["url"] = f"/v2.0.0/mission_queue/{public['id']}"
+    if isinstance(public.get("mission_id"), str) and public["mission_id"]:
+        public["mission"] = f"/v2.0.0/missions/{public['mission_id']}"
     return public
+
+
+def _executed_seconds(ctx: RequestCtx) -> float:
+    clock = _sim_clock(ctx)
+    return sum(max(0.0, min(clock, finish) - start) for _e, start, finish in _timeline(ctx))
 
 
 def _mission_snapshot(ctx: RequestCtx) -> dict:
     """Sim-derived /status fields: state, battery, odometry, position."""
     clock = _sim_clock(ctx)
     timeline = _timeline(ctx)
-    executed_s = sum(max(0.0, min(clock, finish) - start) for _e, start, finish in timeline)
+    executed_s = _executed_seconds(ctx)
     battery = max(BATTERY_FLOOR, BATTERY_START - BATTERY_DRAIN_PER_S * executed_s)
     distance = MISSION_SPEED_M_S * executed_s
     paused = _is_paused(ctx)
@@ -158,24 +202,26 @@ def _mission_snapshot(ctx: RequestCtx) -> dict:
         "battery_percentage": round(battery, 2),
         "battery_time_remaining": int(battery * BATTERY_SECONDS_PER_PERCENT),
         "moved": round(1204.5 + distance, 2),
-        "_position_along_loop": distance % LOOP_LENGTH_M,
+        "_distance_m": distance,
     }
 
+    hold_id = 11 if _sim(ctx).get("hold") == "manual" else 4
     executing = next(((e, s, f) for e, s, f in timeline if s <= clock < f), None)
     if executing is not None:
         entry, _start, finish = executing
         remaining = finish - clock
         fields.update(
             {
-                "state_id": 4 if paused else 5,
-                "state_text": "Pause" if paused else "Executing",
+                "state_id": hold_id if paused else 5,
+                "state_text": STATE_CHOICES[hold_id] if paused else "Executing",
                 "mission_queue_id": int(entry.get("id", 0)),
+                "mission_queue_url": f"/v2.0.0/mission_queue/{entry.get('id')}",
                 "mission_text": f"Executing mission (queue id {entry.get('id')})...",
                 "distance_to_next_target": round(remaining * MISSION_SPEED_M_S, 2),
             }
         )
     elif paused:
-        fields.update({"state_id": 4, "state_text": "Pause"})
+        fields.update({"state_id": hold_id, "state_text": STATE_CHOICES[hold_id]})
     return fields
 
 
@@ -188,27 +234,37 @@ def _status_doc(ctx: RequestCtx) -> dict:
     if isinstance(base, dict):
         overlay_compatible(base, STATUS_OVERLAY)
     doc = dict(base) if isinstance(base, dict) else {}
-    for key, value in ctx.state.singleton("/status", {}).items():
+    overlay = ctx.state.singleton("/status", {})
+    for key, value in overlay.items():
         if key in doc:
             doc[key] = value
 
     snapshot = _mission_snapshot(ctx)
-    along_loop = snapshot.pop("_position_along_loop")
+    distance = snapshot.pop("_distance_m")
     for key, value in snapshot.items():
         if key in doc:
             doc[key] = value
+    if "uptime" in doc:
+        clock = _sim_clock(ctx)
+        boot = ctx.state.singleton("/boot", {"at": clock - UPTIME_START_S})
+        doc["uptime"] = int(clock - boot["at"])
     if isinstance(doc.get("position"), dict):
         position = dict(doc["position"])
-        # Patrol a straight out-and-back segment of the loop, home at (5, 5).
+        # Patrol a straight out-and-back segment of the loop. A position set
+        # via PUT /status relocalizes the robot: it becomes the loop's home
+        # and the patrol offset restarts from the odometry at that moment.
+        user_pos = overlay.get("position")
+        if not isinstance(user_pos, dict):
+            user_pos = {}
+        home_x = float(user_pos.get("x", POSITION_HOME_X))
+        home_y = float(user_pos.get("y", POSITION_HOME_Y))
+        along_loop = (distance - float(overlay.get("_position_anchor_m", 0.0))) % LOOP_LENGTH_M
         half = LOOP_LENGTH_M / 2
         offset = along_loop if along_loop <= half else LOOP_LENGTH_M - along_loop
-        position.update(
-            {
-                "x": round(POSITION_HOME_X + offset, 2),
-                "y": POSITION_HOME_Y,
-                "orientation": 0.0 if along_loop <= half else 180.0,
-            }
-        )
+        orientation = 0.0 if along_loop <= half else 180.0
+        if along_loop == 0.0 and "orientation" in user_pos:
+            orientation = float(user_pos["orientation"])
+        position.update({"x": round(home_x + offset, 2), "y": home_y, "orientation": orientation})
         doc["position"] = position
     if isinstance(doc.get("velocity"), dict):
         moving = snapshot.get("state_text") == "Executing"
@@ -225,23 +281,82 @@ async def get_status(ctx: RequestCtx) -> tuple[int, Any]:
     return ctx.op.success_status, _status_doc(ctx)
 
 
+def _argument_error(human: str) -> tuple[int, Any]:
+    return 400, {"error_code": "400", "error_human": f"Argument error: {human}"}
+
+
 async def put_status(ctx: RequestCtx) -> tuple[int, Any]:
-    if isinstance(ctx.body, dict):
-        # MiR semantics: state_id 4 pauses the robot, 3 sets it Ready again.
-        # Pausing freezes the simulation clock, so a paused mission holds its
-        # progress and resumes exactly where it stopped.
-        state_id = ctx.body.get("state_id")
-        if state_id == 4:
-            _pause_sim(ctx)
-        elif state_id == 3:
-            _resume_sim(ctx)
-        allowed = _status_doc(ctx)
-        patch = {k: v for k, v in ctx.body.items() if k in allowed}
+    """Apply exactly the fields the spec's PutStatus document declares — a
+    real robot ignores everything else. MiR semantics per the spec: state_id
+    4 pauses the robot, 11 puts it in manual control, 3 sets it Ready again;
+    pausing (or taking manual control) freezes the simulation clock, so a
+    held mission keeps its progress and resumes exactly where it stopped.
+    `name` renames the robot; `position` relocalizes it (see _status_doc)."""
+    body = ctx.body if isinstance(ctx.body, dict) else {}
+
+    state_id = body.get("state_id")
+    if state_id is not None and state_id not in STATE_CHOICES:
+        return _argument_error(f"state_id choices are {sorted(STATE_CHOICES)}")
+    mode_id = body.get("mode_id")
+    if mode_id is not None and mode_id not in MODE_CHOICES:
+        return _argument_error(f"mode_id choices are {sorted(MODE_CHOICES)}")
+    if "clear_error" in body and body["clear_error"] is not True:
+        return _argument_error("clear_error choices are {True}")
+
+    if state_id == 4:
+        _pause_sim(ctx, "pause")
+    elif state_id == 11:
+        _pause_sim(ctx, "manual")
+    elif state_id == 3:
+        _resume_sim(ctx)
+
+    patch: dict[str, Any] = {}
+    for put_field, status_field in (
+        ("name", "robot_name"),
+        ("serial_number", "serial_number"),
+        ("map_id", "map_id"),
+    ):
+        if isinstance(body.get(put_field), str):
+            patch[status_field] = body[put_field]
+    if mode_id is not None:
+        patch["mode_id"] = mode_id
+        patch["mode_text"] = MODE_CHOICES[mode_id]
+    if isinstance(body.get("position"), dict):
+        position = {
+            k: float(v)
+            for k, v in body["position"].items()
+            if k in ("x", "y", "orientation")
+            and isinstance(v, int | float)
+            and not isinstance(v, bool)
+        }
+        if position:
+            patch["position"] = position
+            patch["_position_anchor_m"] = _executed_seconds(ctx) * MISSION_SPEED_M_S
+    if body.get("clear_error") is True:
+        patch["errors"] = []
+    if patch:
         ctx.state.merge_singleton("/status", patch)
     return ctx.op.success_status, _status_doc(ctx)
 
 
+def _mission_exists(ctx: RequestCtx, mission_id: Any) -> bool:
+    """True when mission_id names a mission on this robot (seeded or created)."""
+    if not isinstance(mission_id, str) or not mission_id:
+        return False
+    if ctx.seed_collection is not None:
+        ctx.seed_collection("/missions", "/missions")
+    missions = ctx.state.collection("/missions")
+    return mission_id in missions or any(
+        item.get("guid") == mission_id for item in missions.values()
+    )
+
+
 async def post_mission_queue(ctx: RequestCtx) -> tuple[int, Any]:
+    # A real robot rejects queueing a mission it does not know (400 is the
+    # declared "Bad request or Argument error" response for this operation).
+    mission_id = ctx.body.get("mission_id") if isinstance(ctx.body, dict) else None
+    if not _mission_exists(ctx, mission_id):
+        return _argument_error("mission_id does not match an existing mission")
     entry = example_from_schema(ctx.spec.deref(ctx.op.success_schema))
     if not isinstance(entry, dict):
         entry = {}
@@ -273,9 +388,42 @@ async def get_mission_queue_item(ctx: RequestCtx) -> tuple[int, Any]:
         return 404, {"error_code": "404", "error_human": "Not found"}
     clock = _sim_clock(ctx)
     for entry, start, finish in _timeline(ctx):
-        if entry.get("id") == queue_id:
-            return ctx.op.success_status, _public_entry(entry, start, finish, clock)
+        if entry.get("id") != queue_id:
+            continue
+        public = _public_entry(entry, start, finish, clock)
+        # The item endpoint returns the full GetMission_queue document (the
+        # list uses the slim {id, state, url} shape) — flesh it out from the
+        # declared schema, then overlay the live lifecycle fields.
+        full = example_from_schema(ctx.spec.deref(ctx.op.success_schema))
+        if not isinstance(full, dict) or not full:
+            return ctx.op.success_status, public
+        overlay_compatible(full, public)
+        for key in ("started", "finished"):
+            if key in public:
+                full[key] = public[key]
+            else:
+                full.pop(key, None)
+        return ctx.op.success_status, full
     return 404, {"error_code": "404", "error_human": "Not found"}
+
+
+async def put_mission_queue_item(ctx: RequestCtx) -> tuple[int, Any]:
+    """PutMission_queue declares cmd, mission_id, priority. Metadata updates
+    apply to the stored entry; the generic handler would instead seed a
+    phantom entry into a queue that never held one."""
+    try:
+        queue_id = int(next(iter(ctx.path_params.values())))
+    except (StopIteration, TypeError, ValueError):
+        return 404, {"error_code": "404", "error_human": "Not found"}
+    if ctx.state.get("/mission_queue", str(queue_id)) is None:
+        return 404, {"error_code": "404", "error_human": "Not found"}
+    body = ctx.body if isinstance(ctx.body, dict) else {}
+    patch = {k: body[k] for k in ("mission_id", "priority") if k in body}
+    if "mission_id" in patch and not _mission_exists(ctx, patch["mission_id"]):
+        return _argument_error("mission_id does not match an existing mission")
+    if patch:
+        ctx.state.update("/mission_queue", str(queue_id), patch)
+    return await get_mission_queue_item(ctx)
 
 
 async def delete_mission_queue(ctx: RequestCtx) -> tuple[int, Any]:
@@ -284,13 +432,26 @@ async def delete_mission_queue(ctx: RequestCtx) -> tuple[int, Any]:
     return ctx.op.success_status, None
 
 
+async def delete_mission_queue_item(ctx: RequestCtx) -> tuple[int, Any]:
+    """Remove one queue entry — never executes (if pending) or stops on the
+    spot (if executing); the FIFO timeline recomputes without it. The generic
+    handler would seed an example entry first, which a real queue never has."""
+    try:
+        queue_id = int(next(iter(ctx.path_params.values())))
+    except (StopIteration, TypeError, ValueError):
+        return 404, {"error_code": "404", "error_human": "Not found"}
+    if not ctx.state.delete("/mission_queue", str(queue_id)):
+        return 404, {"error_code": "404", "error_human": "Not found"}
+    return ctx.op.success_status, None if ctx.op.success_status == 204 else {}
+
+
 def _register_doc(ctx: RequestCtx, register_id: int) -> dict:
-    values = ctx.state.singleton("/registers", {})
+    register = ctx.state.singleton("/registers", {}).get(str(register_id), {})
     return {
         "id": register_id,
-        "label": "",
+        "label": str(register.get("label", "")),
         "url": f"/v2.0.0/registers/{register_id}",
-        "value": float(values.get(str(register_id), 0.0)),
+        "value": float(register.get("value", 0.0)),
     }
 
 
@@ -314,23 +475,36 @@ async def get_register(ctx: RequestCtx) -> tuple[int, Any]:
 
 
 async def put_register(ctx: RequestCtx) -> tuple[int, Any]:
+    """PUT and POST /registers/{id}: the spec's PostRegister body is
+    {value: number, label: string}, both optional — writes merge."""
     register_id = _register_id(ctx)
     if register_id is None:
         return 404, {"error_code": "404", "error_human": "register not found"}
-    value = ctx.body.get("value") if isinstance(ctx.body, dict) else None
-    if not isinstance(value, int | float) or isinstance(value, bool):
-        return 400, {"error_code": "400", "error_human": "value must be a number"}
-    ctx.state.merge_singleton("/registers", {str(register_id): float(value)})
+    body = ctx.body if isinstance(ctx.body, dict) else {}
+    patch: dict[str, Any] = {}
+    if "value" in body:
+        if not isinstance(body["value"], int | float) or isinstance(body["value"], bool):
+            return _argument_error("value must be a number")
+        patch["value"] = float(body["value"])
+    if "label" in body:
+        if not isinstance(body["label"], str):
+            return _argument_error("label must be a string")
+        patch["label"] = body["label"]
+    if patch:
+        current = ctx.state.singleton("/registers", {}).get(str(register_id), {})
+        ctx.state.merge_singleton("/registers", {str(register_id): {**current, **patch}})
     return ctx.op.success_status, _register_doc(ctx, register_id)
 
 
 async def get_metrics(ctx: RequestCtx) -> tuple[int, Any, str]:
     snapshot = _mission_snapshot(ctx)
+    clock = _sim_clock(ctx)
+    boot = ctx.state.singleton("/boot", {"at": clock - UPTIME_START_S})
     text = (
         "# TYPE mir_robot_battery_percent gauge\n"
         f"mir_robot_battery_percent {snapshot['battery_percentage']}\n"
         "# TYPE mir_robot_uptime_seconds counter\n"
-        "mir_robot_uptime_seconds_total 3600\n"
+        f"mir_robot_uptime_seconds_total {int(clock - boot['at'])}\n"
         "# TYPE mir_robot_distance_moved_meters counter\n"
         f"mir_robot_distance_moved_meters_total {snapshot['moved']}\n"
         "# EOF\n"
@@ -344,9 +518,12 @@ OVERRIDES: dict[tuple[str, str], Any] = {
     ("POST", "/mission_queue"): post_mission_queue,
     ("GET", "/mission_queue"): get_mission_queue,
     ("GET", "/mission_queue/{id}"): get_mission_queue_item,
+    ("PUT", "/mission_queue/{id}"): put_mission_queue_item,
     ("DELETE", "/mission_queue"): delete_mission_queue,
+    ("DELETE", "/mission_queue/{id}"): delete_mission_queue_item,
     ("GET", "/registers"): get_registers,
     ("GET", "/registers/{id}"): get_register,
     ("PUT", "/registers/{id}"): put_register,
+    ("POST", "/registers/{id}"): put_register,
     ("GET", "/metrics"): get_metrics,
 }
