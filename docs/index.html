@@ -230,16 +230,29 @@ pre.resp .b { color: #e08cc8; }
 .auth .row > div { flex: 1; min-width: 0; }
 .auth input { width: 100%; padding: 8px 10px; font-size: 12.5px; }
 .token { font-size: 10.5px; color: var(--ink-faint); word-break: break-all; line-height: 1.5; }
+
+/* ---------- endpoint selector ---------- */
+.auth label.radio {
+  display: flex; gap: 9px; align-items: center; cursor: pointer;
+  font-size: 12.5px; color: var(--ink); text-transform: none; letter-spacing: 0;
+}
+.auth label.radio input[type=radio] { accent-color: var(--yellow); width: auto; flex: none; }
+.auth label.radio .dim { color: var(--ink-faint); font-size: 11px; }
+.connect-btn {
+  cursor: pointer; width: 100%;
+  font-family: var(--display); font-weight: 700; font-size: 12px;
+  letter-spacing: .14em; text-transform: uppercase;
+  background: transparent; color: var(--yellow);
+  border: 1px solid var(--yellow-dim); border-radius: 8px; padding: 9px 0;
+  transition: box-shadow .15s, border-color .15s;
+}
+.connect-btn:hover { border-color: var(--yellow); box-shadow: 0 0 16px rgba(245,197,24,.2); }
+.connect-btn[disabled] { opacity: .45; cursor: wait; }
+.hint.warn { color: #f0b6b6; }
+.hint.ok { color: var(--green); }
 .token b { color: var(--ink-dim); }
 
-/* ---------- footer / banner ---------- */
-.banner {
-  margin-top: 26px; padding: 14px 18px; border-radius: 10px;
-  border: 1px solid var(--red); background: #1c1113; color: #f0b6b6; font-size: 13px;
-  display: none;
-}
-.banner.show { display: block; }
-.banner code { color: var(--yellow); }
+/* ---------- footer ---------- */
 footer { margin-top: 46px; color: var(--ink-faint); font-size: 11.5px; line-height: 1.8; }
 footer .hazard-mini { height: 3px; margin-bottom: 16px; opacity: .5;
   background: repeating-linear-gradient(-45deg, var(--yellow) 0 10px, transparent 10px 20px); }
@@ -268,11 +281,6 @@ footer .hazard-mini { height: 3px; margin-bottom: 16px; opacity: .5;
 
 <div class="wrap">
 
-  <div class="banner" id="banner">
-    No API endpoint configured. Append <code>?api=https://your-endpoint.example.com</code> to this page's URL,
-    or set <code>API_BASE</code> at the top of the script in <code>docs/index.html</code>.
-  </div>
-
   <div class="intro">
     <b>&#9888; Shared demo unit</b>
     <p>
@@ -282,12 +290,38 @@ footer .hazard-mini { height: 3px; margin-bottom: 16px; opacity: .5;
       — <code>/&lt;version&gt;/api/v2.0.0/&hellip;</code> — so you can diff robot behavior across releases from one URL.
       State (mission queue, PLC registers, status writes) is in-memory per runtime instance and resets on cold start.
       Auth mirrors a factory robot: <code>Basic BASE64(user&colon;SHA-256(password))</code>, default account
-      <code>distributor / distributor</code>.
+      <code>distributor / distributor</code>. Once your integration works against the demo, switch the
+      <b>endpoint</b> to a real MiR robot's IP or hostname on your network — same console, same requests.
     </p>
   </div>
 
   <div class="grid">
     <div style="display:grid; gap:18px;">
+      <section class="panel">
+        <div class="panel-head">&#8644; Endpoint</div>
+        <div class="panel-body auth">
+          <label class="radio">
+            <input type="radio" name="ep" id="ep-demo" checked>
+            <span>demo unit <span class="dim">mir.advin.io</span></span>
+          </label>
+          <label class="radio">
+            <input type="radio" name="ep" id="ep-custom">
+            <span>local robot / custom <span class="dim">same-network MiR</span></span>
+          </label>
+          <div class="row" id="custom-row" style="display:none">
+            <div><input type="text" id="custom-url" placeholder="http://192.168.12.20 &nbsp;or&nbsp; http://mir.local" spellcheck="false" autocomplete="off"></div>
+          </div>
+          <button class="connect-btn" id="connect">Connect</button>
+          <div class="hint" id="ep-status"></div>
+          <div class="hint warn" id="mixed-warn" style="display:none">
+            &#9888; This page is HTTPS but the endpoint is plain HTTP &mdash; browsers block that
+            (mixed content). To reach a robot on your LAN, run the console over HTTP from your own
+            machine: <code>curl -so console.html https://mir.advin.io/console && python3 -m http.server 8000</code>
+            then open <code>http://localhost:8000/console.html</code>. The curl mirror below always works.
+          </div>
+        </div>
+      </section>
+
       <section class="panel">
         <div class="panel-head">&#9635; Software version <span class="tag" id="vcount"></span></div>
         <div class="panel-body">
@@ -347,13 +381,34 @@ footer .hazard-mini { height: 3px; margin-bottom: 16px; opacity: .5;
 <script>
 "use strict";
 /* ================= configuration =================
-   Set at deploy time. Can be overridden per-visit with ?api=https://... */
-const API_BASE = "https://mir.advin.io";
+   Default endpoint, set at deploy time. Per-visit override: ?api=https://...
+   The endpoint panel persists a custom choice in localStorage. */
+const DEFAULT_BASE = "https://mir.advin.io";
+const STORE_KEY = "mir-console-endpoint";
 /* ================================================= */
 
 const qs = new URLSearchParams(location.search);
-const RAW_BASE = (qs.get("api") || API_BASE || "").replace(/\/+$/, "");
 const $ = (id) => document.getElementById(id);
+
+/* Active connection. MODE:
+   "fleet" — this project's multi-version dispatcher (/<version>/api/v2.0.0)
+   "robot" — a single MiR-shaped API at <base>/api/v2.0.0 (a real robot, or
+             `mir-emulator --cors` running anywhere on the network) */
+let BASE = "";
+let MODE = "fleet";
+
+function normalizeBase(raw) {
+  let v = (raw || "").trim().replace(/\/+$/, "");
+  if (!v) return "";
+  if (!/^https?:\/\//i.test(v)) v = "http://" + v; // bare IP/hostname → LAN http
+  return v;
+}
+
+function fetchT(url, opts = {}, ms = 6000) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctl.signal }).finally(() => clearTimeout(timer));
+}
 
 const PRESETS = [
   { m: "GET",    p: "/status",             body: null, note: "robot state" },
@@ -388,7 +443,7 @@ async function authToken() {
 }
 
 /* ---------- helpers ---------- */
-function apiRoot(v)   { return RAW_BASE + "/" + v; }
+function apiRoot(v)   { return MODE === "robot" ? BASE : BASE + "/" + v; }
 function fullPath(v, p) { return apiRoot(v) + "/api/v2.0.0" + (p.startsWith("/") ? p : "/" + p); }
 
 function esc(s) {
@@ -418,6 +473,16 @@ async function refreshCurl() {
 function renderVersions() {
   const box = $("versions");
   box.innerHTML = "";
+  if (MODE === "robot") {
+    const b = document.createElement("button");
+    b.className = "vbtn active";
+    b.innerHTML = '<span class="vnum">ROBOT</span><span class="chip latest">direct</span>' +
+      '<span class="vpath">/api/v2.0.0</span>';
+    box.appendChild(b);
+    $("vcount").textContent = "direct connection";
+    $("target-tag").textContent = "target: " + BASE.replace(/^https?:\/\//, "");
+    return;
+  }
   versions.forEach((v, i) => {
     const b = document.createElement("button");
     b.className = "vbtn" + (v === currentVersion ? " active" : "");
@@ -434,12 +499,16 @@ function renderVersions() {
 async function loadVersionMeta() {
   const dl = $("vmeta");
   dl.innerHTML = "";
-  if (!currentVersion) return;
+  if (MODE === "fleet" && !currentVersion) return;
   try {
-    const r = await fetch(apiRoot(currentVersion) + "/", {
+    // Fleet mode and a locally-run `mir-emulator` both serve a JSON index and
+    // their spec files; a real robot serves neither — hide the panel then.
+    const r = await fetchT(apiRoot(currentVersion) + "/", {
       headers: { Authorization: "Basic " + await authToken() },
     });
+    if (!r.ok) return;
     const j = await r.json();
+    if (!j.api_title && !j.emulated_mir_version) return;
     const rows = [
       ["title", j.api_title],
       ["operations", j.operations],
@@ -476,8 +545,8 @@ function syncBodyVisibility() {
 
 /* ---------- transmit ---------- */
 async function transmit() {
-  if (!RAW_BASE) { $("banner").classList.add("show"); return; }
-  if (!currentVersion) return;
+  if (!BASE) return;
+  if (MODE === "fleet" && !currentVersion) return;
   const btn = $("send");
   btn.disabled = true;
   const m = $("method").value;
@@ -496,7 +565,11 @@ async function transmit() {
     ctype = r.headers.get("content-type") || "";
     text = await r.text();
   } catch (e) {
-    text = "network error: " + e.message + "\n(endpoint down, CORS blocked, or bad ?api= override)";
+    text = "network error: " + e.message +
+      "\nPossible causes: endpoint down / unreachable from this network," +
+      "\nmixed content (HTTPS page -> HTTP robot; see the endpoint panel)," +
+      "\nor the device does not send CORS headers for browser requests." +
+      "\nThe curl command above talks to it directly and is not affected.";
   }
   const ms = Math.round(performance.now() - t0);
   const meta = $("resp-meta");
@@ -517,28 +590,96 @@ async function transmit() {
   btn.disabled = false;
 }
 
-/* ---------- boot ---------- */
-async function probe() {
-  const led = $("led"), lt = $("led-text");
-  if (!RAW_BASE) {
-    $("banner").classList.add("show");
-    led.className = "led err"; lt.textContent = "no endpoint";
-    $("endpoint-label").textContent = "unconfigured";
-    $("versions").innerHTML = '<div class="hint">configure an endpoint to load versions</div>';
+/* ---------- endpoint selection / probe ---------- */
+function syncMixedContentWarning(base) {
+  const blocked = location.protocol === "https:" && /^http:\/\//i.test(base);
+  $("mixed-warn").style.display = blocked ? "" : "none";
+  return blocked;
+}
+
+async function connectTo(rawBase) {
+  const led = $("led"), lt = $("led-text"), st = $("ep-status");
+  const base = normalizeBase(rawBase);
+  if (!base) { st.className = "hint warn"; st.textContent = "enter an endpoint first"; return; }
+  syncMixedContentWarning(base);
+
+  $("connect").disabled = true;
+  led.className = "led"; lt.textContent = "probing…";
+  st.className = "hint"; st.textContent = "probing " + base + " …";
+  $("endpoint-label").textContent = base.replace(/^https?:\/\//, "");
+
+  let mode = null, foundVersions = [];
+  // Shape 1: this project's multi-version dispatcher.
+  try {
+    const r = await fetchT(base + "/healthz");
+    if (r.ok) {
+      const j = await r.json();
+      if (Array.isArray(j.versions) && j.versions.length) {
+        mode = "fleet"; foundVersions = j.versions;
+      }
+    }
+  } catch { /* fall through to robot shape */ }
+  // Shape 2: a MiR robot (or single-version emulator): /api/v2.0.0 at the root.
+  if (!mode) {
+    try {
+      // Any HTTP answer (200/401/404...) proves something is listening there;
+      // 200/401 specifically look like a MiR API (401 = auth wall, as shipped).
+      const r = await fetchT(base + "/api/v2.0.0/status");
+      if (r.status === 200 || r.status === 401) mode = "robot";
+    } catch { /* unreachable */ }
+  }
+
+  $("connect").disabled = false;
+  if (!mode) {
+    led.className = "led err"; lt.textContent = "unreachable";
+    st.className = "hint warn";
+    st.textContent = "no MiR API at " + base + " — not reachable from this browser, or no CORS. " +
+      (syncMixedContentWarning(base) ? "Mixed content is blocking this request (see below)." : "");
+    $("versions").innerHTML = '<div class="hint">connect to an endpoint to load versions</div>';
     return;
   }
-  $("endpoint-label").textContent = RAW_BASE.replace(/^https?:\/\//, "");
+
+  BASE = base; MODE = mode;
+  versions = foundVersions;
+  currentVersion = mode === "fleet" ? versions[0] : null;
+  try { localStorage.setItem(STORE_KEY, base); } catch { /* private mode */ }
+  led.className = "led on"; lt.textContent = "online";
+  st.className = "hint ok";
+  st.textContent = mode === "fleet"
+    ? "connected — emulator fleet, " + versions.length + " versions"
+    : "connected — direct MiR API at " + base.replace(/^https?:\/\//, "") + "/api/v2.0.0";
+  renderVersions(); loadVersionMeta(); refreshCurl();
+}
+
+function selectedEndpoint() {
+  return $("ep-demo").checked ? DEFAULT_BASE : $("custom-url").value;
+}
+
+function syncEndpointForm() {
+  $("custom-row").style.display = $("ep-custom").checked ? "" : "none";
+  syncMixedContentWarning($("ep-demo").checked ? DEFAULT_BASE : normalizeBase($("custom-url").value));
+}
+
+/* ---------- boot ---------- */
+function initialEndpoint() {
+  const fromQuery = qs.get("api");
+  if (fromQuery) return normalizeBase(fromQuery);
   try {
-    const r = await fetch(RAW_BASE + "/healthz");
-    const j = await r.json();
-    versions = j.versions || [];
-    currentVersion = versions[0] || null;
-    led.className = "led on"; lt.textContent = "online";
-    renderVersions(); loadVersionMeta(); refreshCurl();
-  } catch {
-    led.className = "led err"; lt.textContent = "unreachable";
-    $("versions").innerHTML = '<div class="hint">could not reach ' + esc(RAW_BASE) + "/healthz</div>";
+    const stored = localStorage.getItem(STORE_KEY);
+    if (stored) return stored;
+  } catch { /* private mode */ }
+  return DEFAULT_BASE;
+}
+
+function probe() {
+  const start = initialEndpoint();
+  if (start !== DEFAULT_BASE) {
+    $("ep-custom").checked = true;
+    $("ep-demo").checked = false;
+    $("custom-url").value = start;
   }
+  syncEndpointForm();
+  connectTo(start);
 }
 
 renderPresets();
@@ -547,6 +688,11 @@ syncBodyVisibility();
   $(id).addEventListener("input", () => { syncBodyVisibility(); refreshCurl(); }));
 $("send").onclick = transmit;
 $("path").addEventListener("keydown", (e) => { if (e.key === "Enter") transmit(); });
+$("connect").onclick = () => connectTo(selectedEndpoint());
+$("ep-demo").addEventListener("change", () => { syncEndpointForm(); connectTo(DEFAULT_BASE); });
+$("ep-custom").addEventListener("change", () => { syncEndpointForm(); $("custom-url").focus(); });
+$("custom-url").addEventListener("input", syncEndpointForm);
+$("custom-url").addEventListener("keydown", (e) => { if (e.key === "Enter") connectTo(selectedEndpoint()); });
 $("copy").onclick = async () => {
   await navigator.clipboard.writeText($("curl").textContent);
   $("copy").textContent = "COPIED"; setTimeout(() => ($("copy").textContent = "COPY"), 1200);
