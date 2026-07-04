@@ -203,6 +203,98 @@ textarea { width: 100%; min-height: 96px; resize: vertical; line-height: 1.5; ma
 }
 .copy:hover { color: var(--blue-deep); border-color: var(--brand); }
 
+/* ---------- language tabs (Stripe-style: pick once, everything follows) ---------- */
+.lang-tabs { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.lang-tab {
+  cursor: pointer; font-family: var(--mono); font-size: 11px; font-weight: 600;
+  background: #fff; color: var(--ink-dim);
+  border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.lang-tab:hover { color: var(--blue-deep); border-color: var(--brand); }
+.lang-tab.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+/* ---------- API reference (per software version) ---------- */
+#reference { scroll-margin-top: 96px; }
+.ref-grid { display: grid; grid-template-columns: 230px 1fr; gap: 24px; margin-top: 20px; align-items: start; }
+@media (max-width: 900px) { .ref-grid { grid-template-columns: 1fr; } .ref-nav { position: static; } }
+.ref-nav {
+  position: sticky; top: 96px;
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: 13px; max-height: calc(100vh - 120px); overflow: auto;
+}
+.ref-nav a {
+  color: var(--ink-dim); padding: 5px 10px; border-left: 2px solid var(--line);
+  font-family: var(--mono); font-size: 12px;
+}
+.ref-nav a:hover { color: var(--blue-deep); border-left-color: var(--brand); text-decoration: none; }
+.ref-nav a .cnt { color: var(--ink-faint); font-size: 10px; }
+.ref-group { scroll-margin-top: 96px; margin-bottom: 26px; }
+.ref-group > h3 {
+  font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--ink);
+  padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 8px;
+}
+details.ref-op { border-bottom: 1px solid var(--line); }
+details.ref-op > summary {
+  cursor: pointer; display: flex; align-items: baseline; gap: 10px;
+  padding: 9px 6px; font-family: var(--mono); font-size: 12.5px;
+  list-style: none;
+}
+details.ref-op > summary::-webkit-details-marker { display: none; }
+details.ref-op > summary:hover { background: var(--tint); }
+details.ref-op[open] > summary { background: var(--tint); }
+.mchip {
+  flex: none; font-weight: 700; font-size: 10px; letter-spacing: .06em;
+  border-radius: 4px; padding: 2px 7px; min-width: 52px; text-align: center;
+}
+.mchip.m-get { background: #e3f4ea; color: var(--green); }
+.mchip.m-post { background: var(--tint-2); color: var(--blue-deep); }
+.mchip.m-put, .mchip.m-patch { background: #f7ecd9; color: var(--amber); }
+.mchip.m-delete { background: #fae4e2; color: var(--red); }
+.ref-op .rp { color: var(--ink); word-break: break-all; }
+.ref-op .rsum {
+  color: var(--ink-faint); font-family: var(--sans); font-size: 12px;
+  margin-left: auto; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%;
+}
+.ref-body { padding: 4px 6px 18px; }
+.ref-body .desc { color: var(--ink-dim); font-size: 13.5px; max-width: 72ch; margin: 6px 0 4px; }
+.ref-attrs { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12.5px; }
+.ref-attrs th {
+  text-align: left; font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--line);
+}
+.ref-attrs td { padding: 6px 10px; border-bottom: 1px dashed var(--line); vertical-align: top; }
+.ref-attrs td.an { font-family: var(--mono); color: var(--blue-deep); white-space: nowrap; }
+.ref-attrs td.at { font-family: var(--mono); color: var(--ink-faint); white-space: nowrap; }
+.req-badge {
+  font-size: 9px; letter-spacing: .1em; text-transform: uppercase; font-family: var(--sans);
+  color: var(--amber); font-weight: 700; margin-left: 7px;
+}
+.ref-resp { margin-top: 10px; font-size: 12.5px; color: var(--ink-dim); }
+.ref-resp .code { font-family: var(--mono); font-weight: 600; color: var(--blue-deep); }
+.ref-code { margin-top: 12px; position: relative; }
+.ref-code pre {
+  background: var(--ink); color: #dbe3f5; border-radius: .4rem;
+  padding: 14px 60px 14px 14px; font-family: var(--mono); font-size: 12px; line-height: 1.6;
+  overflow-x: auto; white-space: pre; margin: 0;
+}
+.ref-code .copy { background: rgba(255,255,255,.08); color: #dbe3f5; border-color: rgba(255,255,255,.25); }
+.ref-code .copy:hover { color: #fff; border-color: var(--brand); }
+.ref-try {
+  cursor: pointer; margin-top: 10px;
+  font-weight: 600; font-size: 12px;
+  background: #fff; color: var(--blue);
+  border: 1px solid var(--blue); border-radius: 999px; padding: 5px 16px;
+  transition: color .3s ease, border-color .3s ease, background-color .3s ease;
+}
+.ref-try:hover { color: var(--blue-deep); border-color: var(--blue-deep); background: var(--tint); }
+.ref-toolbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px;
+  font-size: 12px; color: var(--ink-faint);
+}
+.ref-toolbar .tagline { font-family: var(--mono); }
+
 /* ---------- response ---------- */
 .resp-meta {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
@@ -385,6 +477,7 @@ table.plain td:last-child { color: var(--ink-dim); }
     </div>
     <nav class="topnav">
       <a href="#console">Console</a>
+      <a href="#reference">API reference</a>
       <a href="#docs">Documentation</a>
       <a href="https://github.com/JimothyJohn/mir-emulator" rel="noopener">GitHub</a>
     </nav>
@@ -541,7 +634,7 @@ table.plain td:last-child { color: var(--ink-dim); }
         </div>
         <div class="body-label" id="body-label">request body &mdash; JSON</div>
         <textarea id="body" spellcheck="false"></textarea>
-        <div class="curl-label">curl equivalent</div>
+        <div class="curl-label">code sample &mdash; <span class="lang-tabs" id="lang-tabs"></span></div>
         <div class="curl"><span id="curl"></span><button class="copy" id="copy">Copy</button></div>
         <div class="resp-meta" id="resp-meta" style="display:none">
           <span class="status-big" id="resp-status"></span>
@@ -584,6 +677,24 @@ curl -X POST -H "Authorization: Basic $TOKEN" -H 'Content-Type: application/json
       </div>
     </div>
   </div>
+
+  <h2 class="sect-title" id="reference">API reference <span id="ref-version" style="color:var(--brand)"></span></h2>
+  <p class="lead">
+    Every operation the selected software version serves, generated in your browser from that version's
+    official spec &mdash; switch the version in the <a href="#console">console panel</a> and the whole
+    reference follows, so diffing what <code>2.x</code> and <code>3.x</code> robots accept is two clicks.
+    Samples run as-is: they derive MiR's hashed-password auth token and honor your virtual robot session.
+  </p>
+  <div class="ref-toolbar">
+    <span>Sample language:</span>
+    <span class="lang-tabs" id="lang-tabs-ref"></span>
+    <span class="tagline" id="ref-count"></span>
+  </div>
+  <div class="ref-grid" id="ref-grid" style="display:none">
+    <nav class="ref-nav" id="ref-nav"></nav>
+    <div class="ref-main" id="ref-main"></div>
+  </div>
+  <div class="hint" id="ref-hint">connect to an endpoint to generate the reference from its spec&hellip;</div>
 
   <h2 class="sect-title" id="docs">Documentation &amp; primary sources</h2>
   <p class="lead">
@@ -747,15 +858,198 @@ function highlight(json) {
     });
 }
 
-async function refreshCurl() {
-  const m = $("method").value, p = $("path").value || "/";
-  let cmd = "curl -X " + m + " \\\n  '" + fullPath(currentVersion || "latest", p) + "' \\\n  -H 'Authorization: Basic " + await authToken() + "'";
-  if (sessionId())
-    cmd += " \\\n  -H 'X-MiR-Session: " + sessionId().replace(/'/g, "") + "'";
-  const body = $("body").value.trim();
-  if (body && (m === "POST" || m === "PUT" || m === "PATCH"))
-    cmd += " \\\n  -H 'Content-Type: application/json' \\\n  -d '" + body.replace(/'/g, "'\\''") + "'";
-  $("curl").textContent = cmd;
+/* ---------- multi-language samples (Stripe-style: pick a language once,
+   every sample on the page follows, choice persists across visits) ----------
+   Each sampler emits a complete, runnable program: it derives MiR's
+   Basic BASE64(user ":" SHA-256-hex(password)) token in-language, carries the
+   X-MiR-Session header when a virtual robot session is active, and targets
+   the selected software version's path prefix. */
+const LANG_KEY = "mir-console-lang";
+const LANGS = [["curl", "cURL"], ["python", "Python"], ["javascript", "JavaScript"], ["go", "Go"], ["rust", "Rust"]];
+let lang = "curl";
+try {
+  const stored = localStorage.getItem(LANG_KEY);
+  if (LANGS.some(([id]) => id === stored)) lang = stored;
+} catch { /* private mode */ }
+
+function compactBody(raw) {
+  if (!raw) return "";
+  try { return JSON.stringify(JSON.parse(raw)); } catch { return raw; }
+}
+const shQ = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
+const dq = (s) => JSON.stringify(String(s)); // valid literal in py/js/go (and rust for JSON-safe text)
+const pyS = (s) => {
+  s = String(s);
+  return (!s.includes("'") && !s.includes("\\") && !s.includes("\n")) ? "'" + s + "'" : dq(s);
+};
+
+const SAMPLERS = {
+  curl(c) {
+    let out =
+      "# MiR auth: Basic BASE64(user \":\" SHA-256-hex(password))\n" +
+      "HASH=$(printf '%s' " + shQ(c.pass) + " | shasum -a 256 | cut -d' ' -f1)\n" +
+      "TOKEN=$(printf '%s:%s' " + shQ(c.user) + " \"$HASH\" | base64 | tr -d '\\n')\n" +
+      "curl -X " + c.method + " " + shQ(c.url) + " \\\n  -H \"Authorization: Basic $TOKEN\"";
+    if (c.session) out += " \\\n  -H " + shQ("X-MiR-Session: " + c.session);
+    if (c.body) out += " \\\n  -H 'Content-Type: application/json' \\\n  -d " + shQ(c.body);
+    return out;
+  },
+  python(c) {
+    const lines = [
+      "import base64, hashlib",
+      "",
+      "import requests  # pip install requests",
+      "",
+      "USER, PASSWORD = " + pyS(c.user) + ", " + pyS(c.pass),
+      "digest = hashlib.sha256(PASSWORD.encode()).hexdigest()",
+      "token = base64.b64encode(f\"{USER}:{digest}\".encode()).decode()",
+      "headers = {\"Authorization\": \"Basic \" + token}",
+    ];
+    if (c.session) lines.push("headers[\"X-MiR-Session\"] = " + pyS(c.session) + "  # your virtual robot");
+    lines.push("");
+    if (c.body) {
+      lines.push(
+        "resp = requests." + c.method.toLowerCase() + "(",
+        "    " + pyS(c.url) + ",",
+        "    headers={**headers, \"Content-Type\": \"application/json\"},",
+        "    data=" + pyS(c.body) + ",",
+        ")");
+    } else {
+      lines.push("resp = requests." + c.method.toLowerCase() + "(" + pyS(c.url) + ", headers=headers)");
+    }
+    lines.push("print(resp.status_code)", "print(resp.json())");
+    return lines.join("\n");
+  },
+  javascript(c) {
+    const lines = [
+      "// Node 18+ or the browser — fetch and WebCrypto are built in",
+      "const USER = " + dq(c.user) + ", PASSWORD = " + dq(c.pass) + ";",
+      "",
+      "const digest = await crypto.subtle.digest(\"SHA-256\", new TextEncoder().encode(PASSWORD));",
+      "const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, \"0\")).join(\"\");",
+      "const headers = { Authorization: \"Basic \" + btoa(USER + \":\" + hex) };",
+    ];
+    if (c.session) lines.push("headers[\"X-MiR-Session\"] = " + dq(c.session) + "; // your virtual robot");
+    lines.push("");
+    if (c.body) {
+      lines.push(
+        "headers[\"Content-Type\"] = \"application/json\";",
+        "const resp = await fetch(" + dq(c.url) + ", {",
+        "  method: " + dq(c.method) + ",",
+        "  headers,",
+        "  body: " + dq(c.body) + ",",
+        "});");
+    } else {
+      lines.push("const resp = await fetch(" + dq(c.url) + ", { method: " + dq(c.method) + ", headers });");
+    }
+    lines.push("console.log(resp.status, await resp.json());");
+    return lines.join("\n");
+  },
+  go(c) {
+    const imports = ["\"crypto/sha256\"", "\"encoding/base64\"", "\"encoding/hex\"", "\"fmt\"", "\"io\"", "\"net/http\""];
+    if (c.body) imports.push("\"strings\"");
+    const lines = [
+      "package main",
+      "",
+      "import (",
+      ...imports.sort().map((i) => "\t" + i),
+      ")",
+      "",
+      "func main() {",
+      "\tuser, password := " + dq(c.user) + ", " + dq(c.pass),
+      "\tsum := sha256.Sum256([]byte(password))",
+      "\ttoken := base64.StdEncoding.EncodeToString([]byte(user + \":\" + hex.EncodeToString(sum[:])))",
+      "",
+      c.body
+        ? "\treq, err := http.NewRequest(" + dq(c.method) + ", " + dq(c.url) + ", strings.NewReader(" + dq(c.body) + "))"
+        : "\treq, err := http.NewRequest(" + dq(c.method) + ", " + dq(c.url) + ", nil)",
+      "\tif err != nil {",
+      "\t\tpanic(err)",
+      "\t}",
+      "\treq.Header.Set(\"Authorization\", \"Basic \"+token)",
+    ];
+    if (c.session) lines.push("\treq.Header.Set(\"X-MiR-Session\", " + dq(c.session) + ") // your virtual robot");
+    if (c.body) lines.push("\treq.Header.Set(\"Content-Type\", \"application/json\")");
+    lines.push(
+      "",
+      "\tresp, err := http.DefaultClient.Do(req)",
+      "\tif err != nil {",
+      "\t\tpanic(err)",
+      "\t}",
+      "\tdefer resp.Body.Close()",
+      "\tbody, _ := io.ReadAll(resp.Body)",
+      "\tfmt.Println(resp.Status)",
+      "\tfmt.Println(string(body))",
+      "}");
+    return lines.join("\n");
+  },
+  rust(c) {
+    const lines = [
+      "// Cargo.toml: reqwest = { version = \"0.12\", features = [\"blocking\"] },",
+      "//             sha2 = \"0.10\", hex = \"0.4\", base64 = \"0.22\"",
+      "use base64::Engine;",
+      "use sha2::{Digest, Sha256};",
+      "",
+      "fn main() -> Result<(), Box<dyn std::error::Error>> {",
+      "    let (user, password) = (" + dq(c.user) + ", " + dq(c.pass) + ");",
+      "    let digest = hex::encode(Sha256::digest(password.as_bytes()));",
+      "    let token = base64::engine::general_purpose::STANDARD.encode(format!(\"{user}:{digest}\"));",
+      "",
+      "    let client = reqwest::blocking::Client::new();",
+      "    let resp = client",
+      "        ." + c.method.toLowerCase() + "(" + dq(c.url) + ")",
+      "        .header(\"Authorization\", format!(\"Basic {token}\"))",
+    ];
+    if (c.session) lines.push("        .header(\"X-MiR-Session\", " + dq(c.session) + ") // your virtual robot");
+    if (c.body) lines.push(
+      "        .header(\"Content-Type\", \"application/json\")",
+      "        .body(" + dq(c.body) + ")");
+    lines.push(
+      "        .send()?;",
+      "    println!(\"{}\", resp.status());",
+      "    println!(\"{}\", resp.text()?);",
+      "    Ok(())",
+      "}");
+    return lines.join("\n");
+  },
+};
+
+function sampleCtx() {
+  const m = $("method").value;
+  return {
+    method: m,
+    url: fullPath(currentVersion || "latest", $("path").value || "/"),
+    user: $("user").value || "distributor",
+    pass: $("pass").value || "distributor",
+    session: sessionId(),
+    body: ["POST", "PUT", "PATCH"].includes(m) ? compactBody($("body").value.trim()) : "",
+  };
+}
+
+function renderLangTabs() {
+  ["lang-tabs", "lang-tabs-ref"].forEach((id) => {
+    const box = $(id);
+    if (!box) return;
+    box.innerHTML = "";
+    LANGS.forEach(([key, label]) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "lang-tab" + (key === lang ? " active" : "");
+      b.textContent = label;
+      b.onclick = () => {
+        lang = key;
+        try { localStorage.setItem(LANG_KEY, lang); } catch { /* private mode */ }
+        renderLangTabs();
+        refreshSample();
+      };
+      box.appendChild(b);
+    });
+  });
+}
+
+async function refreshSample() {
+  $("curl").textContent = SAMPLERS[lang](sampleCtx());
+  refreshOpenRefSamples();
   $("token-view").innerHTML = "<b>Authorization:</b> Basic " + esc(await authToken());
 }
 
@@ -779,7 +1073,7 @@ function renderVersions() {
     b.innerHTML = '<span class="vnum">' + esc(v) + "</span>" +
       (i === 0 ? '<span class="chip latest">latest</span>' : "") +
       '<span class="vpath">/' + esc(v) + "/api/v2.0.0</span>";
-    b.onclick = () => { currentVersion = v; renderVersions(); loadVersionMeta(); loadSpec(); refreshCurl(); };
+    b.onclick = () => { currentVersion = v; renderVersions(); loadVersionMeta(); loadSpec(); refreshSample(); };
     box.appendChild(b);
   });
   $("vcount").textContent = versions.length + " tracked";
@@ -874,7 +1168,7 @@ function renderPresets() {
       }
       $("body").value = body ? JSON.stringify(body, null, 2) : "";
       syncBodyVisibility();
-      refreshCurl();
+      refreshSample();
     };
     box.appendChild(b);
   });
@@ -902,6 +1196,8 @@ function indexSpec(doc) {
         params: (op.parameters || []).filter((pa) => pa.in === "path"),
         bodySchema: body ? body.schema : null,
         responses: Object.entries(op.responses || {}).map(([c, r]) => [c, r.description || ""]),
+        summary: op.summary || "",
+        description: op.description || "",
       });
     }
   }
@@ -936,6 +1232,7 @@ async function loadSpec() {
   spec = null;
   clearOperation();
   renderCatalog();
+  renderReference();
   if (MODE === "fleet" && !currentVersion) return;
   try {
     // Fleet mode and a local `mir-emulator` serve swagger.json; a real robot
@@ -945,6 +1242,7 @@ async function loadSpec() {
     spec = indexSpec(await r.json());
   } catch { /* catalog is progressive enhancement */ }
   renderCatalog();
+  renderReference();
 }
 
 function renderCatalog() {
@@ -1015,7 +1313,7 @@ function applyOperation(i) {
     info.style.display = "none";
   }
   syncBodyVisibility();
-  refreshCurl();
+  refreshSample();
 }
 
 function rebuildPath() {
@@ -1026,7 +1324,195 @@ function rebuildPath() {
     if (v) p = p.replaceAll("{" + inp.dataset.param + "}", encodeURIComponent(v));
   });
   $("path").value = p;
-  refreshCurl();
+  refreshSample();
+}
+
+/* ---------- API reference: Stripe-style, generated from the served spec.
+   The version picker switches the whole reference; attribute tables come from
+   the swagger definitions; each operation carries a runnable sample in the
+   active language. Operation bodies render lazily on first expand. ---------- */
+function refCtx(op) {
+  // integer path params get a plausible value so samples run; string params
+  // keep their {placeholder} to show what the caller must supply
+  let p = op.p;
+  op.params.forEach((pa) => {
+    if (pa.type === "integer") p = p.replaceAll("{" + pa.name + "}", "1");
+  });
+  const body = op.bodySchema ? exampleFromSchema(op.bodySchema, spec.defs) : null;
+  return {
+    method: op.m,
+    url: fullPath(currentVersion || "latest", p),
+    user: $("user").value || "distributor",
+    pass: $("pass").value || "distributor",
+    session: sessionId(),
+    body: body === null ? "" : JSON.stringify(body),
+  };
+}
+
+function attrRows(schema, defs, depth = 0, out = []) {
+  if (!schema || depth > 3) return out;
+  if (schema.$ref) return attrRows(defs[schema.$ref.split("/").pop()], defs, depth, out);
+  const req = schema.required || [];
+  for (const [name, sub0] of Object.entries(schema.properties || {})) {
+    let sub = sub0;
+    if (sub.$ref) sub = defs[sub.$ref.split("/").pop()] || sub;
+    const desc = sub0.description || sub.description || "";
+    if (sub.type === "array") {
+      let it = sub.items || {};
+      if (it.$ref) it = defs[it.$ref.split("/").pop()] || it;
+      out.push({
+        name, depth, desc,
+        type: "array of " + (it.type || (it.properties ? "object" : "any")),
+        required: req.includes(name),
+      });
+      if (it.properties) attrRows(it, defs, depth + 1, out);
+      continue;
+    }
+    out.push({
+      name, depth, desc,
+      type: sub.type || (sub.properties ? "object" : "any"),
+      required: req.includes(name),
+    });
+    if (sub.properties) attrRows(sub, defs, depth + 1, out);
+  }
+  return out;
+}
+
+function refOpBody(i) {
+  const op = spec.ops[i];
+  const box = document.createElement("div");
+  box.className = "ref-body";
+  const desc = op.description || op.summary;
+  if (desc) {
+    const p = document.createElement("p");
+    p.className = "desc";
+    p.textContent = desc;
+    box.appendChild(p);
+  }
+  const rows = op.params.map((pa) => ({
+    name: pa.name, depth: 0,
+    type: (pa.type || "string") + " · path",
+    required: true,
+    desc: pa.description || "",
+  }));
+  if (op.bodySchema) attrRows(op.bodySchema, spec.defs, 0, rows);
+  if (rows.length) {
+    const t = document.createElement("table");
+    t.className = "ref-attrs";
+    t.innerHTML = "<thead><tr><th>parameter</th><th>type</th><th></th></tr></thead>";
+    const tb = document.createElement("tbody");
+    rows.forEach((r) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        '<td class="an" style="padding-left:' + (10 + r.depth * 18) + 'px">' + esc(r.name) +
+        (r.required ? '<span class="req-badge">required</span>' : "") + "</td>" +
+        '<td class="at">' + esc(r.type) + "</td><td>" + esc(r.desc) + "</td>";
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb);
+    box.appendChild(t);
+  }
+  if (op.responses.length) {
+    const rp = document.createElement("div");
+    rp.className = "ref-resp";
+    rp.innerHTML = "returns: " + op.responses.map(([c, d]) =>
+      '<span class="code">' + esc(c) + "</span> " + esc(String(d).split(" or ")[0])).join(" &middot; ");
+    box.appendChild(rp);
+  }
+  const code = document.createElement("div");
+  code.className = "ref-code";
+  const pre = document.createElement("pre");
+  pre.className = "ref-sample";
+  pre.textContent = SAMPLERS[lang](refCtx(op));
+  const cp = document.createElement("button");
+  cp.className = "copy";
+  cp.textContent = "Copy";
+  cp.onclick = async () => {
+    await navigator.clipboard.writeText(pre.textContent);
+    cp.textContent = "Copied";
+    setTimeout(() => (cp.textContent = "Copy"), 1200);
+  };
+  code.appendChild(pre);
+  code.appendChild(cp);
+  box.appendChild(code);
+  const tryBtn = document.createElement("button");
+  tryBtn.className = "ref-try";
+  tryBtn.textContent = "Open in console →";
+  tryBtn.onclick = () => {
+    $("op-select").value = String(i);
+    applyOperation(i);
+    document.getElementById("console").scrollIntoView({ behavior: "smooth" });
+  };
+  box.appendChild(tryBtn);
+  return box;
+}
+
+function refOpElement(i) {
+  const op = spec.ops[i];
+  const d = document.createElement("details");
+  d.className = "ref-op";
+  d.dataset.op = i;
+  const s = document.createElement("summary");
+  s.innerHTML =
+    '<span class="mchip m-' + op.m.toLowerCase() + '">' + op.m + "</span>" +
+    '<span class="rp">' + esc(op.p) + "</span>" +
+    (op.summary ? '<span class="rsum">' + esc(op.summary) + "</span>" : "");
+  d.appendChild(s);
+  d.addEventListener("toggle", () => {
+    if (d.open && !d.dataset.rendered) {
+      d.appendChild(refOpBody(i));
+      d.dataset.rendered = "1";
+    }
+  });
+  return d;
+}
+
+function renderReference() {
+  const grid = $("ref-grid"), hint = $("ref-hint"), nav = $("ref-nav"), main = $("ref-main");
+  nav.innerHTML = "";
+  main.innerHTML = "";
+  $("ref-version").textContent = "";
+  $("ref-count").textContent = "";
+  if (!spec || !spec.ops.length) {
+    grid.style.display = "none";
+    hint.style.display = "";
+    hint.textContent = MODE === "robot"
+      ? "this endpoint does not publish swagger.json — the reference needs an emulator (fleet or local)"
+      : "connect to an endpoint to generate the reference from its spec…";
+    return;
+  }
+  $("ref-version").textContent = MODE === "fleet" && currentVersion ? "— " + currentVersion : "— direct robot";
+  $("ref-count").textContent = spec.ops.length + " operations";
+  const groups = new Map();
+  spec.ops.forEach((op, i) => {
+    if (!groups.has(op.group)) groups.set(op.group, []);
+    groups.get(op.group).push(i);
+  });
+  for (const [g, idxs] of groups) {
+    const slug = "ref-g-" + g.replace(/[^a-zA-Z0-9]+/g, "-");
+    const a = document.createElement("a");
+    a.href = "#" + slug;
+    a.innerHTML = esc(g) + ' <span class="cnt">' + idxs.length + "</span>";
+    nav.appendChild(a);
+    const sec = document.createElement("section");
+    sec.className = "ref-group";
+    sec.id = slug;
+    const h = document.createElement("h3");
+    h.textContent = g;
+    sec.appendChild(h);
+    idxs.forEach((i) => sec.appendChild(refOpElement(i)));
+    main.appendChild(sec);
+  }
+  hint.style.display = "none";
+  grid.style.display = "";
+}
+
+function refreshOpenRefSamples() {
+  if (!spec) return;
+  document.querySelectorAll("details.ref-op[data-rendered]").forEach((d) => {
+    const pre = d.querySelector("pre.ref-sample");
+    if (pre) pre.textContent = SAMPLERS[lang](refCtx(spec.ops[Number(d.dataset.op)]));
+  });
 }
 
 /* ---------- request history ---------- */
@@ -1053,7 +1539,7 @@ function renderHistory() {
       $("path").value = h.p;
       $("body").value = h.body || "";
       syncBodyVisibility();
-      refreshCurl();
+      refreshSample();
     };
     box.appendChild(b);
   });
@@ -1214,7 +1700,7 @@ async function connectTo(rawBase) {
   st.textContent = mode === "fleet"
     ? "connected — emulator fleet, " + versions.length + " versions"
     : "connected — direct MiR API at " + base.replace(/^https?:\/\//, "") + "/api/v2.0.0";
-  renderVersions(); loadVersionMeta(); loadSpec(); loadProvenance(); refreshCurl();
+  renderVersions(); loadVersionMeta(); loadSpec(); loadProvenance(); refreshSample();
 }
 
 function selectedEndpoint() {
@@ -1249,9 +1735,10 @@ function probe() {
 }
 
 renderPresets();
+renderLangTabs();
 syncBodyVisibility();
 ["method", "path", "body", "user", "pass"].forEach((id) =>
-  $(id).addEventListener("input", () => { syncBodyVisibility(); refreshCurl(); }));
+  $(id).addEventListener("input", () => { syncBodyVisibility(); refreshSample(); }));
 $("send").onclick = transmit;
 $("path").addEventListener("keydown", (e) => { if (e.key === "Enter") transmit(); });
 $("op-filter").addEventListener("input", renderCatalog);
@@ -1266,11 +1753,11 @@ $("tele-toggle").onclick = () => setTelemetry(!teleTimer);
 $("new-session").onclick = () => {
   $("session").value = newSessionId();
   try { localStorage.setItem(SESSION_KEY, $("session").value); } catch { /* private mode */ }
-  refreshCurl();
+  refreshSample();
 };
 $("session").addEventListener("input", () => {
   try { localStorage.setItem(SESSION_KEY, sessionId()); } catch { /* private mode */ }
-  refreshCurl();
+  refreshSample();
 });
 try {
   $("session").value = localStorage.getItem(SESSION_KEY) ?? newSessionId();
@@ -1284,7 +1771,7 @@ $("copy").onclick = async () => {
   await navigator.clipboard.writeText($("curl").textContent);
   $("copy").textContent = "Copied"; setTimeout(() => ($("copy").textContent = "Copy"), 1200);
 };
-probe(); refreshCurl();
+probe(); refreshSample();
 </script>
 </body>
 </html>

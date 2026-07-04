@@ -20,7 +20,7 @@ schemas. Everything below that references "Stripe-style" means one of these.
       portal PDFs. Selection rule lives in `mir_spec_scraper.versions`;
       the weekly scrape keeps it current.
 
-- [ ] **Multi-language code samples in the console** (cURL, Python,
+- [x] **Multi-language code samples in the console** (cURL, Python,
       JavaScript, Go, Rust). Stripe-style language tabs on the request
       mirror: pick a language once, every sample on the page follows, choice
       persists across visits. Samples are complete programs — they derive
@@ -29,7 +29,7 @@ schemas. Everything below that references "Stripe-style" means one of these.
       target the selected software version's path prefix. Acceptance: copy
       any sample, run it unmodified, get the same response the console shows.
 
-- [ ] **Stripe-style API reference, per software version.** A reference
+- [x] **Stripe-style API reference, per software version.** A reference
       section generated in-browser from the selected version's swagger:
       operations grouped by resource, expandable per-operation blocks with
       path-parameter and body-attribute tables (types, required flags,
