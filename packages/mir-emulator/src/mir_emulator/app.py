@@ -31,7 +31,14 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from mir_emulator import auth, registry
-from mir_emulator.behaviors import MISSION_DURATION_S, OVERRIDES, RequestCtx
+from mir_emulator.behaviors import (
+    FAULTS,
+    MISSION_DURATION_S,
+    OVERRIDES,
+    RequestCtx,
+    faults_doc,
+    set_faults,
+)
 from mir_emulator.examples import example_from_schema, overlay_compatible
 from mir_emulator.openapi3 import to_openapi3
 from mir_emulator.spec import Operation, Spec, load_spec
@@ -436,6 +443,10 @@ def create_app(
                     "virtual robot; omit it for the shared default robot"
                 ),
                 "specs": {"swagger2": "/swagger.json", "openapi3": "/openapi.json"},
+                "faults": (
+                    "GET/PUT/DELETE /_emulator/faults — emulator-only fault injection "
+                    f"({', '.join(sorted(FAULTS))})"
+                ),
                 "source": {
                     "primary_source": registry.primary_source(),
                     "provenance": entry["provenance"],
@@ -447,6 +458,41 @@ def create_app(
                 },
             }
         )
+
+    async def faults_endpoint(request: Request) -> Response:
+        """Emulator-only fault injection (/_emulator/faults) — not part of the
+        MiR API surface, hence the reserved prefix. Same auth as the API."""
+        if not emulator._authorized(request):
+            return _respond(401, _error_body(401, "Not authorized"))
+        session_id = request.headers.get(SESSION_HEADER, "")
+        if session_id and not SESSION_ID_RE.match(session_id):
+            return _respond(
+                400, _error_body(400, "Invalid X-MiR-Session: 1-64 chars from [A-Za-z0-9._-]")
+            )
+        state = emulator.state_for(session_id)
+        if request.method == "DELETE":
+            set_faults(state, [])
+        elif request.method == "PUT":
+            raw = await request.body()
+            if len(raw) > MAX_BODY_BYTES:
+                return _respond(400, _error_body(400, "Payload too large"))
+            try:
+                body = json.loads(raw) if raw else {}
+            except ValueError:
+                return _respond(400, _error_body(400, "Invalid JSON"))
+            names = body.get("faults") if isinstance(body, dict) else None
+            if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+                return _respond(
+                    400, _error_body(400, 'Body must be {"faults": ["emergency_stop", ...]}')
+                )
+            unknown = sorted(set(names) - set(FAULTS))
+            if unknown:
+                return _respond(
+                    400,
+                    _error_body(400, f"Unknown faults; available: {sorted(FAULTS)}"),
+                )
+            set_faults(state, names)
+        return _respond(200, faults_doc(state))
 
     async def not_found(_request: Request, _exc: Exception) -> JSONResponse:
         return JSONResponse(_error_body(404, "Not found"), status_code=404)
@@ -467,6 +513,7 @@ def create_app(
             Route("/", index),
             Route("/swagger.json", swagger_json),
             Route("/openapi.json", openapi_json),
+            Route("/_emulator/faults", faults_endpoint, methods=["GET", "PUT", "DELETE"]),
             *routes,
         ],
         exception_handlers={404: not_found},

@@ -46,12 +46,16 @@ schemas. Everything below that references "Stripe-style" means one of these.
       acceptance invariant holds: 3.5.4 → 3.5.6 reports structurally
       identical, verified in tests and in the browser.
 
-- [ ] **Fault injection.** A `/_emulator/faults` control surface (and/or
-      scenario file) that drives the robot into the states integrators must
-      handle: emergency stop, localization lost, battery critical, blocked
-      path, mission failure. Documented error payloads matching the spec's
-      400/404/409 shapes. Acceptance: each fault flips `/status` state_id and
-      errors[] the way the real robot documents, and clears on demand.
+- [x] **Fault injection.** Shipped 2026-07-04: `GET/PUT/DELETE
+      /_emulator/faults` per robot (session-isolated) with emergency_stop,
+      error, localization_lost, battery_critical, blocked_path. Holding
+      faults freeze the mission simulation and release it exactly where it
+      stopped; resettable faults clear via the documented `PUT /status
+      {"clear_error": true}`; the fleet reports faulted robots with official
+      `robot-end-state` enum values ("Emergency Stop", "Error"). State ids
+      beyond the writable {3,4,11} are pinned by MiR's own ROS message table
+      (mir_msgs/RobotState.msg) — not guessed. Follow-up: mission_failure
+      (needs abort semantics in the queue timeline).
 
 - [ ] **Mission lifecycle realism, deepened.** Time-based mission
       progression with position interpolation along a path, configurable

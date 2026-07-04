@@ -58,6 +58,16 @@ ORDER_STATUS_BY_ROBOT_STATE = {
     "Done": "Finished",
 }
 
+# Robot /status state_text → the fleet spec's official robot-end-state enum.
+END_STATE_BY_STATE_TEXT = {
+    "Ready": "Idle",
+    "Executing": "Operational",
+    "Pause": "Paused",
+    "Manualcontrol": "Manual Control",
+    "EmergencyStop": "Emergency Stop",
+    "Error": "Error",
+}
+
 
 def _iso_now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
@@ -260,8 +270,21 @@ class FleetEmulator(Emulator):
                             "orientation": position.get("orientation"),
                         },
                     )
-            executing = status.get("state_text") == "Executing"
-            doc["robot-end-state"] = "Operational" if executing else "Idle"
+            doc["robot-end-state"] = END_STATE_BY_STATE_TEXT.get(
+                str(status.get("state_text")), "Idle"
+            )
+            errors = status.get("errors")
+            if isinstance(errors, list):
+                doc["errors"] = [
+                    {
+                        "code": int(e.get("code", 0)),
+                        "description": str(e.get("description", "")),
+                        "module": str(e.get("module", "")),
+                        "timestamp": _iso_now(),
+                    }
+                    for e in errors
+                    if isinstance(e, dict) and e.get("module") != "emulated"
+                ]
         patch = ctx.state.singleton(f"/fleet_robot/{robot.robot_id}", {})
         if patch:
             overlay_compatible(doc, patch)
