@@ -159,7 +159,7 @@ def _fallback_entry(existing: dict, version_str: str, tracked: list[dict]) -> di
 
 def sync(
     specs_dir: Path,
-    majors: int,
+    minors_per_major: int,
     dry_run: bool,
     force: bool = False,
     report_path: Path | None = None,
@@ -193,7 +193,7 @@ def sync(
         majors_seen = sorted({f.version[0] for f in files}, reverse=True)
         lines.append(f"portal: {len(files)} files, latest {latest_seen}, majors {majors_seen}")
 
-        targets = select_tracked([f.version for f in files], majors=majors)
+        targets = select_tracked([f.version for f in files], minors_per_major=minors_per_major)
         tracked = []
         for version in targets:
             version_str = format_version(version)
@@ -313,7 +313,12 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     p_sync = sub.add_parser("sync", help="fetch portal listing and update bundled specs")
     p_sync.add_argument("--specs-dir", type=Path, default=DEFAULT_SPECS_DIR)
-    p_sync.add_argument("--majors", type=int, default=3)
+    p_sync.add_argument(
+        "--minors-per-major",
+        type=int,
+        default=4,
+        help="latest patch of this many minor lines per major release (default 4)",
+    )
     p_sync.add_argument("--dry-run", action="store_true")
     p_sync.add_argument(
         "--force",
@@ -336,7 +341,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     changed, summary = sync(
-        args.specs_dir, args.majors, args.dry_run, force=args.force, report_path=args.report
+        args.specs_dir,
+        args.minors_per_major,
+        args.dry_run,
+        force=args.force,
+        report_path=args.report,
     )
     print(summary)
     _github_output(changed, summary)

@@ -16,9 +16,9 @@ curl -H "Authorization: Basic $(printf '%s:%s' distributor "$(printf distributor
 
 1. **`scrape.yml`** runs weekly: logs into the MiR support portal, parses the
    REST API files listing (~500 PDFs, one per product per version), and
-   applies the **selection rule** — *the latest minor.patch of each of the
-   newest 3 major versions* (filling remaining slots with the newest major's
-   previous minor lines if fewer than 3 majors publish files).
+   applies the **selection rule** — *for every major release line, the
+   latest patch of each of its newest 4 minor lines* (so both MiR software
+   generations stay covered four API revisions deep).
 2. MiR publishes the API definitions **as PDFs only** (swagger2markup +
    Asciidoctor renderings of their internal swagger doc). The scraper picks
    one robot PDF per selected version (MIR250 preferred; FLEET/HOOK are

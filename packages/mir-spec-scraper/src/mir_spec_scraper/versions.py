@@ -1,9 +1,9 @@
 """Version parsing and the tracking-selection rule.
 
-Rule: track the latest minor.patch of each of the newest N (default 3) major
-versions that publish REST API files. If fewer than N majors exist, fill the
-remaining slots with the previous minor lines of the newest major, so N
-distinct API generations are always covered when the portal offers them.
+Rule: for every major release line that publishes REST API files, track the
+latest patch of each of its newest N (default 4) minor lines. With the portal
+publishing majors 2 and 3, that covers e.g. 3.8.x/3.7.x/3.6.x/3.5.x and
+2.14.x/2.13.x/2.12.x/2.10.x — four API generations per large release.
 """
 
 from __future__ import annotations
@@ -29,28 +29,26 @@ def format_version(version: tuple[int, ...]) -> str:
     return ".".join(str(p) for p in version)
 
 
-def select_tracked(versions: Sequence[tuple[int, ...]], majors: int = 3) -> list[tuple[int, ...]]:
-    """Pick which of *versions* to track, newest first."""
+def select_tracked(
+    versions: Sequence[tuple[int, ...]], minors_per_major: int = 4
+) -> list[tuple[int, ...]]:
+    """Pick which of *versions* to track, newest first.
+
+    For each major, keep the latest patch of each of its newest
+    *minors_per_major* minor lines.
+    """
     unique = sorted(set(versions), reverse=True)
-    if not unique:
-        return []
 
-    latest_per_major: dict[int, tuple[int, ...]] = {}
+    latest_per_line: dict[tuple[int, int], tuple[int, ...]] = {}
     for v in unique:
-        latest_per_major.setdefault(v[0], v)
-    picked = [latest_per_major[m] for m in sorted(latest_per_major, reverse=True)[:majors]]
+        latest_per_line.setdefault((v[0], v[1]), v)
 
-    if len(picked) < majors:
-        newest_major = unique[0][0]
-        latest_per_minor: dict[int, tuple[int, ...]] = {}
-        for v in unique:
-            if v[0] == newest_major:
-                latest_per_minor.setdefault(v[1], v)
-        for minor in sorted(latest_per_minor, reverse=True):
-            candidate = latest_per_minor[minor]
-            if candidate not in picked:
-                picked.append(candidate)
-            if len(picked) >= majors:
-                break
+    lines_taken: dict[int, int] = {}
+    picked: list[tuple[int, ...]] = []
+    for major, minor in sorted(latest_per_line, reverse=True):
+        if lines_taken.get(major, 0) >= minors_per_major:
+            continue
+        lines_taken[major] = lines_taken.get(major, 0) + 1
+        picked.append(latest_per_line[(major, minor)])
 
     return sorted(picked, reverse=True)
