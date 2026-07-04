@@ -144,7 +144,7 @@ from mir_emulator.fleet import DEFAULT_API_KEY, create_fleet_app  # noqa: E402
 @pytest.fixture(params=registry.fleet_supported_versions(), scope="module")
 def fleet_fuzz_client(request):
     app = create_fleet_app(request.param)
-    ops = list(app.state.emulator.spec.operations.values())
+    ops = list(app.state.all_operations)  # integration + top module + compatibility
     base = app.state.emulator.spec.base_path  # "" — fleet paths are absolute
     with TestClient(app, base_url="http://fleet.test", raise_server_exceptions=False) as client:
         yield client, ops, base

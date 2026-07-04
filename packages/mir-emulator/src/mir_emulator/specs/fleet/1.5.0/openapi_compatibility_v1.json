@@ -1,0 +1,5059 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "MiR Fleet Compatibility API",
+    "description": "<p>This API provides RESTful endpoints in the format of software 3.X.</p>\n<p>The API is intended to support sites that have an existing integration system that is compatible with the 3.x MiR Fleet API system.</p>",
+    "contact": {
+      "name": "Mobile industrial robots",
+      "url": "https://supportportal.mobile-industrial-robots.com/",
+      "email": "support-docs@mir-robots.com"
+    },
+    "license": {
+      "name": "MiR",
+      "url": "https://www.mobile-industrial-robots.com/"
+    },
+    "version": "v1"
+  },
+  "paths": {
+    "/compatibility_api/v1/area_events/{id}/blocked": {
+      "put": {
+        "tags": [
+          "AreaEvents"
+        ],
+        "summary": "Lock or unlock lock zone",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/put-area-events-request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/put-area-events-response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/batch": {
+      "post": {
+        "tags": [
+          "Batch"
+        ],
+        "summary": "Execute multiple API calls in a single request.",
+        "requestBody": {
+          "description": "The batch request containing multiple individual requests",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/batch-request"
+              },
+              "example": {"requests":[{"method":"get","url":"/robots","body":null},{"method":"post","url":"/mission_scheduler/search","body":{"filters":[{"fieldname":"state","operator":"=","value":"Executing"}]}}]}
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/response"
+                  }
+                },
+                "example": [{"status":200,"body":[{"url":"/compatibility_api/v1/robots/7c81d35b-4e6c-4a60-8d81-59f50b03e5f8","id":"7c81d35b-4e6c-4a60-8d81-59f50b03e5f8"},{"url":"/compatibility_api/v1/robots/c9b3aab3-8e8c-4d98-8055-d7a453660f59","id":"c9b3aab3-8e8c-4d98-8055-d7a453660f59"}],"headers":null},{"status":200,"body":[{"url":"/compatibility_api/v1/mission_scheduler/6f1f9c93-0e59-40fa-bfcd-7f70833117f5","state":"Executing","id":"6f1f9c93-0e59-40fa-bfcd-7f70833117f5"}],"headers":null}]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/log/error_reports": {
+      "post": {
+        "tags": [
+          "ErrorReports"
+        ],
+        "summary": "Create a Fleet error log.",
+        "parameters": [
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/create-error-report-request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/create-error-report-response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/evacuations": {
+      "post": {
+        "tags": [
+          "Evacuations"
+        ],
+        "summary": "Activate/Deactivate evacuation in Fleet",
+        "parameters": [
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/post-evacuation-request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/evacuation-response-item"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Evacuations"
+        ],
+        "summary": "Gets the current evacuation status in Fleet as a List (For backwards compatibility, evacuation history is not supported)",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/evacuation-response-item"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/evacuations/{id}": {
+      "get": {
+        "tags": [
+          "Evacuations"
+        ],
+        "summary": "Get details on specific evacuation (Only ID of 1 is allowed as evacuation history is not supported)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/evacuation-response-item"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/maps": {
+      "get": {
+        "tags": [
+          "Maps"
+        ],
+        "summary": "Get all maps.",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/i-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/maps/search": {
+      "post": {
+        "tags": [
+          "Maps"
+        ],
+        "summary": "Search maps",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Search filters",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/search1-map"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/i-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/maps/{id}": {
+      "get": {
+        "tags": [
+          "Maps"
+        ],
+        "summary": "Get a map.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/map"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/maps/{mapId}/positions": {
+      "get": {
+        "tags": [
+          "Maps"
+        ],
+        "summary": "Get positions by the specified map ID.",
+        "parameters": [
+          {
+            "name": "mapId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/position-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/maps/{mapId}/positions/search": {
+      "post": {
+        "tags": [
+          "Maps"
+        ],
+        "summary": "Search map positions by the specified map ID.",
+        "parameters": [
+          {
+            "name": "mapId",
+            "in": "path",
+            "description": "Map ID to search",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Search filters",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/search1-position"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/position-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/missions": {
+      "get": {
+        "tags": [
+          "Mission"
+        ],
+        "summary": "Get all missions.",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/i-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/missions/search": {
+      "post": {
+        "tags": [
+          "Mission"
+        ],
+        "summary": "Search missions",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Search filters",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/search1-mission"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/i-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/missions/{id}": {
+      "get": {
+        "tags": [
+          "Mission"
+        ],
+        "summary": "Get a single mission",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Mission GUID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/mission"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/missions/{id}/definition": {
+      "get": {
+        "tags": [
+          "Mission"
+        ],
+        "summary": "Get mission definition",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Mission ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/mission-definition"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/mission_scheduler": {
+      "get": {
+        "tags": [
+          "MissionScheduler"
+        ],
+        "summary": "Get all queued orders.",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/i-order-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "MissionScheduler"
+        ],
+        "summary": "Create a mission in the mission queue.",
+        "parameters": [
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The request to queue an order.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/queue-order-post-request"
+              },
+              "example": {"mission_id":"fc75b090-17ef-4284-a192-43d19e68e7b1","robot_id":"a0ea1bcf-9094-4744-bd5b-13680bef5995","earliest_start_time":"2026-06-01T12:19:32","parameters":null,"priority":0,"high_priority":false,"description":"N/A","created_by_id":"N/A"}
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/order-with-parameters"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/error-response"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "MissionScheduler"
+        ],
+        "summary": "Abort all pending and waiting orders. Waiting orders are orders that are waiting for their scheduled execution time.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/mission_scheduler/search": {
+      "post": {
+        "tags": [
+          "MissionScheduler"
+        ],
+        "summary": "Search order queue",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Search filters",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/search1-order"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/i-order-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/mission_scheduler/{id}": {
+      "get": {
+        "tags": [
+          "MissionScheduler"
+        ],
+        "summary": "Get single order by ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Guid identifying the order.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/order-with-parameters"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "MissionScheduler"
+        ],
+        "summary": "Abort a scheduled order by ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Guid identifying the scheduled order to abort.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "MissionScheduler"
+        ],
+        "summary": "Change a scheduled order by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Guid identifying the scheduled order to change.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The requested changes to the order.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/queue-order-put-request"
+              },
+              "example": {"mission_id":"c7d6ad41-ea38-470b-beaa-c546baff543e","robot_id":"4332cc93-1e8a-4dc7-8518-d36d7f38b107","earliest_start_time":"2026-06-01T12:19:32","parameters":null,"priority":0,"high_priority":false,"description":"N/A"}
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/order-with-parameters"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/error-response"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/positions": {
+      "get": {
+        "tags": [
+          "Positions"
+        ],
+        "summary": "Get all positions.",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/position-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/positions/search": {
+      "post": {
+        "tags": [
+          "Positions"
+        ],
+        "summary": "Search positions",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Search filters",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/search1-position"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/position-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/positions/{id}": {
+      "get": {
+        "tags": [
+          "Positions"
+        ],
+        "summary": "Gets the position by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/position"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/positions/{id}/helper_positions": {
+      "get": {
+        "tags": [
+          "Positions"
+        ],
+        "summary": "Get helper (entry) positions belonging to the given position ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Position ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/position-list-item"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/positions/{id}/helper_positions/search": {
+      "post": {
+        "tags": [
+          "Positions"
+        ],
+        "summary": "Search helper (entry) positions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Position ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Search filters",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/search1-position"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/position-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/resources/positions": {
+      "get": {
+        "tags": [
+          "Resource"
+        ],
+        "summary": "Get all positions' resource queues.",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/position-resource-queue-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/resources/positions/search": {
+      "post": {
+        "tags": [
+          "Resource"
+        ],
+        "summary": "Search positions' resource queues",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/search1-position-resource-queue"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/position-resource-queue-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/resources/areas": {
+      "get": {
+        "tags": [
+          "Resource"
+        ],
+        "summary": "Get all zones' resource queues.",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/area-resource-queue-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/resources/areas/search": {
+      "post": {
+        "tags": [
+          "Resource"
+        ],
+        "summary": "Search areas' resource queues",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/search1-area-resource-queue"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/area-resource-queue-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/resources/positions/{id}": {
+      "get": {
+        "tags": [
+          "Resource"
+        ],
+        "summary": "Gets a position's resource queue by ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/position-resource-queue"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/resources/areas/{id}": {
+      "get": {
+        "tags": [
+          "Resource"
+        ],
+        "summary": "Gets a zone's resource queue by ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/area-resource-queue"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/robots": {
+      "get": {
+        "tags": [
+          "Robot"
+        ],
+        "summary": "Get list of robots",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/robot-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/robots/search": {
+      "post": {
+        "tags": [
+          "Robot"
+        ],
+        "summary": "Search robots",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/search1-robot"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/robot-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/robots/{id}": {
+      "get": {
+        "tags": [
+          "Robot"
+        ],
+        "summary": "Get robot by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/robot"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/zones": {
+      "get": {
+        "tags": [
+          "Zones"
+        ],
+        "summary": "Get all zones.",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/zone-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/zones/{id}": {
+      "get": {
+        "tags": [
+          "Zones"
+        ],
+        "summary": "Get a zone",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Zone ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/zone"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/zones/search": {
+      "post": {
+        "tags": [
+          "Zones"
+        ],
+        "summary": "Search zones",
+        "parameters": [
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Optional name of field to sort the results by. May be followed by \",asc\" or \",desc\" to specify sorting direction. Example: \"name,asc\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of items to return.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Indicates where in the dataset to begin retrieving items.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "whitelist",
+            "in": "query",
+            "description": "Indicate which fields to include in the response (comma-separated), for example: \"guid,name\", or \"all\" to include all fields.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Search filters",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/search1-zone"
+              },
+              "example": {"filters":[{"fieldname":"name","operator":"=","value":"Name to find"}]}
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/zone-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "angle-hook-data": {
+        "required": [
+          "timestamp"
+        ],
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "$ref": "#/components/schemas/no-stamp"
+          },
+          "angle": {
+            "type": "number",
+            "description": "Angle of the hook in degrees.",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Angle"
+      },
+      "area-resource-queue": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/resource-queue"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "max_robots": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              },
+              "assigned": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "map_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "blocked_for_entry": {
+                "type": "string",
+                "description": "If the resource is blocked for entry.\nChanged from type bool in order to show \"N/A\"",
+                "readOnly": true
+              },
+              "queue": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "allowed_methods": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              },
+              "guid": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Area resource queue details"
+      },
+      "area-resource-queue-list-item": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/resource-queue"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "blocked_for_entry": {
+                "type": "string",
+                "description": "If the resource is blocked for entry.\nChanged from type bool in order to show \"N/A\"",
+                "readOnly": true
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Response for area resource queues."
+      },
+      "batch-request": {
+        "required": [
+          "requests"
+        ],
+        "type": "object",
+        "properties": {
+          "requests": {
+            "maxItems": 24,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/request"
+            },
+            "description": "Individual requests to be executed"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Batch requests"
+      },
+      "cart": {
+        "type": "object",
+        "properties": {
+          "width": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "length": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "offset_locked_wheels": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The id of the attached trolley"
+          },
+          "height": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Trolley"
+      },
+      "create-error-report-request": {
+        "required": [
+          "description"
+        ],
+        "type": "object",
+        "properties": {
+          "description": {
+            "minLength": 1,
+            "type": "string",
+            "description": "The mission identifier."
+          }
+        },
+        "additionalProperties": false,
+        "description": ""
+      },
+      "create-error-report-response": {
+        "type": "object",
+        "properties": {
+          "generating": {
+            "type": "boolean",
+            "description": "Indicates whether the error log creation is running or not",
+            "readOnly": true
+          },
+          "allowed_methods": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the error log."
+          },
+          "module": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "download_url": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "time": {
+            "type": "string",
+            "description": "Time of error log creation.",
+            "format": "date-time"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "Is the error log ready for download",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "CreateErrorReport response."
+      },
+      "default-constraint1-t": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/parameter-constraint"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "default": {
+                "$ref": "#/components/schemas/t-1"
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Constraint with default value"
+      },
+      "duration-constraint": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/parameter-constraint"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "default": {
+                "type": "string",
+                "description": "Default value",
+                "format": "date-span",
+                "nullable": true
+              },
+              "max": {
+                "type": "string",
+                "description": "Maximum value",
+                "format": "date-span",
+                "nullable": true
+              },
+              "null_option": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility."
+              },
+              "nullable": {
+                "type": "boolean",
+                "description": "Allow setting argument to null"
+              },
+              "min": {
+                "type": "string",
+                "description": "Minimum value",
+                "format": "date-span",
+                "nullable": true
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Min/max timespan duration constraint"
+      },
+      "error": {
+        "type": "object",
+        "properties": {
+          "error_human": {
+            "type": "string",
+            "description": "Human readable description of the error",
+            "nullable": true
+          },
+          "error_code": {
+            "type": "string",
+            "description": "Machine-readable error code",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "An error"
+      },
+      "error-response": {
+        "type": "object",
+        "properties": {
+          "error_human": {
+            "type": "string",
+            "description": "Human readable description of the error",
+            "nullable": true
+          },
+          "error_code": {
+            "type": "string",
+            "description": "Machine-readable error code",
+            "nullable": true
+          },
+          "element_guid": {
+            "type": "string",
+            "description": "ID of the element the response applies to",
+            "nullable": true
+          },
+          "field_errors": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/error"
+            },
+            "description": "Errors per field",
+            "nullable": true
+          },
+          "sortable_fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sortable fields",
+            "nullable": true
+          },
+          "available_fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Available fields",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Error response"
+      },
+      "evacuation-response-item": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "URL to get more details on this evacuation"
+          },
+          "trigger_time": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility",
+            "readOnly": true
+          },
+          "note": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility",
+            "readOnly": true
+          },
+          "created_by_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "evacuation_activated": {
+            "type": "boolean",
+            "description": "Indicates whether evacuation is activated or deactivated"
+          },
+          "id": {
+            "type": "integer",
+            "description": "ID of the evacuation",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Evacuation response"
+      },
+      "external-zone-type": {
+        "enum": [
+          0,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          201,
+          202,
+          203,
+          204,
+          205,
+          206,
+          208,
+          301,
+          302
+        ],
+        "type": "integer",
+        "description": "Zone type IDs",
+        "format": "int32"
+      },
+      "header": {
+        "required": [
+          "stamp"
+        ],
+        "type": "object",
+        "properties": {
+          "stamp": {
+            "$ref": "#/components/schemas/stamp"
+          },
+          "frame_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "seq": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Header for legacy response"
+      },
+      "hook-data": {
+        "type": "object",
+        "properties": {
+          "angle": {
+            "$ref": "#/components/schemas/angle-hook-data"
+          },
+          "height_state": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "brake_state": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "height": {
+            "type": "number",
+            "description": "Height of the hook measured from the ground in mm.",
+            "format": "double"
+          },
+          "length": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "gripper_state": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Hook data"
+      },
+      "hook-status": {
+        "type": "object",
+        "properties": {
+          "cart": {
+            "$ref": "#/components/schemas/cart"
+          },
+          "available": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "cart_attached": {
+            "type": "boolean",
+            "description": "Boolean indicating if a trolley is currently attached"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Hook Status"
+      },
+      "i-list-item": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "maxLength": 200,
+            "type": "string",
+            "description": "The API URL for object details",
+            "readOnly": true
+          },
+          "guid": {
+            "type": "string",
+            "description": "Id of the object",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the object",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A reference to an object"
+      },
+      "i-order-list-item": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "maxLength": 200,
+            "type": "string",
+            "description": "The API URL for object details",
+            "readOnly": true
+          },
+          "state": {
+            "$ref": "#/components/schemas/order-status-v3"
+          },
+          "id": {
+            "type": "string",
+            "description": "GUID identifying the order.",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Represents a mission item in the response for the get missions list."
+      },
+      "map": {
+        "type": "object",
+        "properties": {
+          "base_map": {
+            "type": "string",
+            "description": "Map image as base64 encoded byte string"
+          },
+          "allowed_methods": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "description": "Map name"
+          },
+          "url": {
+            "type": "string",
+            "description": "The API URL for map details"
+          },
+          "positions": {
+            "type": "string",
+            "description": "URL of map positions"
+          },
+          "created_by": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "origin_theta": {
+            "type": "number",
+            "description": "Map orientation",
+            "format": "double",
+            "readOnly": true
+          },
+          "created_by_name": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "origin_y": {
+            "type": "number",
+            "description": "Map origin Y coordinate",
+            "format": "double"
+          },
+          "origin_x": {
+            "type": "number",
+            "description": "Map origin X coordinate",
+            "format": "double"
+          },
+          "path_guides": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "created_by_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "guid": {
+            "type": "string",
+            "description": "Map ID",
+            "format": "uuid"
+          },
+          "resolution": {
+            "type": "number",
+            "description": "Map resolution",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Map object"
+      },
+      "method": {
+        "enum": [
+          "get",
+          "post",
+          "put",
+          "delete",
+          "patch"
+        ],
+        "type": "string",
+        "description": "HTTP methods supported in batch requests"
+      },
+      "min-max-constraint1-t": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/parameter-constraint"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "default": {
+                "$ref": "#/components/schemas/t"
+              },
+              "min": {
+                "$ref": "#/components/schemas/t"
+              },
+              "max": {
+                "$ref": "#/components/schemas/t"
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Min/max value constraint"
+      },
+      "mission": {
+        "required": [
+          "definition",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "definition": {
+            "type": "string",
+            "description": "Mission definition URL"
+          },
+          "guid": {
+            "type": "string",
+            "description": "Mission Guid",
+            "format": "uuid"
+          },
+          "allowed_methods": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "description": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "created_by_name": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "is_template": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "valid": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "created_by": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "has_user_parameters": {
+            "type": "boolean",
+            "description": "Indicates if the mission has dynamic parameters"
+          },
+          "created_by_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "actions": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "group_id": {
+            "type": "string",
+            "description": "Mission group ID",
+            "format": "uuid",
+            "nullable": true
+          },
+          "hidden": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "description": "Mission name"
+          },
+          "url": {
+            "type": "string",
+            "description": "The API URL for mission details"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Mission object"
+      },
+      "mission-definition": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/mission-parameter"
+            },
+            "description": "Mission parameters"
+          },
+          "action_type": {
+            "type": "string",
+            "description": "Action type (load_mission)",
+            "readOnly": true
+          },
+          "valid": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "mission_group_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of mission"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Mission definition"
+      },
+      "mission-parameter": {
+        "type": "object",
+        "properties": {
+          "help": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "nullable": true
+          },
+          "input_name": {
+            "type": "string",
+            "description": "Name of the input field",
+            "nullable": true
+          },
+          "constraints": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/default-constraint1-t"
+              },
+              {
+                "$ref": "#/components/schemas/string-constraint"
+              },
+              {
+                "$ref": "#/components/schemas/reference-constraint"
+              },
+              {
+                "$ref": "#/components/schemas/min-max-constraint1-t"
+              },
+              {
+                "$ref": "#/components/schemas/duration-constraint"
+              }
+            ],
+            "description": "Parameter constraints",
+            "nullable": true
+          },
+          "type": {
+            "$ref": "#/components/schemas/parameter-type"
+          },
+          "id": {
+            "type": "string",
+            "description": "Parameter ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Parameter name"
+          }
+        },
+        "additionalProperties": false,
+        "description": ""
+      },
+      "no-stamp": {
+        "type": "object",
+        "properties": {
+          "secs": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "nsecs": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Stamp for legacy response"
+      },
+      "operation-mode-info": {
+        "type": "object",
+        "properties": {
+          "synchronization_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "mission_scheduling_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "resource_management_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "initial_synchronization_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "collision_avoidance_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "mode_name": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "charging_staging_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "communicator_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "OperationModeInfo"
+      },
+      "operator": {
+        "enum": [
+          "=",
+          "!=",
+          "<>",
+          ">",
+          ">=",
+          "<",
+          "<=",
+          "LIKE",
+          "NOT LIKE",
+          "IN",
+          "NOT IN",
+          "IS",
+          "IS NOT"
+        ],
+        "type": "string",
+        "description": "Operator used in filters"
+      },
+      "order": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/order-list-item"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "priority": {
+                "type": "integer",
+                "description": "Priority number",
+                "format": "int32"
+              },
+              "allowed_methods": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              },
+              "description": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              },
+              "order_time": {
+                "type": "string",
+                "description": "Time when the order was created.",
+                "format": "date-time"
+              },
+              "state": {
+                "$ref": "#/components/schemas/order-status-v3"
+              },
+              "finish_time": {
+                "type": "string",
+                "description": "The time when the order was finished, or default timestamp if not finished yet",
+                "format": "date-time"
+              },
+              "earliest_start_time": {
+                "type": "string",
+                "description": "The earliest time that the order is allowed to be started.",
+                "format": "date-time"
+              },
+              "start_time": {
+                "type": "string",
+                "description": "The time the order was started, or default timestamp if not yet started.",
+                "format": "date-time"
+              },
+              "mission": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              },
+              "created_by": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              },
+              "fleet_scheduled_guid": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              },
+              "mission_id": {
+                "type": "string",
+                "description": "The GUID identifying the mission referenced by the order.",
+                "format": "uuid",
+                "nullable": true
+              },
+              "high_priority": {
+                "type": "boolean",
+                "description": "Whether the order has high priority."
+              },
+              "mission_name": {
+                "type": "string",
+                "description": "The name of the mission referenced by the order.",
+                "nullable": true
+              },
+              "created_by_name": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              },
+              "robot_id": {
+                "type": "string",
+                "description": "The GUID identifying the robot referenced by the order. Defaults to a zero-GUID for any robot.",
+                "format": "uuid"
+              },
+              "created_by_id": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              },
+              "id": {
+                "type": "string",
+                "description": "GUID identifying the order.",
+                "format": "uuid"
+              },
+              "url": {
+                "type": "string",
+                "description": "URL for order details"
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Represents a queued mission."
+      },
+      "order-list-item": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "URL for order details"
+          },
+          "state": {
+            "$ref": "#/components/schemas/order-status-v3"
+          },
+          "id": {
+            "type": "string",
+            "description": "GUID identifying the order.",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Represents a mission item in the response for the get missions list.",
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "OrderListItem": "#/components/schemas/order-list-item",
+            "Order": "#/components/schemas/order",
+            "OrderWithParameters": "#/components/schemas/order-with-parameters"
+          }
+        }
+      },
+      "order-parameter": {
+        "required": [
+          "input_name",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "input_name": {
+            "type": "string",
+            "description": "Parameter input name"
+          },
+          "value": {
+            "type": "string",
+            "description": "Parameter value"
+          },
+          "label": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A parameter value used in an order"
+      },
+      "order-parameters": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/order-parameter"
+            },
+            "description": "Parameter data"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Parameter values for an order"
+      },
+      "order-status-v3": {
+        "enum": [
+          "Pending",
+          "Executing",
+          "Done",
+          "Aborted"
+        ],
+        "type": "string",
+        "description": "States of an order."
+      },
+      "order-with-parameters": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/order-list-item"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "parameters": {
+                "$ref": "#/components/schemas/order-parameters"
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Order with parameters"
+      },
+      "parameter-choice": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Parameter value name"
+          },
+          "value": {
+            "type": "string",
+            "description": "Parameter value ID"
+          }
+        },
+        "additionalProperties": false,
+        "description": "An option for a parameter value"
+      },
+      "parameter-constraint": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Parameter constraint base class",
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "DefaultConstraint`1": "#/components/schemas/default-constraint1-t",
+            "StringConstraint": "#/components/schemas/string-constraint",
+            "ReferenceConstraint": "#/components/schemas/reference-constraint",
+            "MinMaxConstraint`1": "#/components/schemas/min-max-constraint1-t",
+            "DurationConstraint": "#/components/schemas/duration-constraint"
+          }
+        }
+      },
+      "parameter-type": {
+        "enum": [
+          "Hidden",
+          "String",
+          "Float",
+          "Integer",
+          "Boolean",
+          "Duration",
+          "Reference",
+          "Selection"
+        ],
+        "type": "string",
+        "description": "Mission parameter type"
+      },
+      "position": {
+        "type": "object",
+        "properties": {
+          "map": {
+            "type": "string",
+            "description": "Url of the map that the position is located at"
+          },
+          "pos_x": {
+            "type": "number",
+            "description": "The x position on the map",
+            "format": "double"
+          },
+          "pos_y": {
+            "type": "number",
+            "description": "The y position on the map",
+            "format": "double"
+          },
+          "map_id": {
+            "type": "string",
+            "description": "The id of the map that the position is located at"
+          },
+          "orientation": {
+            "type": "number",
+            "description": "Orientation of the position",
+            "format": "double"
+          },
+          "parent": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "type_id": {
+            "$ref": "#/components/schemas/position-type-id-v3"
+          },
+          "docking_offsets": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "help_positions": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "created_by_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "created_by": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "parent_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "created_by_name": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "allowed_methods": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "guid": {
+            "type": "string",
+            "description": "ID of the position"
+          },
+          "type": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the position"
+          },
+          "url": {
+            "type": "string",
+            "description": "The API URL for object details"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Position details"
+      },
+      "position-list-item": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "URL for position details"
+          },
+          "map": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility."
+          },
+          "guid": {
+            "type": "string",
+            "description": "Position id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Position name."
+          },
+          "type_id": {
+            "$ref": "#/components/schemas/position-type-id-v3"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response item model for GetPositions"
+      },
+      "position-resource-queue": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/resource-queue"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "max_robots": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              },
+              "queue": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "allowed_methods": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              },
+              "name": {
+                "type": "string"
+              },
+              "assigned": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "map_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "guid": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Position resource queue details"
+      },
+      "position-resource-queue-list-item": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/resource-queue"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false
+          }
+        ],
+        "description": "Position resource queue list item."
+      },
+      "position-type-id-v3": {
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          30,
+          31,
+          42,
+          50,
+          51,
+          52,
+          53,
+          106,
+          200,
+          201,
+          202,
+          203,
+          204,
+          205,
+          206,
+          207,
+          208,
+          209,
+          210,
+          211,
+          212,
+          213,
+          214,
+          215,
+          216,
+          217,
+          218,
+          219,
+          220,
+          221,
+          222,
+          223,
+          224,
+          225,
+          226,
+          227,
+          228,
+          229,
+          230,
+          231,
+          232,
+          233
+        ],
+        "type": "integer",
+        "description": "Position type IDs.",
+        "format": "int32"
+      },
+      "post-evacuation-request": {
+        "required": [
+          "evacuation_activated"
+        ],
+        "type": "object",
+        "properties": {
+          "evacuation_activated": {
+            "type": "boolean",
+            "description": "Indicates whether to activate or deactivate evacuation"
+          },
+          "note": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility"
+          }
+        },
+        "additionalProperties": false,
+        "description": "The request item model for an Evacuation Request"
+      },
+      "problem-details": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": { }
+      },
+      "put-area-events-request": {
+        "required": [
+          "block"
+        ],
+        "type": "object",
+        "properties": {
+          "block": {
+            "type": "boolean",
+            "description": "The request for locking the lock zone"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request to block/unblock an area."
+      },
+      "put-area-events-response": {
+        "type": "object",
+        "properties": {
+          "block": {
+            "type": "boolean",
+            "description": "The response for locking the lock zone which duplicates the request"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Block area response."
+      },
+      "queue-order-post-request": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/queue-order-request"
+          },
+          {
+            "required": [
+              "mission_id"
+            ],
+            "type": "object",
+            "properties": {
+              "mission_id": {
+                "type": "string",
+                "description": "The mission identifier. Required in POST request.",
+                "format": "uuid"
+              },
+              "created_by_id": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Request to queue a new order"
+      },
+      "queue-order-put-request": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/queue-order-request"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false
+          }
+        ],
+        "description": "Request to update an order"
+      },
+      "queue-order-request": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "mission_id": {
+            "type": "string",
+            "description": "The mission identifier.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "robot_id": {
+            "type": "string",
+            "description": "The robot identifier for the robot required to execute the order.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "earliest_start_time": {
+            "type": "string",
+            "description": "The earliest time at which the order can be scheduled.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/order-parameter"
+            },
+            "description": "Order parameters",
+            "nullable": true
+          },
+          "priority": {
+            "type": "integer",
+            "description": "Priority",
+            "format": "int32"
+          },
+          "high_priority": {
+            "type": "boolean",
+            "description": "Whether the mission has high priority.",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request to schedule a mission.",
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "QueueOrderPutRequest": "#/components/schemas/queue-order-put-request",
+            "QueueOrderPostRequest": "#/components/schemas/queue-order-post-request"
+          }
+        }
+      },
+      "reference-constraint": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/parameter-constraint"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "body": {
+                "type": "string",
+                "description": "Constraint body",
+                "nullable": true
+              },
+              "value_field": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "nullable": true
+              },
+              "null_option": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "nullable": true
+              },
+              "nullable": {
+                "type": "boolean",
+                "description": "Accepts null values",
+                "nullable": true
+              },
+              "url": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "nullable": true
+              },
+              "name_field": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "nullable": true
+              },
+              "choices": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/parameter-choice"
+                },
+                "description": "Possible values for the parameter",
+                "nullable": true
+              },
+              "default": {
+                "type": "string",
+                "description": "Default value",
+                "nullable": true
+              },
+              "method": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "nullable": true
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Constraining parameter to refer to an object"
+      },
+      "request": {
+        "required": [
+          "method",
+          "url"
+        ],
+        "type": "object",
+        "properties": {
+          "method": {
+            "$ref": "#/components/schemas/method"
+          },
+          "url": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Relative API URL, e.g. /missions"
+          },
+          "body": {
+            "description": "Request body for POST, PUT, PATCH requests.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A request to be executed"
+      },
+      "resource-queue": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "queue": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Robots in queue for the resource."
+          },
+          "assigned": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Robots assigned to the resource."
+          },
+          "guid": {
+            "type": "string",
+            "description": "Id of the resource.",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of resource."
+          },
+          "map_id": {
+            "type": "string",
+            "description": "Id of map the resource is on.",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string",
+            "description": "The resource URL"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Base class for resource queues",
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "AreaResourceQueue": "#/components/schemas/area-resource-queue",
+            "AreaResourceQueueListItem": "#/components/schemas/area-resource-queue-list-item",
+            "PositionResourceQueue": "#/components/schemas/position-resource-queue",
+            "PositionResourceQueueListItem": "#/components/schemas/position-resource-queue-list-item"
+          }
+        }
+      },
+      "response": {
+        "required": [
+          "body",
+          "headers",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "description": "HTTP status code",
+            "format": "int32"
+          },
+          "body": {
+            "description": "JSON response body"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "HTTP headers"
+          }
+        },
+        "additionalProperties": false,
+        "description": "A response to a request in a batch"
+      },
+      "robot": {
+        "required": [
+          "fleet_state_text"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/status"
+          },
+          "fleet_state_text": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility."
+          },
+          "robot_model": {
+            "type": "string",
+            "description": "Robot model."
+          },
+          "allowed_methods": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.\nChanged from type List<Object> in order to show \"N/A\"",
+            "readOnly": true
+          },
+          "description": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "ip": {
+            "type": "string",
+            "description": "Robot ip address."
+          },
+          "factory_reset_needed": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "created_by_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "fleet_state": {
+            "type": "integer",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "format": "int32"
+          },
+          "created_by": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "operation_mode_info ": {
+            "$ref": "#/components/schemas/operation-mode-info"
+          },
+          "created_by_name": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "state_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "active": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "serial_number": {
+            "type": "string",
+            "description": "Robot serial number."
+          },
+          "robot_group_id": {
+            "type": "string",
+            "description": "Robot group. (Only available if the robot is in a single group).",
+            "nullable": true
+          },
+          "id": {
+            "type": "string",
+            "description": "Robot id.",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "description": "Robot name."
+          },
+          "url": {
+            "type": "string",
+            "description": "URL for robot details"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Robot response"
+      },
+      "robot-error": {
+        "required": [
+          "timestamp"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "Error code",
+            "format": "int32"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the error"
+          },
+          "timestamp": {
+            "$ref": "#/components/schemas/stamp"
+          },
+          "module": {
+            "type": "string",
+            "description": "Robot module where the error was triggered"
+          },
+          "nolog": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "non_resettable": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "An error on the robot"
+      },
+      "robot-list-item": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Url to get specific information about robot"
+          },
+          "id": {
+            "type": "string",
+            "description": "Id of the robot",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Robot"
+      },
+      "robot-position": {
+        "type": "object",
+        "properties": {
+          "y": {
+            "type": "number",
+            "description": "Robot's Y axis position.",
+            "format": "double"
+          },
+          "x": {
+            "type": "number",
+            "description": "Robot's X axis position.",
+            "format": "double"
+          },
+          "orientation": {
+            "type": "number",
+            "description": "Robot's orientation position.",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Position"
+      },
+      "search-filter1-area-resource-queue": {
+        "required": [
+          "fieldname",
+          "operator"
+        ],
+        "type": "object",
+        "properties": {
+          "fieldname": {
+            "minLength": 1,
+            "type": "string",
+            "description": "JSON field name"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/operator"
+          },
+          "value": {
+            "description": "Value to test against.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A filter for searching data"
+      },
+      "search-filter1-map": {
+        "required": [
+          "fieldname",
+          "operator"
+        ],
+        "type": "object",
+        "properties": {
+          "fieldname": {
+            "minLength": 1,
+            "type": "string",
+            "description": "JSON field name"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/operator"
+          },
+          "value": {
+            "description": "Value to test against.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A filter for searching data"
+      },
+      "search-filter1-mission": {
+        "required": [
+          "fieldname",
+          "operator"
+        ],
+        "type": "object",
+        "properties": {
+          "fieldname": {
+            "minLength": 1,
+            "type": "string",
+            "description": "JSON field name"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/operator"
+          },
+          "value": {
+            "description": "Value to test against.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A filter for searching data"
+      },
+      "search-filter1-order": {
+        "required": [
+          "fieldname",
+          "operator"
+        ],
+        "type": "object",
+        "properties": {
+          "fieldname": {
+            "minLength": 1,
+            "type": "string",
+            "description": "JSON field name"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/operator"
+          },
+          "value": {
+            "description": "Value to test against.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A filter for searching data"
+      },
+      "search-filter1-position": {
+        "required": [
+          "fieldname",
+          "operator"
+        ],
+        "type": "object",
+        "properties": {
+          "fieldname": {
+            "minLength": 1,
+            "type": "string",
+            "description": "JSON field name"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/operator"
+          },
+          "value": {
+            "description": "Value to test against.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A filter for searching data"
+      },
+      "search-filter1-position-resource-queue": {
+        "required": [
+          "fieldname",
+          "operator"
+        ],
+        "type": "object",
+        "properties": {
+          "fieldname": {
+            "minLength": 1,
+            "type": "string",
+            "description": "JSON field name"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/operator"
+          },
+          "value": {
+            "description": "Value to test against.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A filter for searching data"
+      },
+      "search-filter1-robot": {
+        "required": [
+          "fieldname",
+          "operator"
+        ],
+        "type": "object",
+        "properties": {
+          "fieldname": {
+            "minLength": 1,
+            "type": "string",
+            "description": "JSON field name"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/operator"
+          },
+          "value": {
+            "description": "Value to test against.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A filter for searching data"
+      },
+      "search-filter1-zone": {
+        "required": [
+          "fieldname",
+          "operator"
+        ],
+        "type": "object",
+        "properties": {
+          "fieldname": {
+            "minLength": 1,
+            "type": "string",
+            "description": "JSON field name"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/operator"
+          },
+          "value": {
+            "description": "Value to test against.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A filter for searching data"
+      },
+      "search1-area-resource-queue": {
+        "required": [
+          "filters"
+        ],
+        "type": "object",
+        "properties": {
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/search-filter1-area-resource-queue"
+            },
+            "description": "List of filters"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Parameters for searching"
+      },
+      "search1-map": {
+        "required": [
+          "filters"
+        ],
+        "type": "object",
+        "properties": {
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/search-filter1-map"
+            },
+            "description": "List of filters"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Parameters for searching"
+      },
+      "search1-mission": {
+        "required": [
+          "filters"
+        ],
+        "type": "object",
+        "properties": {
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/search-filter1-mission"
+            },
+            "description": "List of filters"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Parameters for searching"
+      },
+      "search1-order": {
+        "required": [
+          "filters"
+        ],
+        "type": "object",
+        "properties": {
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/search-filter1-order"
+            },
+            "description": "List of filters"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Parameters for searching"
+      },
+      "search1-position": {
+        "required": [
+          "filters"
+        ],
+        "type": "object",
+        "properties": {
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/search-filter1-position"
+            },
+            "description": "List of filters"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Parameters for searching"
+      },
+      "search1-position-resource-queue": {
+        "required": [
+          "filters"
+        ],
+        "type": "object",
+        "properties": {
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/search-filter1-position-resource-queue"
+            },
+            "description": "List of filters"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Parameters for searching"
+      },
+      "search1-robot": {
+        "required": [
+          "filters"
+        ],
+        "type": "object",
+        "properties": {
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/search-filter1-robot"
+            },
+            "description": "List of filters"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Parameters for searching"
+      },
+      "search1-zone": {
+        "required": [
+          "filters"
+        ],
+        "type": "object",
+        "properties": {
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/search-filter1-zone"
+            },
+            "description": "List of filters"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Parameters for searching"
+      },
+      "stamp": {
+        "type": "object",
+        "properties": {
+          "secs": {
+            "type": "integer",
+            "description": "Seconds since UNIX epoch",
+            "format": "int64"
+          },
+          "nsecs": {
+            "type": "integer",
+            "description": "Nanoseconds",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Timestamp"
+      },
+      "status": {
+        "required": [
+          "header",
+          "hook_data",
+          "hook_status",
+          "mission_text",
+          "mode_key_state",
+          "position",
+          "user_prompt"
+        ],
+        "type": "object",
+        "properties": {
+          "joystick_low_speed_mode_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "mode_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "moved": {
+            "type": "number",
+            "description": "Moved (Total distance in meters).",
+            "format": "double"
+          },
+          "mission_queue_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "header": {
+            "$ref": "#/components/schemas/header"
+          },
+          "robot_name": {
+            "type": "string",
+            "description": "Robot name."
+          },
+          "uptime": {
+            "type": "integer",
+            "description": "Uptime.",
+            "format": "int64"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/robot-error"
+            },
+            "description": "Active errors on the robot"
+          },
+          "unloaded_map_changes": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "distance_to_next_target": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "battery_voltage": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "mode_key_state": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility."
+          },
+          "battery_percentage": {
+            "type": "number",
+            "description": "Robot battery percentage.",
+            "format": "double"
+          },
+          "map_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "software_version": {
+            "type": "string",
+            "description": "Robot software version."
+          },
+          "safety_system_muted": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "mission_text": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility."
+          },
+          "velocity": {
+            "$ref": "#/components/schemas/velocity"
+          },
+          "state_text": {
+            "type": "string",
+            "description": "Robot state."
+          },
+          "position": {
+            "$ref": "#/components/schemas/robot-position"
+          },
+          "footprint": {
+            "type": "string",
+            "description": "Robot footprint."
+          },
+          "user_prompt": {
+            "$ref": "#/components/schemas/user-prompt"
+          },
+          "mode_text": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "hook_status": {
+            "$ref": "#/components/schemas/hook-status"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "joystick_web_session_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "hook_data": {
+            "$ref": "#/components/schemas/hook-data"
+          },
+          "battery_time_remaining": {
+            "type": "integer",
+            "description": "Battery time remaining (seconds).",
+            "format": "int64"
+          },
+          "state_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Robot status information."
+      },
+      "string-constraint": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/parameter-constraint"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "default": {
+                "type": "string",
+                "description": "Default value",
+                "nullable": true
+              },
+              "min_length": {
+                "type": "integer",
+                "description": "Minimum length of string",
+                "format": "int32",
+                "nullable": true
+              },
+              "max_length": {
+                "type": "integer",
+                "description": "Maximum length of string",
+                "format": "int32",
+                "nullable": true
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Constraint with default value"
+      },
+      "t": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "t-1": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "user-prompt": {
+        "required": [
+          "timeout"
+        ],
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "has_request": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "timeout": {
+            "$ref": "#/components/schemas/no-stamp"
+          },
+          "user_group": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "guid": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "options": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.\nChanged from type List<Object> in order to show \"N/A\"",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "User prompt"
+      },
+      "velocity": {
+        "type": "object",
+        "properties": {
+          "linear": {
+            "type": "number",
+            "description": "Linear velocity",
+            "format": "double"
+          },
+          "angular": {
+            "type": "number",
+            "description": "Angular velocity",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Velocity"
+      },
+      "zone": {
+        "type": "object",
+        "properties": {
+          "map": {
+            "type": "string",
+            "description": "URL of the map the zone belongs to."
+          },
+          "direction": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility."
+          },
+          "map_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "format": "uuid"
+          },
+          "polygon": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility."
+          },
+          "type_id": {
+            "$ref": "#/components/schemas/external-zone-type"
+          },
+          "url": {
+            "maxLength": 200,
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility."
+          },
+          "created_by_name": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility."
+          },
+          "stroke_width": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility."
+          },
+          "actions": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility."
+          },
+          "shape_type": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility."
+          },
+          "created_by": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility."
+          },
+          "created_by_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility."
+          },
+          "guid": {
+            "type": "string",
+            "description": "Zone id.",
+            "format": "uuid"
+          },
+          "allowed_methods": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility."
+          },
+          "name": {
+            "type": "string",
+            "description": "Zone name."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Zone"
+      },
+      "zone-list-item": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "URL for zone details"
+          },
+          "map": {
+            "type": "string",
+            "description": "URL of the map the zone belongs to."
+          },
+          "guid": {
+            "type": "string",
+            "description": "Zone id.",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "description": "Zone name."
+          },
+          "type_id": {
+            "$ref": "#/components/schemas/external-zone-type"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Zone list item"
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "name": "x-api-key",
+        "in": "header"
+      }
+    }
+  },
+  "security": [
+    {
+      "ApiKeyAuth": [ ]
+    }
+  ]
+}

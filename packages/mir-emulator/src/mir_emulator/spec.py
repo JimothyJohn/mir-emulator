@@ -163,13 +163,16 @@ def load_spec(path: Path, mir_version: str) -> Spec:
     elif str(doc.get("openapi", "")).startswith("3"):
         operations = _openapi3_operations(doc)
         servers = doc.get("servers") or []
-        # Documents whose path keys are already absolute (the Fleet Integration
-        # API writes /api/v1/... into paths) need no prefix; robot-shaped docs
-        # with relative keys (/status) keep the MiR base path.
-        if any(p.startswith("/api/") for p in doc.get("paths", {})):
-            base_path = ""
-        else:
-            base_path = "/api/v2.0.0"
+
+        # Documents whose path keys are already absolute (the Fleet APIs write
+        # /api/v1/... or /compatibility_api/v1/... into paths) need no prefix;
+        # robot-shaped docs with relative keys (/status) keep the MiR base path.
+        def _absolute(path: str) -> bool:
+            head = path.split("/")[1] if "/" in path else ""
+            return head == "api" or head.endswith("_api")
+
+        paths_absolute = any(_absolute(p) for p in doc.get("paths", {}))
+        base_path = "" if paths_absolute else "/api/v2.0.0"
         if servers:
             url = servers[0].get("url", "")
             _, _, tail = url.partition("//")

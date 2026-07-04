@@ -93,10 +93,14 @@ schemas. Everything below that references "Stripe-style" means one of these.
       robot emulators driven over their own REST API, serial-order dispatch
       into real robot mission queues, session isolation composing across
       both layers, `/fleet/<version>/` dispatcher mounts, `--fleet-version`
-      CLI, credential-free scraper half. Remaining fleet follow-ups: the
-      Top Module and Compatibility APIs (published beside the Integration
-      API), richer order phases (fallback missions, priorities affecting
-      robot choice), and evacuation/zone behaviors.
+      CLI, credential-free scraper half. The Top Module and Compatibility
+      APIs landed as a follow-up (2026-07-04): all three official documents
+      per version are tracked, served verbatim at their CDN filenames, and
+      emulated on ONE fleet app sharing state/sessions/robots — the
+      Compatibility API's growing surface (18→34 paths across 1.3.1→1.5.0)
+      stays version-faithful. Still open: richer order phases (fallback
+      missions, priorities affecting robot choice) and evacuation/zone
+      behaviors.
 
 - [ ] **Generated Python SDK.** The tracked swaggers are machine-readable;
       publish a typed client generated from them (Python first) so emulator
