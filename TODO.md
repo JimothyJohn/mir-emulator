@@ -54,8 +54,10 @@ schemas. Everything below that references "Stripe-style" means one of these.
       {"clear_error": true}`; the fleet reports faulted robots with official
       `robot-end-state` enum values ("Emergency Stop", "Error"). State ids
       beyond the writable {3,4,11} are pinned by MiR's own ROS message table
-      (mir_msgs/RobotState.msg) — not guessed. Follow-up: mission_failure
-      (needs abort semantics in the queue timeline).
+      (mir_msgs/RobotState.msg) — not guessed. mission_failure landed as a
+      follow-up: running and queued missions abort at the sim instant
+      (finished ones keep their history), the robot errors until
+      clear_error, and the fleet reports the orders as Aborted.
 
 - [x] **Mission lifecycle realism.** Already satisfied by the mission
       simulation shipped with per-session statefulness, verified against the

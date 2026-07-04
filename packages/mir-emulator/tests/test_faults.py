@@ -59,6 +59,7 @@ def test_catalog_lists_every_fault(robot):
         "localization_lost",
         "battery_critical",
         "blocked_path",
+        "mission_failure",
     }
 
 
@@ -167,3 +168,71 @@ def test_fleet_sees_the_robots_fault_as_official_end_state():
 
     other = fleet.get(f"/api/v1/robots/{robots[1]['robot-id']}", headers=KEY).json()
     assert other["robot-end-state"] == "Idle"
+
+
+def test_mission_failure_aborts_running_and_pending_missions(clock, robot):
+    mission = robot.get("/api/v2.0.0/missions", headers=AUTH).json()[0]["guid"]
+    for _ in range(2):
+        robot.post("/api/v2.0.0/mission_queue", headers=AUTH, json={"mission_id": mission})
+    clock.tick(2.0)  # first executing, second pending
+
+    set_faults(robot, ["mission_failure"])
+    doc = status(robot)
+    assert doc["state_id"] == 12
+    assert any(e["module"] == "MissionController" for e in doc["errors"])
+    queue = robot.get("/api/v2.0.0/mission_queue", headers=AUTH).json()
+    assert [entry["state"] for entry in queue] == ["Aborted", "Aborted"]
+
+    # clear_error releases the fault, but aborted missions stay aborted
+    robot.put("/api/v2.0.0/status", headers=AUTH, json={"clear_error": True})
+    assert status(robot)["state_id"] == 3
+    queue = robot.get("/api/v2.0.0/mission_queue", headers=AUTH).json()
+    assert [entry["state"] for entry in queue] == ["Aborted", "Aborted"]
+
+
+def test_mission_failure_spares_already_finished_missions(clock, robot):
+    mission = robot.get("/api/v2.0.0/missions", headers=AUTH).json()[0]["guid"]
+    robot.post("/api/v2.0.0/mission_queue", headers=AUTH, json={"mission_id": mission})
+    clock.tick(12.0)  # ran to completion (1s lag + 10s)
+    robot.post("/api/v2.0.0/mission_queue", headers=AUTH, json={"mission_id": mission})
+    clock.tick(2.0)  # second executing
+
+    set_faults(robot, ["mission_failure"])
+    states = [e["state"] for e in robot.get("/api/v2.0.0/mission_queue", headers=AUTH).json()]
+    assert states == ["Done", "Aborted"]
+
+
+def test_robot_is_free_after_an_abort(clock, robot):
+    mission = robot.get("/api/v2.0.0/missions", headers=AUTH).json()[0]["guid"]
+    robot.post("/api/v2.0.0/mission_queue", headers=AUTH, json={"mission_id": mission})
+    clock.tick(2.0)
+    set_faults(robot, ["mission_failure"])
+    robot.put("/api/v2.0.0/status", headers=AUTH, json={"clear_error": True})
+
+    # A fresh mission after the abort runs normally from "now".
+    robot.post("/api/v2.0.0/mission_queue", headers=AUTH, json={"mission_id": mission})
+    clock.tick(2.0)
+    queue = robot.get("/api/v2.0.0/mission_queue", headers=AUTH).json()
+    assert [entry["state"] for entry in queue] == ["Aborted", "Executing"]
+    assert status(robot)["state_text"] == "Executing"
+
+
+def test_fleet_reports_aborted_orders_after_mission_failure(clock):
+    app = create_fleet_app("1.5.0")
+    fleet = TestClient(app)
+    robot = TestClient(app.state.emulator.robots[0].app)
+    robots = fleet.get("/api/v1/robots", headers=KEY).json()["robots"]
+    mission = fleet.get("/api/v1/site/mission", headers=KEY).json()["missions"][0]["id"]
+    fleet.post(
+        "/api/v1/serial-order",
+        headers=KEY,
+        json={
+            "serial-order": {"robot-id": robots[0]["robot-id"], "phases": [{"mission-id": mission}]}
+        },
+    )
+    clock.tick(2.0)
+    set_faults(robot, ["mission_failure"])
+    order = fleet.get("/api/v1/order", headers=KEY).json()[0]
+    assert order["order-status"] == "Aborted"
+    detail = fleet.get(f"/api/v1/robots/{robots[0]['robot-id']}", headers=KEY).json()
+    assert detail["robot-end-state"] == "Error"

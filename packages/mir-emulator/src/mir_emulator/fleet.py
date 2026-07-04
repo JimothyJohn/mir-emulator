@@ -57,6 +57,7 @@ ORDER_STATUS_BY_ROBOT_STATE = {
     "Pending": "Pending",
     "Executing": "Executing",
     "Done": "Finished",
+    "Aborted": "Aborted",
 }
 
 # Robot /status state_text → the fleet spec's official robot-end-state enum.
