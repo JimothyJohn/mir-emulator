@@ -78,10 +78,14 @@ schemas. Everything below that references "Stripe-style" means one of these.
 
 *(MiR Fleet emulation graduated from this list — see above.)*
 
-- [ ] **WebSocket bridge.** Real robots expose a ROS-bridge WebSocket next
-      to REST; even a minimal `/status` push channel lets reactive UIs be
-      tested. Gate: needs a persistent-connection deploy target (the Lambda
-      demo can't hold sockets; local/container mode can).
+- [x] **WebSocket status push.** Shipped 2026-07-04 for local/container
+      mode: `/_emulator/ws/status` streams the /status document on an
+      interval (token or header auth, session-isolated, emulator-namespaced
+      so no MiR surface is invented). Optional extra `mir-emulator[ws]`
+      pulls the uvicorn WS protocol; the Lambda demo still can't hold
+      sockets, as gated. Deferred: faithful ROS-bridge protocol (rosbridge
+      subscribe/publish on :9090) and fleet event streams — bigger fidelity
+      projects with their own primary-source work.
 
 - [x] **MiR Fleet API emulation.** Shipped 2026-07-04: fleet family in the
       registry (official OpenAPI 3, 1.5.0/1.4.2/1.3.1, public URLs — no PDF

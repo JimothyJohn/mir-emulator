@@ -29,7 +29,8 @@ from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
-from starlette.routing import Route
+from starlette.routing import Route, WebSocketRoute
+from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from mir_emulator import auth, registry
 from mir_emulator.behaviors import (
@@ -38,6 +39,7 @@ from mir_emulator.behaviors import (
     OVERRIDES,
     RequestCtx,
     faults_doc,
+    get_status,
     set_faults,
 )
 from mir_emulator.examples import example_from_schema, overlay_compatible
@@ -544,6 +546,57 @@ def create_app(
             set_faults(state, names)
         return _respond(200, faults_doc(state))
 
+    async def status_websocket(websocket: WebSocket) -> None:
+        """Emulator-only status push (/_emulator/ws/status): the /status
+        document every `interval` seconds until the client disconnects.
+        Browsers cannot set an Authorization header on WebSockets, so the
+        Basic token may come as ?token=<BASE64(user:SHA-256-hex(password))>.
+        Needs a WS-capable server: pip install 'mir-emulator[ws]' (or
+        uvicorn[standard]); the Lambda demo cannot hold sockets."""
+        supplied = websocket.headers.get("authorization", "")
+        query_token = websocket.query_params.get("token", "")
+        if not supplied and query_token:
+            supplied = f"Basic {query_token}"
+        if emulator.enforce_auth and not auth.is_authorized(
+            supplied, emulator.username, emulator.password
+        ):
+            await websocket.close(code=4401)
+            return
+        session_id = websocket.headers.get(SESSION_HEADER, "") or websocket.query_params.get(
+            "session", ""
+        )
+        if session_id and not SESSION_ID_RE.match(session_id):
+            await websocket.close(code=4400)
+            return
+        try:
+            interval = float(websocket.query_params.get("interval", "1.0"))
+        except ValueError:
+            await websocket.close(code=4400)
+            return
+        interval = min(max(interval, 0.1), 10.0)
+
+        await websocket.accept()
+        state = emulator.state_for(session_id)
+        status_op = spec.operations.get(("GET", "/status"))
+        try:
+            while True:
+                ctx = RequestCtx(
+                    spec=spec,
+                    state=state,
+                    op=status_op or next(iter(spec.operations.values())),
+                    path_params={},
+                    query={},
+                    body=None,
+                    mission_duration=emulator.mission_duration,
+                    seed_collection=lambda key, path: emulator._seed_collection(state, key, path),
+                    session_id=session_id,
+                )
+                _status, doc = await get_status(ctx)
+                await websocket.send_json(doc)
+                await asyncio.sleep(interval)
+        except WebSocketDisconnect:
+            pass
+
     async def recorder_endpoint(request: Request) -> Response:
         """Emulator-only scenario recorder (/_emulator/recorder)."""
         if not emulator._authorized(request):
@@ -592,6 +645,7 @@ def create_app(
             Route("/openapi.json", openapi_json),
             Route("/_emulator/faults", faults_endpoint, methods=["GET", "PUT", "DELETE"]),
             Route("/_emulator/recorder", recorder_endpoint, methods=["GET", "PUT", "DELETE"]),
+            WebSocketRoute("/_emulator/ws/status", status_websocket),
             *routes,
         ],
         exception_handlers={404: not_found},
