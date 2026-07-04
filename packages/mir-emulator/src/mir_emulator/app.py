@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import re
 import threading
 from collections import OrderedDict
@@ -96,7 +97,7 @@ def parse_latency_ms(header_value: str | None, default: float) -> float | None:
         requested = float(header_value)
     except ValueError:
         return None
-    if requested < 0 or requested != requested:  # NaN guard
+    if requested < 0 or math.isnan(requested):
         return None
     return min(requested, MAX_LATENCY_MS)
 
