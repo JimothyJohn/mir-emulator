@@ -1,0 +1,89 @@
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any, TypeVar
+
+from attrs import define as _attrs_define
+from attrs import field as _attrs_field
+
+from ..types import UNSET, Unset
+
+
+T = TypeVar("T", bound="GetPaths")
+
+
+@_attrs_define
+class GetPaths:
+    """
+    Attributes:
+        goal_pos (str | Unset): The url to the end position of the path
+        guid (str | Unset): The global id unique across robots that identifies this path
+        start_pos (str | Unset): The url to the start position of the path
+        url (str | Unset): The URL of the resource
+    """
+
+    goal_pos: str | Unset = UNSET
+    guid: str | Unset = UNSET
+    start_pos: str | Unset = UNSET
+    url: str | Unset = UNSET
+    additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        goal_pos = self.goal_pos
+
+        guid = self.guid
+
+        start_pos = self.start_pos
+
+        url = self.url
+
+        field_dict: dict[str, Any] = {}
+        field_dict.update(self.additional_properties)
+        field_dict.update({})
+        if goal_pos is not UNSET:
+            field_dict["goal_pos"] = goal_pos
+        if guid is not UNSET:
+            field_dict["guid"] = guid
+        if start_pos is not UNSET:
+            field_dict["start_pos"] = start_pos
+        if url is not UNSET:
+            field_dict["url"] = url
+
+        return field_dict
+
+    @classmethod
+    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        d = dict(src_dict)
+        goal_pos = d.pop("goal_pos", UNSET)
+
+        guid = d.pop("guid", UNSET)
+
+        start_pos = d.pop("start_pos", UNSET)
+
+        url = d.pop("url", UNSET)
+
+        get_paths = cls(
+            goal_pos=goal_pos,
+            guid=guid,
+            start_pos=start_pos,
+            url=url,
+        )
+
+        get_paths.additional_properties = d
+        return get_paths
+
+    @property
+    def additional_keys(self) -> list[str]:
+        return list(self.additional_properties.keys())
+
+    def __getitem__(self, key: str) -> Any:
+        return self.additional_properties[key]
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        self.additional_properties[key] = value
+
+    def __delitem__(self, key: str) -> None:
+        del self.additional_properties[key]
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.additional_properties

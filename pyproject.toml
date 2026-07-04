@@ -12,6 +12,7 @@ dev = [
     "ruff>=0.8",
     "ty>=0.0.1a5",
     "pytest-cov>=7.1.0",
+    "openapi-python-client>=0.29.0",
 ]
 
 [tool.pytest.ini_options]
@@ -19,6 +20,7 @@ testpaths = [
     "tests",
     "packages/mir-emulator/tests",
     "packages/mir-spec-scraper/tests",
+    "packages/mir-client/tests",
 ]
 markers = [
     "integration: tests that boot a real emulator server over TCP",
@@ -28,6 +30,12 @@ addopts = "-ra"
 
 [tool.ruff]
 line-length = 100
+# mir_client/{robot,fleet} are generated verbatim (scripts/generate_client.py)
+# and follow the generator's style, not ours; the drift check guards them.
+extend-exclude = [
+    "packages/mir-client/src/mir_client/robot",
+    "packages/mir-client/src/mir_client/fleet",
+]
 target-version = "py311"
 
 [tool.ruff.lint]
@@ -38,3 +46,9 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S105", "S106", "S310"] # hardcoded test creds / test URLs are intentional
+
+[tool.ty.src]
+exclude = [
+    "packages/mir-client/src/mir_client/robot",
+    "packages/mir-client/src/mir_client/fleet",
+]
