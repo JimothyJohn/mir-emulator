@@ -2,8 +2,9 @@
 
 Each script here reconstructs a published MiR customer deployment
 ([mobile-industrial-robots.com/cases](https://mobile-industrial-robots.com/cases))
-as a runnable exercise against this repo's emulator. They are self-contained
-`uv run` scripts (PEP 723 inline deps — no project install needed) and each
+as a runnable exercise against this repo's emulator. They are `uv run` scripts
+(PEP 723 inline deps — no project install needed; the robot-auth scripts pull
+in this repo's `mir-client` by relative path, so run them from the repo) and each
 one drills a different slice of the API surface, so together they double as a
 guided tour: sessions, missions, the queue, faults, registers, metrics,
 latency shaping, and the Fleet API.

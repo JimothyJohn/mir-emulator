@@ -1,7 +1,10 @@
 #!/usr/bin/env -S uv run --script
 # /// script
-# requires-python = ">=3.10"
-# dependencies = ["httpx>=0.27"]
+# requires-python = ">=3.11"
+# dependencies = ["httpx>=0.27", "mir-client"]
+#
+# [tool.uv.sources]
+# mir-client = { path = "../packages/mir-client" }
 # ///
 """DENSO — just-in-time delivery from PLC call buttons and door I/O.
 
@@ -27,13 +30,12 @@ Run:
     uv run scenarios/denso_jit_callbuttons.py
 """
 
-import base64
-import hashlib
 import os
 import sys
 import time
 
 import httpx
+from mir_client import robot_token
 
 MIR_URL = os.environ.get("MIR_URL", "http://127.0.0.1:8080")
 API = "/api/v2.0.0"
@@ -44,8 +46,7 @@ DOOR = 20
 def client(session: str) -> httpx.Client:
     user = os.environ.get("MIR_USERNAME", "distributor")
     password = os.environ.get("MIR_PASSWORD", "distributor")
-    digest = hashlib.sha256(password.encode()).hexdigest()
-    token = base64.b64encode(f"{user}:{digest}".encode()).decode()
+    token = robot_token(user, password)
     return httpx.Client(
         base_url=MIR_URL,
         headers={"Authorization": f"Basic {token}", "X-MiR-Session": session},
