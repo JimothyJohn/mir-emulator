@@ -163,6 +163,19 @@ FAULTS: dict[str, dict[str, Any]] = {
             "non_resettable": False,
         },
     },
+    "mission_failure": {
+        "description": ("Running and queued missions abort; robot enters Error until clear_error."),
+        "state_id": 12,
+        "state_text": "Error",
+        "resettable": True,
+        "aborts_queue": True,
+        "error": {
+            "code": 10016,
+            "description": "Mission failed (emulated fault)",
+            "module": "MissionController",
+            "non_resettable": False,
+        },
+    },
 }
 
 
@@ -170,9 +183,38 @@ def active_faults(state: StateStore) -> list[str]:
     return [n for n in state.singleton("/faults", {"active": []}).get("active", []) if n in FAULTS]
 
 
-def set_faults(state: StateStore, names: list[str]) -> None:
-    """Replace the active fault set; holding faults freeze the sim clock."""
+def _sim_clock_for(state: StateStore) -> float:
+    """Simulation time computed from raw state (for callers without a ctx)."""
+    sim = state.singleton("/mission_sim", {"paused_at": None, "paused_total": 0.0, "hold": None})
+    paused = sim.get("paused_total", 0.0)
+    if sim.get("paused_at") is not None:
+        paused += _now() - sim["paused_at"]
+    return _now() - paused
+
+
+def _abort_queue(state: StateStore, mission_duration: float) -> None:
+    """Mark every not-yet-finished queue entry aborted at the current sim
+    instant; missions that already ran to completion keep their history."""
+    now = _sim_clock_for(state)
+    items = sorted(
+        state.collection("/mission_queue").items(),
+        key=lambda kv: int(kv[0]) if kv[0].isdigit() else 0,
+    )
+    for entry, _start, finish in _windows(items, mission_duration):
+        if finish > now:
+            entry.setdefault("_aborted_at", now)
+
+
+def set_faults(
+    state: StateStore, names: list[str], mission_duration: float = MISSION_DURATION_S
+) -> None:
+    """Replace the active fault set; holding faults freeze the sim clock;
+    aborting faults kill the mission queue at the current sim instant."""
+    previous = set(active_faults(state))
     state.merge_singleton("/faults", {"active": [n for n in names if n in FAULTS]})
+    newly_active = set(active_faults(state)) - previous
+    if any(FAULTS[n].get("aborts_queue") for n in newly_active):
+        _abort_queue(state, mission_duration)
     holds = any(FAULTS[n].get("holds") for n in active_faults(state))
     sim = state.singleton("/mission_sim", {"paused_at": None, "paused_total": 0.0, "hold": None})
     if holds and sim.get("paused_at") is None:
@@ -242,12 +284,10 @@ def _resume_sim(ctx: RequestCtx) -> None:
         )
 
 
-def _timeline(ctx: RequestCtx) -> list[tuple[dict, float, float]]:
-    """(entry, start, finish) per queued mission — FIFO, one robot at a time."""
-    items = sorted(
-        ctx.state.collection("/mission_queue").items(),
-        key=lambda kv: int(kv[0]) if kv[0].isdigit() else 0,
-    )
+def _windows(items: list[tuple[str, dict]], duration: float) -> list[tuple[dict, float, float]]:
+    """(entry, start, finish) per queued mission — FIFO, one robot at a time.
+    An aborted entry's window collapses at its abort instant (a pending one
+    never runs at all), freeing the robot for whatever follows."""
     out: list[tuple[dict, float, float]] = []
     cursor: float | None = None
     for _id, entry in items:
@@ -255,13 +295,27 @@ def _timeline(ctx: RequestCtx) -> list[tuple[dict, float, float]]:
         start = queued + MISSION_PENDING_LAG_S
         if cursor is not None:
             start = max(start, cursor)
-        finish = start + ctx.mission_duration
+        finish = start + duration
+        aborted_at = entry.get("_aborted_at")
+        if aborted_at is not None:
+            start = min(start, float(aborted_at))
+            finish = max(start, float(aborted_at))
         out.append((entry, start, finish))
         cursor = finish
     return out
 
 
-def _entry_state(start: float, finish: float, clock: float) -> str:
+def _timeline(ctx: RequestCtx) -> list[tuple[dict, float, float]]:
+    items = sorted(
+        ctx.state.collection("/mission_queue").items(),
+        key=lambda kv: int(kv[0]) if kv[0].isdigit() else 0,
+    )
+    return _windows(items, ctx.mission_duration)
+
+
+def _entry_state(entry: dict, start: float, finish: float, clock: float) -> str:
+    if entry.get("_aborted_at") is not None:
+        return "Aborted"
     if clock < start:
         return "Pending"
     if clock < finish:
@@ -279,7 +333,7 @@ def _public_entry(entry: dict, start: float, finish: float, clock: float) -> dic
     finished' — derived from the timeline; not-yet-reached ones are omitted,
     exactly like a real robot leaves them unset until they happen."""
     public = {k: v for k, v in entry.items() if not k.startswith("_")}
-    public["state"] = _entry_state(start, finish, clock)
+    public["state"] = _entry_state(entry, start, finish, clock)
     public["ordered"] = _iso(float(entry.get("_queued_at", start)))
     public.pop("started", None)
     public.pop("finished", None)
@@ -471,7 +525,7 @@ async def put_status(ctx: RequestCtx) -> tuple[int, Any]:
         # A real robot's error reset clears resettable faults; an emergency
         # stop cannot be cleared from the API.
         remaining = [n for n in active_faults(ctx.state) if not FAULTS[n].get("resettable")]
-        set_faults(ctx.state, remaining)
+        set_faults(ctx.state, remaining, ctx.mission_duration)
     if patch:
         ctx.state.merge_singleton("/status", patch)
     return ctx.op.success_status, _status_doc(ctx)

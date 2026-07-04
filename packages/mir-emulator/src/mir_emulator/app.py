@@ -523,7 +523,7 @@ def create_app(
             )
         state = emulator.state_for(session_id)
         if request.method == "DELETE":
-            set_faults(state, [])
+            set_faults(state, [], emulator.mission_duration)
         elif request.method == "PUT":
             raw = await request.body()
             if len(raw) > MAX_BODY_BYTES:
@@ -543,7 +543,7 @@ def create_app(
                     400,
                     _error_body(400, f"Unknown faults; available: {sorted(FAULTS)}"),
                 )
-            set_faults(state, names)
+            set_faults(state, names, emulator.mission_duration)
         return _respond(200, faults_doc(state))
 
     async def status_websocket(websocket: WebSocket) -> None:
