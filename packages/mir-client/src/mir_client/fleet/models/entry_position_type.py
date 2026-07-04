@@ -1,0 +1,41 @@
+from enum import Enum
+
+
+class EntryPositionType(str, Enum):
+    CARTLEFT = "CartLeft"
+    CARTPICKUP = "CartPickup"
+    CARTRIGHT = "CartRight"
+    DEEPLANEFRONT = "DeepLaneFront"
+    DEEPLANELEFT = "DeepLaneLeft"
+    DEEPLANERIGHT = "DeepLaneRight"
+    ELEVATEDBARPALLET = "ElevatedBarPallet"
+    ELEVATEDBARPALLETLEFT = "ElevatedBarPalletLeft"
+    ELEVATEDBARPALLETRIGHT = "ElevatedBarPalletRight"
+    ELEVATEDFIDUCIALPALLETFRONT = "ElevatedFiducialPalletFront"
+    ELEVATEDFIDUCIALPALLETLEFT = "ElevatedFiducialPalletLeft"
+    ELEVATEDFIDUCIALPALLETRIGHT = "ElevatedFiducialPalletRight"
+    ELEVATEDLPALLETFRONT = "ElevatedLPalletFront"
+    ELEVATEDLPALLETLEFT = "ElevatedLPalletLeft"
+    ELEVATEDLPALLETRIGHT = "ElevatedLPalletRight"
+    ELEVATEDPALLETPALLETFRONT = "ElevatedPalletPalletFront"
+    ELEVATEDPALLETPALLETLEFT = "ElevatedPalletPalletLeft"
+    ELEVATEDPALLETPALLETRIGHT = "ElevatedPalletPalletRight"
+    ELEVATEDPALLETRACK = "ElevatedPalletRack"
+    ELEVATEDPALLETRACKLEFT = "ElevatedPalletRackLeft"
+    ELEVATEDPALLETRACKRIGHT = "ElevatedPalletRackRight"
+    ELEVATEDSTRIPEPALLETFRONT = "ElevatedStripePalletFront"
+    ELEVATEDSTRIPEPALLETLEFT = "ElevatedStripePalletLeft"
+    ELEVATEDSTRIPEPALLETRIGHT = "ElevatedStripePalletRight"
+    ELEVATEDVLPALLET = "ElevatedVlPallet"
+    ELEVATEDVLPALLETLEFT = "ElevatedVlPalletLeft"
+    ELEVATEDVLPALLETRIGHT = "ElevatedVlPalletRight"
+    MIRCHARGE48VFAST = "MiRCharge48VFast"
+    MIRCHARGE48VFASTLONG = "MiRCharge48VFastLong"
+    PALLETFLOORFRONT = "PalletFloorFront"
+    PALLETFLOORLEFT = "PalletFloorLeft"
+    PALLETFLOORRIGHT = "PalletFloorRight"
+    SHELFLONG = "ShelfLong"
+    SHELFSHORT = "ShelfShort"
+
+    def __str__(self) -> str:
+        return str(self.value)
