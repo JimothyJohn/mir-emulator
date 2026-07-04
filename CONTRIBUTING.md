@@ -52,11 +52,14 @@ you; Python ≥3.11.
 
 ## Workflow
 
-- Branch from `master`: `feat/<topic>`, `fix/<topic>`, `chore/<topic>`.
+- Branch from `dev`: `feat/<topic>`, `fix/<topic>`, `chore/<topic>`.
+- `master` is the public release branch. It only moves by fast-forwarding
+  from `dev` (a push to it deploys the public demo) — never commit to it or
+  target it with a PR.
 - Conventional commits with a scope: `feat(fleet): …`, `fix(scraper): …`,
   `fix(tests): …`. Look at `git log --oneline` and match.
 - One task, one branch, one direction. Unrelated changes go in a separate PR.
-- PRs target `master` and must pass CI (`ci.yml`): lint, format, types,
+- PRs target `dev` and must pass CI (`ci.yml`): lint, format, types,
   coverage-gated unit + conformance + fuzz, integration, across every
   tracked version.
 - Deploy-chain edits (`.github/workflows/**`, `Dockerfile`, `deploy/`) go
