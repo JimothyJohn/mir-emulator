@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.11"
 
 [manifest]
@@ -511,6 +511,7 @@ wheels = [
 name = "mir-emulator"
 source = { editable = "packages/mir-emulator" }
 dependencies = [
+    { name = "httpx" },
     { name = "jsonschema" },
     { name = "pyyaml" },
     { name = "starlette" },
@@ -519,6 +520,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.27" },
     { name = "jsonschema", specifier = ">=4.20" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "starlette", specifier = ">=0.40" },

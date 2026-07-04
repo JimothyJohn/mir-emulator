@@ -67,6 +67,19 @@ def _is_item_op(op: Operation) -> bool:
     return op.path.rsplit("/", 1)[-1].startswith("{")
 
 
+def _draft4_nullable(schema: Any) -> Any:
+    """OpenAPI 3.0 marks optional-null with ``nullable: true``, which Draft-4
+    validation ignores and then rejects the null. Fold it into a type union."""
+    if isinstance(schema, list):
+        return [_draft4_nullable(s) for s in schema]
+    if not isinstance(schema, dict):
+        return schema
+    out = {k: _draft4_nullable(v) for k, v in schema.items()}
+    if out.pop("nullable", False) and isinstance(out.get("type"), str):
+        out["type"] = [out["type"], "null"]
+    return out
+
+
 def _storage_key(op: Operation, path_params: dict) -> tuple[str, str | None]:
     """(collection key, item id). Context params are baked into the key so
     e.g. /mission_queue/1/actions and /mission_queue/2/actions don't share."""
@@ -159,10 +172,22 @@ class Emulator:
         self._assign_ids(item, item_id)
         state.seed_once(key, [(str(item_id), item)])
 
+    def _authorized(self, request: Request) -> bool:
+        """MiR robot Basic auth; subclasses swap in their own scheme."""
+        if not self.enforce_auth:
+            return True
+        return auth.is_authorized(
+            request.headers.get("authorization"), self.username, self.password
+        )
+
+    def _override_for(self, op: Operation):
+        """Behavior overlay for *op*, or None for the generic engine."""
+        return OVERRIDES.get((op.method, op.path))
+
     def _validate_body(self, op: Operation, body: Any) -> str | None:
         if body is None or not op.body_schema:
             return None
-        schema = self.spec.deref(op.body_schema)
+        schema = _draft4_nullable(self.spec.deref(op.body_schema))
         try:
             Draft4Validator(schema).validate(body)
         except ValidationError as exc:
@@ -180,9 +205,7 @@ class Emulator:
         return handler
 
     async def handle(self, request: Request, op: Operation) -> Response:
-        if self.enforce_auth and not auth.is_authorized(
-            request.headers.get("authorization"), self.username, self.password
-        ):
+        if not self._authorized(request):
             return _respond(401, _error_body(401, "Not authorized"))
 
         session_id = request.headers.get(SESSION_HEADER, "")
@@ -193,7 +216,7 @@ class Emulator:
             )
 
         body: Any = None
-        if op.method in ("POST", "PUT"):
+        if op.method in ("POST", "PUT", "PATCH"):
             raw = await request.body()
             if len(raw) > MAX_BODY_BYTES:
                 return _respond(400, _error_body(400, "Payload too large"))
@@ -218,9 +241,10 @@ class Emulator:
             body=body,
             mission_duration=self.mission_duration,
             seed_collection=lambda key, path: self._seed_collection(state, key, path),
+            session_id=session_id,
         )
 
-        override = OVERRIDES.get((op.method, op.path))
+        override = self._override_for(op)
         result = await override(ctx) if override else self._generic(ctx)
         status, payload, *rest = result
         return _respond(status, payload, rest[0] if rest else "application/json")
@@ -296,7 +320,7 @@ class Emulator:
             ctx.state.insert(key, str(item.get("guid", new_id)), stored)
             return op.success_status, item
 
-        if op.method == "PUT" and is_item:
+        if op.method in ("PUT", "PATCH") and is_item:
             self._seed_collection(ctx.state, key, collection_path)
             existing = ctx.state.get(key, item_id or "")
             if existing is None:
@@ -310,7 +334,7 @@ class Emulator:
                 return op.success_status, full
             return op.success_status, updated
 
-        if op.method == "PUT":
+        if op.method in ("PUT", "PATCH"):
             # Singleton update (e.g. PUT /wifi/enabled).
             doc = self._example(op.success_schema)
             if isinstance(doc, dict) and isinstance(ctx.body, dict):

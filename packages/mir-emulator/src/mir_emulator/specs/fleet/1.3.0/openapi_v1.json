@@ -1,0 +1,4342 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "MiR Fleet Integration API v1",
+    "description": "<p>This API provides RESTful endpoints, as well as events through webhooks. Use the API to integrate MiR Fleet with other systems.</p>\n<p>Please refer to the MiR Fleet Enterprise Documentation on the MiR Support Portal for an introduction to the API.</p>\n<p>This page serves as a reference for endpoints and data types.</p>",
+    "contact": {
+      "name": "Mobile industrial robots",
+      "url": "https://supportportal.mobile-industrial-robots.com/",
+      "email": "support-docs@mir-robots.com"
+    },
+    "license": {
+      "name": "MiR",
+      "url": "https://www.mobile-industrial-robots.com/"
+    },
+    "version": "v1"
+  },
+  "paths": {
+    "/api/v1/group": {
+      "post": {
+        "tags": [
+          "group"
+        ],
+        "summary": "Create a new group",
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/group-request"
+              },
+              "example": {"group":{"id":null,"name":"GroupX","robot-ids":["a94f8690-4bdd-4407-95cb-81782f4dfa08","ca991af8-d0be-42fc-a59b-6e023a448e5c"],"position-ids":["0e90cab7-5fb1-423f-8846-d453990bf29a"],"mission-group-ids":["089d6426-8fb4-402a-8aea-b54ebc03e05a"]}}
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/id-response"
+                },
+                "example": {"id":"ed3825e3-48ee-4002-86c1-9b31e3089e39"}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/group/{id}": {
+      "delete": {
+        "tags": [
+          "group"
+        ],
+        "summary": "Delete a group",
+        "description": "Delete a group by ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/id-response"
+                },
+                "example": {"id":"ed3825e3-48ee-4002-86c1-9b31e3089e39"}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/group/snapshot": {
+      "get": {
+        "tags": [
+          "group"
+        ],
+        "summary": "Get group snapshot",
+        "description": "Get a list of all groups and the content of each group.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/group-snapshot-response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/missions/export": {
+      "post": {
+        "tags": [
+          "missions"
+        ],
+        "summary": "Export missions",
+        "description": "\nList the missions you would like to receive an export file of. You can use this file to transfer missions from one MiR Fleet application to another MiR Fleet without overwriting the whole site.\n\nWhen you export missions, any missions nested in selected missions are also exported automatically. The export function does not support arguments in missions. Before exporting, assign values to all parameters. You can change the value back into arguments after exporting and importing the missions.\n\nThis feature is only supported in the API. You cannot import or export missions through the MiR Fleet interface.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/missions-export-request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "200": {
+            "description": "Returns a .mission file with the selected missions. The .mission file can be imported to other MiR Fleet applications to share the same missions."
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/missions/import": {
+      "post": {
+        "tags": [
+          "missions"
+        ],
+        "summary": "Import missions",
+        "description": "\nUpload a .mission file to MiR Fleet to import missions you exported from another MiR Fleet application.\n\nThis feature is only supported in the API. You cannot import or export missions through the MiR Fleet interface.",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "File"
+                ],
+                "type": "object",
+                "properties": {
+                  "File": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              },
+              "encoding": {
+                "File": {
+                  "style": "form"
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "required": [
+                  "File"
+                ],
+                "type": "object",
+                "properties": {
+                  "File": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              },
+              "encoding": {
+                "File": {
+                  "style": "form"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/order-log": {
+      "get": {
+        "tags": [
+          "order-log"
+        ],
+        "summary": "Get order log csv",
+        "description": "Get log of terminated orders, as a CSV file. By default, orders terminated in the last hour are included.",
+        "parameters": [
+          {
+            "name": "oldestTerminationHour",
+            "in": "query",
+            "description": "Number of hours to look back - default one hour, must be between 1 and 24",
+            "schema": {
+              "maximum": 24,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v1/robot/robot-identity/snapshot": {
+      "get": {
+        "tags": [
+          "robot"
+        ],
+        "summary": "Get robot identity snapshot",
+        "description": "Get a list of all robots connected to MiR Fleet and their system information.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/robot-identity-snapshot-response"
+                },
+                "example": {"robot-identity-events":[{"robot-id":"9f74d0bf-aad4-4de4-b9b3-a6597af18d75","serial-number":"12345","name":"robot-1","model":"MiR100","software-version":"4.7.1","timestamp":"2019-08-24T14:15:22Z","ip":"192.0.2.0"},{"robot-id":"b3a4c703-b934-4618-ad32-a932d1c8022e","serial-number":"67890","name":"robot-2","model":"67890","software-version":"4.7.1","timestamp":"2019-08-24T14:15:22Z","ip":"192.0.2.1"}]}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/serial-order": {
+      "post": {
+        "tags": [
+          "serial-order"
+        ],
+        "summary": "Create Serial Order",
+        "description": "Create a new serial-order.",
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/serial-order-request"
+              },
+              "examples": {
+                "A single mission": {
+                  "value": {"serial-order":{"id":"83c38942-f128-44fd-82c6-c2a43aab187f","priority":"Low","earliest-start-time":"2024-03-14T08:45:32Z","robot-id":"5473c7c6-a6b7-430c-bfc8-1e95002ec9bb","phases":[{"mission-id":"ea906037-0257-4816-b750-17591b632904","arguments":[],"fallback-mission-id":null}]}}
+                },
+                "A single mission with arguments": {
+                  "value": {"serial-order":{"id":"83c38942-f128-44fd-82c6-c2a43aab187f","priority":"Low","earliest-start-time":"2024-03-14T08:45:32Z","robot-id":"5473c7c6-a6b7-430c-bfc8-1e95002ec9bb","phases":[{"mission-id":"ea906037-0257-4816-b750-17591b632904","arguments":[{"name":"arg-1","value":"value-1"},{"name":"arg-2","value":"value-2"}],"fallback-mission-id":null}]}}
+                },
+                "A single mission with a fallback mission": {
+                  "value": {"serial-order":{"id":"83c38942-f128-44fd-82c6-c2a43aab187f","priority":"Low","earliest-start-time":"2024-03-14T08:45:32Z","robot-id":"5473c7c6-a6b7-430c-bfc8-1e95002ec9bb","phases":[{"mission-id":"ea906037-0257-4816-b750-17591b632904","arguments":[],"fallback-mission-id":"f274e69d-bf61-4d8e-b601-5ee3f5de10e1"}]}}
+                },
+                "A serial order with two phases": {
+                  "value": {"serial-order":{"id":"83c38942-f128-44fd-82c6-c2a43aab187f","priority":"Low","earliest-start-time":"2024-03-14T08:45:32Z","robot-id":"5473c7c6-a6b7-430c-bfc8-1e95002ec9bb","phases":[{"mission-id":"ea906037-0257-4816-b750-17591b632904","arguments":[],"fallback-mission-id":null},{"mission-id":"140209c3-0129-4ecb-bbb7-ff0352943962","arguments":[],"fallback-mission-id":null}]}}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/id-response"
+                },
+                "example": {"id":"ed3825e3-48ee-4002-86c1-9b31e3089e39"}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "serial-order"
+        ],
+        "summary": "Update Serial Order",
+        "description": "Update the priority, start-time, or assigned robot of a serial order.",
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/update-serial-order-request"
+              },
+              "examples": {
+                "update-all-properties-example": {
+                  "value": {"serial-order-id":"8e843c4a-bdfe-48f5-8997-d63d5e77f2af","priority":"Medium","earliest-start-time":"2024-03-14T08:45:32Z","robot-id":"94e64532-9d0d-479d-8911-98985d2c0e5a"}
+                },
+                "remove-robot-id-example": {
+                  "value": {"serial-order-id":"8e843c4a-bdfe-48f5-8997-d63d5e77f2af","priority":"Medium","earliest-start-time":"2024-03-14T08:45:32Z","robot-id":null}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/serial-order/phase": {
+      "put": {
+        "tags": [
+          "serial-order"
+        ],
+        "summary": "Update Phase of the Serial Order",
+        "description": "Update the phase or phase arguments of a serial order.",
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/update-phase-request"
+              },
+              "example": {"serial-order-id":"6231cb2e-0b99-5979-97e3-b4e999c999e9","index":1,"phase":{"mission-id":"ea906037-0257-4816-b750-17591b632904","arguments":[{"name":"arg-1","value":"value-1"}],"fallback-mission-id":null}}
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/serial-order/{id}": {
+      "delete": {
+        "tags": [
+          "serial-order"
+        ],
+        "summary": "Abort a serial order",
+        "description": "Abort a specific serial order by specifying its id in the endpoint.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/id-response"
+                },
+                "example": {"id":"ed3825e3-48ee-4002-86c1-9b31e3089e39"}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/serial-order/fallback/{serialOrderId}": {
+      "delete": {
+        "tags": [
+          "serial-order"
+        ],
+        "summary": "Abort a fallback",
+        "description": "Abort a specific serial order's fallback mission by specifying its id in the endpoint.",
+        "parameters": [
+          {
+            "name": "serialOrderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/id-response"
+                },
+                "example": {"id":"ed3825e3-48ee-4002-86c1-9b31e3089e39"}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/serial-order-status/snapshot": {
+      "get": {
+        "tags": [
+          "serial-order"
+        ],
+        "summary": "Get serial order status snapshot",
+        "description": "Get a list of all active orders in MiR Fleet. This includes scheduled order and orders currently being executed.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/serial-order-status-snapshot-response"
+                },
+                "example": {"serial-order-status-events":[{"serial-order-id":"e97a2e7c-904c-4a98-8f44-7fc80b61a288","phase-index":null,"mission-id":"3615f985-33ba-4a50-8e2b-9f06b555e602","state":"Executing","state-change-timestamp":"2019-08-24T14:15:22Z","robot-id":"9f74d0bf-aad4-4de4-b9b3-a6597af18d75","message":null,"is-fallback":null,"order-type":"Ui"},{"serial-order-id":"e97a2e7c-904c-4a98-8f44-7fc80b61a288","phase-index":1,"mission-id":null,"state":"WaitingForInput","state-change-timestamp":"2019-08-24T14:15:22Z","robot-id":"9f74d0bf-aad4-4de4-b9b3-a6597af18d75","message":"Missing MissionId","is-fallback":false,"order-type":"Api"}]}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/site/map": {
+      "post": {
+        "tags": [
+          "site"
+        ],
+        "summary": "Create a map",
+        "description": "Create a new map using geoJSON data.",
+        "requestBody": {
+          "description": "Request to create a map.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/map-request"
+              },
+              "example": {"map":{"id":"c9e458b6-e7f3-486d-9afb-a06eb98d6eca","name":"SimpleMap","geo-json":{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":[[[0,10],[0,20],[10,20],[10,10],[0,10]]]}}]}}}
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/id-response"
+                },
+                "example": {"id":"ed3825e3-48ee-4002-86c1-9b31e3089e39"}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict: A map with the specified values already exists in the database.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/site/map/{id}": {
+      "delete": {
+        "tags": [
+          "site"
+        ],
+        "summary": "Delete a map",
+        "description": "Delete a map based on the map id.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/site/position": {
+      "post": {
+        "tags": [
+          "site"
+        ],
+        "summary": "Create a position or marker.",
+        "description": "Create a position of the following types: BasePosition, Charger, Marker, UtilityPosition.",
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/base-position"
+                  },
+                  {
+                    "$ref": "#/components/schemas/charger"
+                  },
+                  {
+                    "$ref": "#/components/schemas/marker"
+                  },
+                  {
+                    "$ref": "#/components/schemas/utility-position"
+                  }
+                ]
+              },
+              "examples": {
+                "base-position-example": {
+                  "value": {"type":"BasePosition","id":"b62da01f-9abd-4d9d-80c7-02af85c8228c","map-id":"c62da01f-9abd-4d9d-80c7-02af85c8228c","name":"Position","map-pose":{"x":null,"y":null,"orientation":null},"base-position-type":"Staging"}
+                },
+                "charger-example": {
+                  "value": {"type":"Charger","id":"b62da01f-9abd-4d9d-80c7-02af85c8228c","map-id":"c62da01f-9abd-4d9d-80c7-02af85c8228c","name":"Charger24V","map-pose":{"x":null,"y":null,"orientation":null},"charger-type":"MiRCharge24V"}
+                },
+                "marker-example": {
+                  "value": {"type":"Marker","id":"b62da01f-9abd-4d9d-80c7-02af85c8228c","map-id":"c62da01f-9abd-4d9d-80c7-02af85c8228c","name":"BarMarker","map-pose":{"x":null,"y":null,"orientation":null},"offset-pose":{"x":0.1,"y":0.1,"orientation":0.5},"bar":{"length":1,"distance":0.5},"marker-type":"Bar"}
+                },
+                "utility-position-example": {
+                  "value": {"type":"UtilityPosition","id":"b62da01f-9abd-4d9d-80c7-02af85c8228c","map-id":"c62da01f-9abd-4d9d-80c7-02af85c8228c","name":"CartB","map-pose":{"x":null,"y":null,"orientation":null},"utility-position-type":"Cart","offset-pose":{"x":0.1,"y":0.1,"orientation":0.5},"bar":null,"elevation":null,"deep-lane-setting":null}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/id-response"
+                },
+                "example": {"id":"ed3825e3-48ee-4002-86c1-9b31e3089e39"}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "site"
+        ],
+        "summary": "Update a position",
+        "description": "Update or modify a position or marker.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/update-position-request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/id-response"
+                },
+                "example": {"id":"ed3825e3-48ee-4002-86c1-9b31e3089e39"}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/site/position/{id}": {
+      "delete": {
+        "tags": [
+          "site"
+        ],
+        "summary": "Delete a position",
+        "description": "Delete a position based on its position id.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/id-response"
+                },
+                "example": {"id":"ed3825e3-48ee-4002-86c1-9b31e3089e39"}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/site/export": {
+      "get": {
+        "tags": [
+          "site"
+        ],
+        "summary": "Export a site file from Fleet",
+        "description": "Download the current site as a .site file.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "200": {
+            "description": "Returns the site file."
+          }
+        }
+      }
+    },
+    "/api/v1/site/import": {
+      "post": {
+        "tags": [
+          "site"
+        ],
+        "summary": "Import a site file to MiR Fleet.",
+        "description": "\nYou must submit the file using these headers:\n\nContent-Type: multipart/form-data\n\nContent-Disposition: form-date; name=”site-file”",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "SiteFile"
+                ],
+                "type": "object",
+                "properties": {
+                  "SiteFile": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              },
+              "encoding": {
+                "SiteFile": {
+                  "style": "form"
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "required": [
+                  "SiteFile"
+                ],
+                "type": "object",
+                "properties": {
+                  "SiteFile": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              },
+              "encoding": {
+                "SiteFile": {
+                  "style": "form"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict: A site is already being imported",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/site/snapshot": {
+      "get": {
+        "tags": [
+          "site"
+        ],
+        "summary": "Get the Site Snapshot.",
+        "description": "Retrieve all site data.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "200": {
+            "description": "Returns a snapshot of all site data and missions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/site-snapshot-response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/site/zone": {
+      "post": {
+        "tags": [
+          "site"
+        ],
+        "summary": "Create a zone",
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/zone-request"
+              },
+              "examples": {
+                "lock-zone-example": {
+                  "value": {"zone":{"id":null,"name":"LockZoneArea","map-id":"51a91a7e-78ed-4269-ba85-39a1f03f5f8e","geojson":{"type":"Feature","features":[{"type":"Feature","properties":{},"geometry":{"type":"MultiPoint","coordinates":[[18.838,12.901],[27.316,12.901],[27.316,19.914],[18.838,19.914]]}}]},"type":"LockZone","events":[]}}
+                },
+                "integration-zone-example": {
+                  "value": {"zone":{"id":null,"name":"IntegrationZoneArea","map-id":"6b7cd795-0cee-4b64-9822-3912017afd94","geojson":{"type":"Feature","features":[{"type":"Feature","properties":{},"geometry":{"type":"MultiPoint","coordinates":[[2.3,18.8],[7.6,18.8],[7.6,14.4],[2.3,14.4]]}}]},"type":"IntegrationZone","events":[{"name":"entry","event":{"value":"raise"},"type":"Entry","address":"Integration"},{"name":"exit","event":{"value":"lower"},"type":"Exit","address":"Integration"}]}}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/id-response"
+                },
+                "example": {"id":"ed3825e3-48ee-4002-86c1-9b31e3089e39"}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/site/zone/{zoneId}": {
+      "delete": {
+        "tags": [
+          "site"
+        ],
+        "summary": "Delete a zone",
+        "description": "Delete a zone by id",
+        "parameters": [
+          {
+            "name": "zoneId",
+            "in": "path",
+            "description": "External id of the zone",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/id-response"
+                },
+                "example": {"id":"ed3825e3-48ee-4002-86c1-9b31e3089e39"}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/site/zone/lock": {
+      "post": {
+        "tags": [
+          "site"
+        ],
+        "summary": "Activate Lock Zone",
+        "description": "Lock or unlock a zone.",
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/lock-zone-request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subscription/resync": {
+      "post": {
+        "tags": [
+          "subscription"
+        ],
+        "summary": "Resync",
+        "description": "All subscriptions you have set up send a snapshot event of their event type — see Snapshots in the MiR Fleet Enterprise manual.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted"
+          }
+        }
+      }
+    },
+    "/api/v1/subscription": {
+      "post": {
+        "tags": [
+          "subscription"
+        ],
+        "summary": "Subscribe to events",
+        "description": "\nCreate a subscription to an event. Specify the address of the endpoint you want MiR Fleet to publish the event to when it is triggered.\n\nEach subscription must have a unique combination of base URL, event-type, and endpoint path.\n\nSee Callbacks for a definition of each event.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/subscription-request"
+              },
+              "examples": {
+                "example": {
+                  "value": {"base-url":"https://your-app.com/webhooks/","endpoints":[{"event-type":"Subscription","endpoint-paths":["integration/subscription","monitoring/subscription"]},{"event-type":"Payload","endpoint-paths":["integration/payload"]}],"access-token":null,"max-retries":null,"ignore-certificate-errors":false}
+                },
+                "example-config": {
+                  "value": {"base-url":"https://your-app.com/webhooks/","endpoints":[{"event-type":"Subscription","endpoint-paths":["integration/subscription","monitoring/subscription"]}],"access-token":"udPTcG0_QoPvnuFl4ZScruuwGXDo9kxPBmBnjzmJJjLprBkdVFS9y6J5qZu_DJZOrMV5B6iowU5cmWjDeNUMvVMtkQ3SNlnUzUdDkkq1OoB7cKoNeJp6OWIJPUdHdpOOgIgziMcL6RK87w01dksFvn_fKevVhKY_I4Xc8YfmCjPmH9M_AegpflRlEPOMzzjiqiOIMeOQsaQKI42KRLKTr8U07Ot_2mShApBfwDsM_zyggY7roLZkgqa6TiqQJxcCSwqMb1u0y84Vp49rWb6pFJzcTEAho6KMyP280trzFd8MKGzcZc8i5HoSpPI6oZ96b3pQ8m4_Bc9C7rFxKr5gHC4dyhHU4Hheh1g6TQKP7V6kQ0kErKdpOvT7mzCbwWPLzLImjHltpvRn79tybBeUcVqSxVtkJGHcSZ8NlGtb70F4c_tAsGpyazkHRON79L5tyWsSVuBXT9GXB7uJYkFQVp9_ZXH2VDDmZmjMreSvQI7JSQEL2nJFqtnLT4EPYjAd2Ciet51O5rBXLH4g0sBdYA7J4GzONOrbS5WXaOFyqFw5lAk_lZKCdIMb71t1cozFXG59ijPMPkzg8d0JLkXfZRiBzr9cTFUo6BXAEZyxv9Bm7xiGj4lyZoIWQq2ekxoY2XkijVRK9iamgSEtuIQbicL3P49r6dowUwhhSYdG151xrFbJAQuZ9qk72EN_sj3Le9LHxCwjXQhN2tOi6aHr8GSG4Iz5EI2JlGMxxoO0dPArbEa8w5XxGfkwcpghEPRRhsy5Yg1rZx2eAxniRWb7O06oxV5Axy1BEPonNAZmKDb8uFGvcBUG5qHKpO8jKTtbaoq9fY_Wt8qi8oix9zUZPEJZUe0GYzONI3Kju5iatgajMS56pAItV7RH0SvBTzJ4khtaUg2eT04oFpzFieX0lrYEoIxxvm3d4l_0AYFjplQIohcDXL89vqcz301Nzwii5IByoxkCg6Ru_ycPFvXCdekIPSSEuJueo2N2nQaTVJiayjOEj1tO8ZOiI4o3Ov0p809fXxMMsg5ssxkjlxSn0RDyUPzitug_039_8vFeA5UjAyC8E8KdNz94AJOGuXydLVmT1PL3jgqwi4EVU8nmFoyu3qLjw9uMrLoX8b3QH80dThYu3t2w7sKTK0KllHGGPIiePTErm9XafSFcZ_LOcShJVJ6NBQ9SZ3j3_XUjzkfhUy2Hk565Gpu45VCPPjaSOzMKP9X4egExC3O4A7IVrjeDvaPXM_RpdcNrgDxwvyeni3i31YYhqfdPwTedFxZz3hXIZATa9cE3nSMq33Yc0KVAXWIPuthfj17mMQHycZhMI1HWVH7OAx35bDB6Q9yA7ALYw7diIJITFdIkimWdciuEgzkwBye1M8djcCKm8idTVibpwMK_z8pmUtjIA8bqjPwjh906YHWicDI7sn3sDTBRLJZgLL2EIb46XCrbZ8oEiYVXFdsE4raQEfaHfwuGX0L8BwYkU6oMYsVYVNf_DGzLqa1F97rg9z_1ZUurFYzh5lbYYPV1LWOGUmZ2DZf9uZ6pVyCVfsJzwd97uaId9gOSWJxk90rNsuqbeORo9W306AnB6n2F2pFv6PC7pLLt7Vn93NgRy3r9UPsR09jTgdu68UwVzimfBuCuq3SBRv2IjFptvy3WDXVN1orJRs3LMHmqqoU8T9pN6ym5WQ56vAzk13tKtRJrKaNI2PX8GCBxDCG4WjQ_rjBl5xGqwI1fc1_XEUHVbnkMnWd0lvMvpRoXCyrZeCiRHxc3KVeNvbMfAdHZWt9s8ndSqYwi70a4YubLuwkNhODuitX_HipymK3K16lxZ375gI71vqnPSSOsYX2iNIzD0Me69Halz_WhMSOyYw1lTPMP6RLAz4SUTetHAMfUl8Zr21EAfInd9OWZ1XXlI_zvRb5F4Aap94VfxNz8vhc9V8IImDtcxYgpa43XcAPXhkWzmsmcvwP5ZvO","max-retries":10,"ignore-certificate-errors":true}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict: The specified values already exists in the database.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        },
+        "callbacks": {
+          "Alert Event": {
+            "https://your-app.com/webhooks/alert": {
+              "post": {
+                "summary": "Alert webhook endpoint",
+                "description": "Receive an event when an alert is triggered in the system.",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/alert-event-request"
+                      },
+                      "example": "{\"id\":\"d1943b99-45f1-4571-9ced-e49305347b25\",\"name\":\"DeadlockDetected\",\"message\":\"Alert message\",\"timestamp\":\"2022-09-19T09:08:12.8651699Z\"}"
+                    }
+                  }
+                },
+                "responses": {
+                  "200": {
+                    "description": "Webhook received successfully"
+                  }
+                }
+              }
+            }
+          },
+          "Error": {
+            "https://your-app.com/webhooks/error": {
+              "post": {
+                "summary": "Error event webhook endpoint",
+                "description": "Receive an event when an error occurs in MiR Fleet Integration API. This is only related to system errors that can occur when you send API requests. It does not catch any robot errors or errors in the request you sent in the API.",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/error-event-request"
+                      },
+                      "example": "{\"action-type\":\"Create\",\"entity-type\":\"Map\",\"entity-id\":\"85d80812-0a58-4261-916a-f438fa519051\",\"error-type\":\"Internal\",\"message\":\"Encountered an internal error.\",\"timestamp\":\"2022-09-19T09:08:12.8651699Z\"}"
+                    }
+                  }
+                },
+                "responses": {
+                  "200": {
+                    "description": "Webhook received successfully"
+                  }
+                }
+              }
+            }
+          },
+          "Group": {
+            "https://your-app.com/webhooks/group": {
+              "post": {
+                "summary": "Group webhook endpoint",
+                "description": "Recieve an event when a group in created, changed, or deleted.",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/group-event-request"
+                      },
+                      "example": "{\"is-snapshot\":true,\"group-events\":[{\"entity-id\":\"102fd74a-bbb0-4b25-b42c-8b8e35225c0d\",\"entity-type\":\"MissionGroup\",\"action-type\":\"Create\",\"status-change-timestamp\":\"2024-07-04T17:10:14.48348Z\",\"group\":null,\"mission-group\":{\"name\":\"MissionGroup1\",\"mission-ids\":[\"224ee3e8-3101-45dc-b346-3b3282101598\",\"65fc3f77-5401-4168-9841-36ea836b9177\"]}},{\"entity-id\":\"a15fc10e-b106-4411-9587-3d7f0f48de67\",\"entity-type\":\"Group\",\"action-type\":\"Create\",\"status-change-timestamp\":\"2024-07-04T17:10:14.48348Z\",\"group\":{\"name\":\"Group1\",\"robot-ids\":[\"4d95cdb0-e314-4338-b594-4c7803fecc8b\"],\"position-ids\":[\"6e7c2e57-dfb1-4ba5-a2e7-75692c4d830f\",\"ca245603-59ea-4cc3-863e-76185763f73c\"],\"mission-group-ids\":[\"102fd74a-bbb0-4b25-b42c-8b8e35225c0d\"]},\"mission-group\":null}]}"
+                    }
+                  }
+                },
+                "responses": {
+                  "200": {
+                    "description": "Webhook received successfully"
+                  }
+                }
+              }
+            }
+          },
+          "Payload": {
+            "https://your-app.com/webhooks/payload": {
+              "post": {
+                "summary": "Payload event webhook endpoint",
+                "description": "Receive events when a Send JSON payload action is executed by a robot or the robot in a mission or Integration zone—see Integration actions and Zones in the MiR Fleet Enterprise manual. The robot can pass a customized JSON body in the event.",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/payload-event-request"
+                      },
+                      "example": "{\"name\":\"CustomEvent\",\"payload\":{\"Speed\":\"Low\",\"Height\":5,\"IsPaused\":true,\"Orientation\":0.5},\"robot-id\":\"d7b06bff-e56b-41ab-bea1-a30b32639661\",\"serial-order-id\":\"d1943b99-45f1-4571-9ced-e49305347b25\",\"phase-index\":1,\"is-fallback\":true,\"timestamp\":\"2022-09-19T09:08:12.8651699Z\"}"
+                    }
+                  }
+                },
+                "responses": {
+                  "200": {
+                    "description": "Webhook received successfully"
+                  }
+                }
+              }
+            }
+          },
+          "RobotIdentity": {
+            "https://your-app.com/webhooks/robot-identity": {
+              "post": {
+                "summary": "RobotIdentity webhook endpoint",
+                "description": "Receive events when a robot's software version or name changes.",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/robot-identity-event-request"
+                      },
+                      "example": "{\"is-snapshot\":false,\"robot-identity-events\":[{\"robot-id\":\"822db143-c9ab-4023-973b-a431e38d6a86\",\"serial-number\":\"0001\",\"name\":\"Robot\",\"model\":\"MiR100\",\"software-version\":\"4.0.0\",\"timestamp\":\"2022-09-19T09:08:12.8651699Z\",\"ip\":\"http://test.com/integration\"}]}"
+                    }
+                  }
+                },
+                "responses": {
+                  "200": {
+                    "description": "Webhook received successfully"
+                  }
+                }
+              }
+            }
+          },
+          "RobotRuntime": {
+            "https://your-app.com/webhooks/robot-runtime": {
+              "post": {
+                "summary": "RobotRuntime webhook endpoint",
+                "description": "Receive events with robot coordinates and when the robot enters Emergency or Protective stop. This subscription is a data stream. An event is posted to subscribed endpoints every second.",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/robot-runtime-event-request"
+                      },
+                      "example": "{\"robot-id\":\"0ada8a13-f035-4564-8b44-b148bec9738c\",\"pose-x\":1.5,\"pose-y\":1.5,\"pose-orientation\":1.5,\"map-id\":\"80f94c98-44db-404e-8f65-8a74b89938c7\",\"in-emergency-stop\":false,\"timestamp\":\"2022-09-19T09:08:12.8651699Z\",\"battery-percentage\":0}"
+                    }
+                  }
+                },
+                "responses": {
+                  "200": {
+                    "description": "Webhook received successfully"
+                  }
+                }
+              }
+            }
+          },
+          "RobotState": {
+            "https://your-app.com/webhooks/robot-state": {
+              "post": {
+                "summary": "RobotState webhook endpoint",
+                "description": "Receive events when a robot changes state. An event is only triggered when the robot changes states, not battery percentage.",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/robot-state-event-request"
+                      },
+                      "example": "{\"robot-id\":\"85d80812-0a58-4261-916a-f438fa519051\",\"robot-state\":{\"idle\":{}},\"robot-end-state\":\"Idle\",\"battery-percentage\":96,\"uptime\":\"00:32:47\",\"battery-time-remaining-in-minutes\":\"00:00:00\",\"total-distance-moved-in-meters\":6,\"pose-x\":0.2,\"pose-y\":0.9,\"pose-orientation\":0.45,\"map-id\":\"24f6c058-a582-46ab-8b73-e3fbae58c6fc\",\"timestamp\":\"2024-07-04T17:10:14.48348Z\",\"battery-time-remaining\":\"09:02:57\"}"
+                    }
+                  }
+                },
+                "responses": {
+                  "200": {
+                    "description": "Webhook received successfully"
+                  }
+                }
+              }
+            }
+          },
+          "SerialOrderStatus": {
+            "https://your-app.com/webhooks/serial-order-status": {
+              "post": {
+                "summary": "SerialOrderStatus webhook endpoint",
+                "description": "Receive events whenever a phase or serial-order changes status.",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/serial-order-status-event-request"
+                      },
+                      "example": "{\"is-snapshot\":false,\"serial-order-status-events\":[{\"serial-order-id\":\"2ed45aec-3e6c-4969-bd0d-d6746ab4fbc0\",\"phase-index\":1,\"mission-id\":\"a28de20c-a112-4c85-bbb0-6ae1071b6796\",\"state\":\"Executing\",\"state-change-timestamp\":\"2022-09-19T09:08:12.8651699Z\",\"robot-id\":\"80f94c98-44db-404e-8f65-8a74b89938c7\",\"message\":\"Test string!\",\"is-fallback\":false,\"order-type\":\"User\"}]}"
+                    }
+                  }
+                },
+                "responses": {
+                  "200": {
+                    "description": "Webhook received successfully"
+                  }
+                }
+              }
+            }
+          },
+          "Site": {
+            "https://your-app.com/webhooks/site": {
+              "post": {
+                "summary": "Site webhook endpoint",
+                "description": "Receive events when a map or map element is changed.",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/site-event-request"
+                      },
+                      "example": "{\"site-event-type\":\"Snapshot\",\"site-events\":[{\"entity-id\":\"822db143-c9ab-4023-973b-a431e38d6a86\",\"entity-type\":\"Map\",\"action-type\":null,\"status-change-timestamp\":\"2022-09-19T09:08:12.8651699Z\",\"map\":{\"name\":\"Map\",\"image\":\"iVBORw0KGgoAAAANSUhEUgAAAcEAAAHOCAIAAABvjyVqAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAAEnQAABJ0Ad5mH3gAAAAhdEVYdENyZWF0aW9uIFRpbWUAMjAyMjoxMToxMCAwODoyMzozOWrDsVsAAAZ9SURBVHhe7d3BitswFEDRqP//zyoYbWzKFN+oIU3O2UiLIRlCdDF+g+cBAAAAAAAAfzHWephzrh0AfzLGKZu/1grAfRoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnRjrYc559oB32SMUwq2+NSeXD4r16EAnYYCdBoK0GkoQGemBFznJC0FW17k/ZkpAWyjoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtCNtR7mnGsHfJMxTinY4lN7cvmsXIcCdBoK0GkoQKehAJ2ZEsANZkoA22goQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtCNtR7mnGsHX2yM07l4PSfxnV2+Hq5DAToNBeg0FKDTUIDOTAmuLkODF5yL178jmZkSwDYaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0I21HuacawdfbIzTuXg9J/GdXb4erkMBOg0F6DQUoNNQgM5MCeAGMyWAbTQUoNNQgE5DAToNBeg0FKDTUIBOQwE6DQXoNBSg01CATkMBOg0F6DQUoNNQgE5DAbr/8hnMz/zbRc+ZBp7hGcwA22goQKehAJ2GAnSfMFP6+de+9cMAPzNTAthGQwE6DQXoPuF+6C3uhwLPcD8UYBsNBeg0FKDTUIDO358D3GCmBLCNhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaShAp6EAnYYCdBoK0GkoQKehAJ2GAnQaCtBpKECnoQCdhgJ0GgrQaSgAAAAAAAAA/CuPx281V058/6KQfgAAAABJRU5ErkJggg==\",\"origin\":{\"x\":1,\"y\":5}},\"position\":null,\"zone\":null,\"mission\":null},{\"entity-id\":\"822db143-c9ab-4023-973b-a431e38d6a86\",\"entity-type\":\"Position\",\"action-type\":null,\"status-change-timestamp\":\"2022-09-19T09:08:12.8651699Z\",\"map\":null,\"position\":{\"base-position\":{\"type\":\"Robot\",\"map-id\":\"80f94c98-44db-404e-8f65-8a74b89938c7\",\"name\":\"Position3\",\"map-pose\":{\"x\":1.3,\"y\":2.7,\"orientation\":0.8}},\"marker\":{\"type\":\"VL\",\"map-id\":\"7b09f46e-4c90-46bf-8230-f0128ed0b0fb\",\"name\":\"DockingStation1\",\"map-pose\":{\"x\":1.3,\"y\":2.7,\"orientation\":0.8},\"entry-position-offset-pose\":{\"x\":0.6,\"y\":0.2,\"orientation\":0.3},\"offset-pose\":{\"x\":0.1,\"y\":0.1,\"orientation\":0.2},\"bar\":{\"length\":1,\"distance\":0.8}},\"charger\":{\"type\":\"48V\",\"map-id\":\"24f6c058-a582-46ab-8b73-e3fbae58c6fc\",\"name\":\"MainEntryCharger\",\"map-pose\":{\"x\":1.3,\"y\":2.7,\"orientation\":0.8},\"entry-position-offset-pose\":{\"x\":0.6,\"y\":0.2,\"orientation\":0.3},\"entry-positions\":[]},\"utility-position\":{\"type\":\"PALLETFLOOR\",\"map-id\":\"85d80812-0a58-4261-916a-f438fa519051\",\"name\":\"Pickup10\",\"map-pose\":{\"x\":1.3,\"y\":2.7,\"orientation\":0.8},\"entry-positions\":[{\"entry-position-type\":\"PALLETFLOORFRONT\",\"offset-pose\":{\"x\":0.6,\"y\":0.9,\"orientation\":0.5}},{\"entry-position-type\":\"PALLETFLOORLEFT\",\"offset-pose\":{\"x\":0.1,\"y\":0.1,\"orientation\":0.2}},{\"entry-position-type\":\"PALLETFLOORRIGHT\",\"offset-pose\":{\"x\":0.2,\"y\":0.2,\"orientation\":0.3}}],\"offset-pose\":{\"x\":0.1,\"y\":0.1,\"orientation\":0.2},\"bar\":null,\"elevation\":null,\"deep-lane-setting\":null}},\"zone\":null,\"mission\":null},{\"entity-id\":\"822db143-c9ab-4023-973b-a431e38d6a86\",\"entity-type\":\"Zone\",\"action-type\":null,\"status-change-timestamp\":\"2022-09-19T09:08:12.8651699Z\",\"map\":null,\"position\":null,\"zone\":{\"name\":\"Zone\",\"map-id\":\"85d80812-0a58-4261-916a-f438fa519051\",\"polygon\":[{\"x\":1,\"y\":0.5},{\"x\":10,\"y\":0.5},{\"x\":10,\"y\":10.5},{\"x\":1,\"y\":10.5}],\"type\":\"LockZone\",\"events\":[{\"name\":\"Event1\",\"event\":{\"Name1\":\"payload1\",\"Name2\":2.3,\"Name3\":true},\"type\":\"Entry\",\"address\":\"Integration\"},{\"name\":\"Event2\",\"event\":{\"Name1\":\"payload2\",\"Name2\":112,\"Name3\":false},\"type\":\"Exit\",\"address\":\"TopModule\"}],\"lock-zone-state\":\"Unlocked\"},\"mission\":null},{\"entity-id\":\"822db143-c9ab-4023-973b-a431e38d6a86\",\"entity-type\":\"Mission\",\"action-type\":null,\"status-change-timestamp\":\"2024-07-16T08:18:15.8651699Z\",\"map\":null,\"position\":null,\"zone\":null,\"mission\":{\"name\":\"Drive to Charger\",\"arguments\":[]}}]}"
+                    }
+                  }
+                },
+                "responses": {
+                  "200": {
+                    "description": "Webhook received successfully"
+                  }
+                }
+              }
+            }
+          },
+          "Subscription": {
+            "https://your-app.com/webhooks/subscription": {
+              "post": {
+                "summary": "Subscription webhook endpoint",
+                "description": "Receive an event when a subscription in the system changes status.",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/subscribe-event-request"
+                      },
+                      "example": "{\"base-url\":\"https://your-app.com/webhooks/\",\"endpoints\":[{\"event-type\":\"Subscription\",\"endpoint-paths\":[\"p1\",\"p2\"]},{\"event-type\":\"Site\",\"endpoint-paths\":[\"p3\"]}],\"state\":\"Subscribed\",\"timestamp\":\"2022-09-19T09:08:12.8651699Z\"}"
+                    }
+                  }
+                },
+                "responses": {
+                  "200": {
+                    "description": "Webhook received successfully"
+                  }
+                }
+              }
+            }
+          },
+          "System": {
+            "https://your-app.com/webhooks/system": {
+              "post": {
+                "summary": "System webhook endpoint",
+                "description": "Receive an event when a robot changes connection status or an evacuation changes status.",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/system-event-request"
+                      },
+                      "example": "{\"is-snapshot\":true,\"system-events\":[{\"evacuation\":{\"evacuation-state\":\"InEvacuationOngoing\"},\"robot\":null,\"timestamp\":\"2022-09-19T09:08:12.8651699Z\"},{\"evacuation\":null,\"robot\":{\"robot-id\":\"80e94c98-44db-404e-8f65-8a74b89938c7\",\"robot-state\":\"Added\"},\"timestamp\":\"2022-09-19T09:08:12.8651699Z\"}]}"
+                    }
+                  }
+                },
+                "responses": {
+                  "200": {
+                    "description": "Webhook received successfully"
+                  }
+                }
+              }
+            }
+          },
+          "TopModule": {
+            "https://your-app.com/webhooks/top-module": {
+              "post": {
+                "summary": "TopModule webhook endpoint",
+                "description": "Receive custom events defined using the Top Module Integration API.",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/top-module-event-request"
+                      },
+                      "example": "{\"event-type\":\"Event\",\"event\":{\"name\":\"CustomEvent\",\"payload\":{\"Speed\":\"Low\",\"Height\":5,\"IsPaused\":true,\"Orientation\":0.5},\"robot-id\":\"85d80812-0a58-4261-916a-f438fa519051\",\"serial-order-id\":\"208b6817-34d5-4077-9156-919040abe5fc\",\"phase-index\":1,\"is-fallback\":false,\"timestamp\":\"2022-09-19T09:08:12.8651699Z\"},\"error\":{\"name\":\"CustomError\",\"message\":\"Error from Top Module\",\"robot-id\":\"85d80812-0a58-4261-916a-f438fa519051\",\"serial-order-id\":\"208b6817-34d5-4077-9156-919040abe5fc\",\"phase-index\":0,\"is-fallback\":true,\"timestamp\":\"2022-09-19T09:08:12.8651699Z\"}}"
+                    }
+                  }
+                },
+                "responses": {
+                  "200": {
+                    "description": "Webhook received successfully"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "subscription"
+        ],
+        "summary": "Delete all subscriptions",
+        "description": "Removes all active subscriptions",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "204": {
+            "description": "No content: All subscriptions have been removed."
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "subscription"
+        ],
+        "summary": "Get list of all active subscriptions",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "200": {
+            "description": "Returns a list of subscriptions in the same format as the subscription request bodies — see POST api/v1/subscription.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/subscription-response"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subscription/unsubscribe": {
+      "post": {
+        "tags": [
+          "subscription"
+        ],
+        "summary": "Unsubscribe subscriptions",
+        "description": "Unsubscribe all subscriptions to a selected base-URL.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/unsubscribe-request"
+              },
+              "example": {"base-url":"https://your-app.com/webhooks/"}
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subscription/event-types": {
+      "get": {
+        "tags": [
+          "subscription"
+        ],
+        "summary": "Retrieve a list of all event-types in string format.",
+        "description": "Note: This endpoint is deprecated. Please see available event types under the Subscribe endpoint callbacks instead.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "200": {
+            "description": "Returns an array of strings of all the Event types you can subscribe to.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/subscription-type-response"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true
+      }
+    },
+    "/api/v1/subscription/event-contracts": {
+      "get": {
+        "tags": [
+          "subscription"
+        ],
+        "summary": "Retrieve subscription contracts.",
+        "description": "Retrieve a list of all event-contracts in string format. The event-contracts describe the schemas of the event data that is sent to the subscribed endpoint.\n            \nNote: This endpoint is deprecated. Please see event definitions under the Subscribe endpoint callbacks instead.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/event-contracts-response"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true
+      }
+    },
+    "/api/v1/system/evacuation": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Activate evacuation",
+        "description": "Create an evacuation order.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "201": {
+            "description": "Created"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Terminate Evacuation",
+        "description": "Stop the current evacuation.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v1/system/fleet-error-log": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Generate an error log on MiR Fleet.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/create-fleet-error-log-request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Health check",
+        "description": "Get the current status of the MiR Fleet application.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "200": {
+            "description": "Returns the status of the Authentication, MiR Fleet health, and the MiR Fleet database."
+          },
+          "503": {
+            "description": "If the application is unhealthy"
+          }
+        }
+      }
+    },
+    "/api/v1/system/robot/continue": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Continue",
+        "description": "Make a robot that is paused in a Wait for Continue action to continue to the next action in the mission.",
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/continue-request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/version": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Get the software version",
+        "description": "Get the software version of the MiR Fleet",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/system-version-response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/top-module": {
+      "post": {
+        "tags": [
+          "top-module"
+        ],
+        "summary": "Send an event to the top module API",
+        "requestBody": {
+          "description": "An object describing the event to be sent and the target robot",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/top-module-event-request-1"
+              },
+              "example": {"robot-id":"9f74d0bf-aad4-4de4-b9b3-a6597af18d75","event":{"name":"Event","payload":{"Speed":"Low","Height":10,"IsPaused":false,"Orientation":0.5}}}
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "alert": {
+        "enum": [
+          "InternalAlertReported",
+          "DeadlockDetected",
+          "PathConflict",
+          "RobotError",
+          "RobotEstop",
+          "IncompatibleRobot",
+          "InvalidSiteEntity"
+        ],
+        "type": "string"
+      },
+      "alert-event-request": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "$ref": "#/components/schemas/alert"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "argument": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "default-value": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "bar": {
+        "required": [
+          "distance",
+          "length"
+        ],
+        "type": "object",
+        "properties": {
+          "length": {
+            "type": "number"
+          },
+          "distance": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false
+      },
+      "bar-1": {
+        "type": "object",
+        "properties": {
+          "length": {
+            "type": "number"
+          },
+          "distance": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false
+      },
+      "base-geometry": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "GeometryDouble": "#/components/schemas/geometry-double",
+            "GeometryMulti": "#/components/schemas/geometry-multi",
+            "GeometrySingle": "#/components/schemas/geometry-single",
+            "GeometryTriple": "#/components/schemas/geometry-triple"
+          }
+        }
+      },
+      "base-position": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/position"
+          },
+          {
+            "required": [
+              "base-position-type"
+            ],
+            "type": "object",
+            "properties": {
+              "base-position-type": {
+                "$ref": "#/components/schemas/base-position-type"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "base-position-1": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/position-properties"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false
+          }
+        ]
+      },
+      "base-position-type": {
+        "enum": [
+          "Robot",
+          "Staging",
+          "Evacuation"
+        ],
+        "type": "string"
+      },
+      "brake-release": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "charger": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/position"
+          },
+          {
+            "required": [
+              "charger-type"
+            ],
+            "type": "object",
+            "properties": {
+              "charger-type": {
+                "$ref": "#/components/schemas/charger-type"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "charger-1": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/position-properties"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "entry-position-offset-pose": {
+                "$ref": "#/components/schemas/pose-1"
+              },
+              "entry-positions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/entry-position-1"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "charger-type": {
+        "enum": [
+          "MiRCharge24V",
+          "MiRCharge48V",
+          "MiRCharge48VFast"
+        ],
+        "type": "string"
+      },
+      "continue-request": {
+        "required": [
+          "robot-id"
+        ],
+        "type": "object",
+        "properties": {
+          "robot-id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false
+      },
+      "create-fleet-error-log-request": {
+        "required": [
+          "comment"
+        ],
+        "type": "object",
+        "properties": {
+          "comment": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "deep-lane-setting": {
+        "required": [
+          "pallet-amount",
+          "pallet-length",
+          "pallet-width"
+        ],
+        "type": "object",
+        "properties": {
+          "pallet-length": {
+            "type": "number"
+          },
+          "pallet-width": {
+            "type": "number"
+          },
+          "pallet-amount": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      },
+      "deep-lane-setting-1": {
+        "type": "object",
+        "properties": {
+          "palletLength": {
+            "type": "number"
+          },
+          "palletWidth": {
+            "type": "number"
+          },
+          "palletAmount": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      },
+      "e-stop": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "elevation": {
+        "required": [
+          "height",
+          "relative-lift-distance"
+        ],
+        "type": "object",
+        "properties": {
+          "height": {
+            "type": "number"
+          },
+          "relative-lift-distance": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false
+      },
+      "elevation-1": {
+        "type": "object",
+        "properties": {
+          "height": {
+            "type": "number"
+          },
+          "relativeLiftDistance": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false
+      },
+      "entry-position": {
+        "required": [
+          "entry-position-type",
+          "offset-pose"
+        ],
+        "type": "object",
+        "properties": {
+          "entry-position-type": {
+            "$ref": "#/components/schemas/entry-position-type"
+          },
+          "offset-pose": {
+            "$ref": "#/components/schemas/pose"
+          }
+        },
+        "additionalProperties": false
+      },
+      "entry-position-1": {
+        "type": "object",
+        "properties": {
+          "entry-position-type": {
+            "type": "string"
+          },
+          "offset-pose": {
+            "$ref": "#/components/schemas/pose-1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "entry-position-type": {
+        "enum": [
+          "CartLeft",
+          "CartRight",
+          "CartPickup",
+          "ShelfShort",
+          "ShelfLong",
+          "PalletFloorLeft",
+          "PalletFloorFront",
+          "PalletFloorRight",
+          "MiRCharge48VFast",
+          "MiRCharge48VFastLong",
+          "ElevatedVlPallet",
+          "ElevatedBarPallet",
+          "ElevatedPalletRack",
+          "DeepLaneLeft",
+          "DeepLaneFront",
+          "DeepLaneRight"
+        ],
+        "type": "string"
+      },
+      "error": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "error-1": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "robot-id": {
+            "type": "string"
+          },
+          "serial-order-id": {
+            "type": "string"
+          },
+          "phase-index": {
+            "type": "integer",
+            "nullable": true
+          },
+          "is-fallback": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "error-event-request": {
+        "type": "object",
+        "properties": {
+          "action-type": {
+            "type": "string"
+          },
+          "entity-type": {
+            "type": "string"
+          },
+          "entity-id": {
+            "type": "string"
+          },
+          "error-type": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "evacuation": {
+        "type": "object",
+        "properties": {
+          "evacuation-state": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "event": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": { }
+          },
+          "robot-id": {
+            "type": "string"
+          },
+          "serial-order-id": {
+            "type": "string"
+          },
+          "phase-index": {
+            "type": "integer",
+            "nullable": true
+          },
+          "is-fallback": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "event-contracts-response": {
+        "type": "object",
+        "properties": {
+          "contracts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": { }
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "event-type-with-endpoints": {
+        "required": [
+          "endpoint-paths",
+          "event-type"
+        ],
+        "type": "object",
+        "properties": {
+          "event-type": {
+            "$ref": "#/components/schemas/subscription-event-type"
+          },
+          "endpoint-paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "event-type-with-endpoints-1": {
+        "type": "object",
+        "properties": {
+          "event-type": {
+            "type": "string"
+          },
+          "endpoint-paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "external-cable-charger-connected": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "feature": {
+        "required": [
+          "geometry",
+          "properties",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": { }
+          },
+          "geometry": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/geometry-double"
+              },
+              {
+                "$ref": "#/components/schemas/geometry-multi"
+              },
+              {
+                "$ref": "#/components/schemas/geometry-single"
+              },
+              {
+                "$ref": "#/components/schemas/geometry-triple"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "geo-json": {
+        "required": [
+          "features",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/feature"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "geometry-double": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/base-geometry"
+          },
+          {
+            "required": [
+              "coordinates"
+            ],
+            "type": "object",
+            "properties": {
+              "coordinates": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "format": "double"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "geometry-multi": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/base-geometry"
+          },
+          {
+            "required": [
+              "coordinates"
+            ],
+            "type": "object",
+            "properties": {
+              "coordinates": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "format": "double"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "geometry-single": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/base-geometry"
+          },
+          {
+            "required": [
+              "coordinates"
+            ],
+            "type": "object",
+            "properties": {
+              "coordinates": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "format": "double"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "geometry-triple": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/base-geometry"
+          },
+          {
+            "required": [
+              "coordinates"
+            ],
+            "type": "object",
+            "properties": {
+              "coordinates": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "format": "double"
+                    }
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "group": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "robot-ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "position-ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "mission-group-ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "group-1": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "robot-ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "position-ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mission-group-ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "group-event": {
+        "required": [
+          "entity-id",
+          "entity-type"
+        ],
+        "type": "object",
+        "properties": {
+          "entity-id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "entity-type": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "action-type": {
+            "type": "string",
+            "nullable": true
+          },
+          "status-change-timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "group": {
+            "$ref": "#/components/schemas/group-1"
+          },
+          "mission-group": {
+            "$ref": "#/components/schemas/mission-group"
+          }
+        },
+        "additionalProperties": false
+      },
+      "group-event-request": {
+        "type": "object",
+        "properties": {
+          "is-snapshot": {
+            "type": "boolean"
+          },
+          "group-events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/group-event"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "group-request": {
+        "required": [
+          "group"
+        ],
+        "type": "object",
+        "properties": {
+          "group": {
+            "$ref": "#/components/schemas/group"
+          }
+        },
+        "additionalProperties": false
+      },
+      "group-snapshot-response": {
+        "type": "object",
+        "properties": {
+          "group-events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/group-event"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "id-response": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "idle": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "key": {
+        "type": "object",
+        "properties": {
+          "key-manual": {
+            "$ref": "#/components/schemas/key-manual"
+          },
+          "key-idle": {
+            "$ref": "#/components/schemas/key-idle"
+          }
+        },
+        "additionalProperties": false
+      },
+      "key-idle": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "key-manual": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "lock-zone-request": {
+        "required": [
+          "is-locked",
+          "zone-id"
+        ],
+        "type": "object",
+        "properties": {
+          "zone-id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "is-locked": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "lock-zone-state": {
+        "enum": [
+          "Unlocked",
+          "Locking",
+          "Locked"
+        ],
+        "type": "string"
+      },
+      "manual-control": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "map": {
+        "required": [
+          "geo-json",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "geo-json": {
+            "$ref": "#/components/schemas/geo-json"
+          }
+        },
+        "additionalProperties": false
+      },
+      "map-1": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "image": {
+            "type": "string",
+            "format": "byte"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/point"
+          }
+        },
+        "additionalProperties": false
+      },
+      "map-request": {
+        "required": [
+          "map"
+        ],
+        "type": "object",
+        "properties": {
+          "map": {
+            "$ref": "#/components/schemas/map"
+          }
+        },
+        "additionalProperties": false
+      },
+      "marker": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/position"
+          },
+          {
+            "required": [
+              "marker-type",
+              "offset-pose"
+            ],
+            "type": "object",
+            "properties": {
+              "offset-pose": {
+                "$ref": "#/components/schemas/pose"
+              },
+              "bar": {
+                "$ref": "#/components/schemas/bar"
+              },
+              "marker-type": {
+                "$ref": "#/components/schemas/marker-type"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "marker-1": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/position-properties"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "entry-position-offset-pose": {
+                "$ref": "#/components/schemas/pose-1"
+              },
+              "offset-pose": {
+                "$ref": "#/components/schemas/pose-1"
+              },
+              "bar": {
+                "$ref": "#/components/schemas/bar-1"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "marker-type": {
+        "enum": [
+          "V",
+          "VL",
+          "L",
+          "Bar",
+          "PalletRack",
+          "Stripe"
+        ],
+        "type": "string"
+      },
+      "mission": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/argument"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "mission-argument": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "mission-group": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "mission-ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "missions-export-request": {
+        "required": [
+          "mission-group-ids",
+          "mission-ids"
+        ],
+        "type": "object",
+        "properties": {
+          "mission-ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "mission-group-ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "not-operational": {
+        "type": "object",
+        "properties": {
+          "manual-control": {
+            "$ref": "#/components/schemas/manual-control"
+          },
+          "error": {
+            "$ref": "#/components/schemas/error"
+          },
+          "paused": {
+            "$ref": "#/components/schemas/paused"
+          },
+          "safety-stop": {
+            "$ref": "#/components/schemas/safety-stop"
+          },
+          "system-busy": {
+            "$ref": "#/components/schemas/system-busy"
+          },
+          "key": {
+            "$ref": "#/components/schemas/key"
+          },
+          "external-cable-charger-connected": {
+            "$ref": "#/components/schemas/external-cable-charger-connected"
+          }
+        },
+        "additionalProperties": false
+      },
+      "operational": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "order-state": {
+        "enum": [
+          "Created",
+          "Pending",
+          "WaitingForInput",
+          "Executing",
+          "Aborting",
+          "Aborted",
+          "Finished",
+          "Updated",
+          "Outbound",
+          "Paused"
+        ],
+        "type": "string"
+      },
+      "p-stop": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "paused": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "payload-event-request": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": { }
+          },
+          "robot-id": {
+            "type": "string"
+          },
+          "serial-order-id": {
+            "type": "string",
+            "nullable": true
+          },
+          "phase-index": {
+            "type": "integer",
+            "nullable": true
+          },
+          "is-fallback": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "phase": {
+        "type": "object",
+        "properties": {
+          "mission-id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "arguments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/mission-argument"
+            }
+          },
+          "fallback-mission-id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "point": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false
+      },
+      "pose": {
+        "required": [
+          "orientation",
+          "x",
+          "y"
+        ],
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "orientation": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false
+      },
+      "pose-1": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "orientation": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false
+      },
+      "position": {
+        "required": [
+          "map-id",
+          "map-pose",
+          "name",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "map-id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "map-pose": {
+            "$ref": "#/components/schemas/pose"
+          }
+        },
+        "additionalProperties": false,
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "BasePosition": "#/components/schemas/base-position",
+            "Charger": "#/components/schemas/charger",
+            "Marker": "#/components/schemas/marker",
+            "UtilityPosition": "#/components/schemas/utility-position"
+          }
+        }
+      },
+      "position-1": {
+        "type": "object",
+        "properties": {
+          "base-position": {
+            "$ref": "#/components/schemas/base-position-1"
+          },
+          "marker": {
+            "$ref": "#/components/schemas/marker-1"
+          },
+          "charger": {
+            "$ref": "#/components/schemas/charger-1"
+          },
+          "utility-position": {
+            "$ref": "#/components/schemas/utility-position-1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "position-properties": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "map-id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "map-pose": {
+            "$ref": "#/components/schemas/pose-1"
+          }
+        },
+        "additionalProperties": false,
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "BasePosition": "#/components/schemas/base-position-1",
+            "Charger": "#/components/schemas/charger-1",
+            "Marker": "#/components/schemas/marker-1",
+            "UtilityPosition": "#/components/schemas/utility-position-1"
+          }
+        }
+      },
+      "problem-details": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": { }
+      },
+      "restart-required": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "robot": {
+        "type": "object",
+        "properties": {
+          "robot-id": {
+            "type": "string"
+          },
+          "robot-state": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "robot-identity-event": {
+        "type": "object",
+        "properties": {
+          "robot-id": {
+            "type": "string"
+          },
+          "serial-number": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "software-version": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ip": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "robot-identity-event-request": {
+        "type": "object",
+        "properties": {
+          "is-snapshot": {
+            "type": "boolean"
+          },
+          "robot-identity-events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/robot-identity-event"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "robot-identity-snapshot-response": {
+        "type": "object",
+        "properties": {
+          "robot-identity-events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/robot-identity-event"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "robot-runtime-event-request": {
+        "type": "object",
+        "properties": {
+          "robot-id": {
+            "type": "string"
+          },
+          "pose-x": {
+            "type": "number"
+          },
+          "pose-y": {
+            "type": "number"
+          },
+          "pose-orientation": {
+            "type": "number"
+          },
+          "map-id": {
+            "type": "string"
+          },
+          "in-emergency-stop": {
+            "type": "boolean"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "battery-percentage": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false
+      },
+      "robot-state": {
+        "type": "object",
+        "properties": {
+          "idle": {
+            "$ref": "#/components/schemas/idle"
+          },
+          "operational": {
+            "$ref": "#/components/schemas/operational"
+          },
+          "not-operational": {
+            "$ref": "#/components/schemas/not-operational"
+          }
+        },
+        "additionalProperties": false
+      },
+      "robot-state-event-request": {
+        "type": "object",
+        "properties": {
+          "robot-id": {
+            "type": "string"
+          },
+          "robot-state": {
+            "$ref": "#/components/schemas/robot-state"
+          },
+          "robot-end-state": {
+            "type": "string"
+          },
+          "battery-percentage": {
+            "type": "integer"
+          },
+          "uptime": {
+            "type": "string",
+            "format": "date-span"
+          },
+          "battery-time-remaining-in-minutes": {
+            "type": "string",
+            "format": "date-span"
+          },
+          "total-distance-moved-in-meters": {
+            "type": "number"
+          },
+          "pose-x": {
+            "type": "number"
+          },
+          "pose-y": {
+            "type": "number"
+          },
+          "pose-orientation": {
+            "type": "number"
+          },
+          "map-id": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "battery-time-remaining": {
+            "type": "string",
+            "format": "date-span"
+          }
+        },
+        "additionalProperties": false
+      },
+      "safety-stop": {
+        "type": "object",
+        "properties": {
+          "p-stop": {
+            "$ref": "#/components/schemas/p-stop"
+          },
+          "e-stop": {
+            "$ref": "#/components/schemas/e-stop"
+          },
+          "brake-release": {
+            "$ref": "#/components/schemas/brake-release"
+          },
+          "restart-required": {
+            "$ref": "#/components/schemas/restart-required"
+          }
+        },
+        "additionalProperties": false
+      },
+      "serial-order": {
+        "required": [
+          "phases"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "priority": {
+            "$ref": "#/components/schemas/serial-order-priority"
+          },
+          "earliest-start-time": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "robot-id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "phases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/phase"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "serial-order-priority": {
+        "enum": [
+          "Low",
+          "Medium",
+          "High"
+        ],
+        "type": "string"
+      },
+      "serial-order-request": {
+        "required": [
+          "serial-order"
+        ],
+        "type": "object",
+        "properties": {
+          "serial-order": {
+            "$ref": "#/components/schemas/serial-order"
+          }
+        },
+        "additionalProperties": false
+      },
+      "serial-order-status-event": {
+        "type": "object",
+        "properties": {
+          "serial-order-id": {
+            "type": "string"
+          },
+          "phase-index": {
+            "type": "integer",
+            "nullable": true
+          },
+          "mission-id": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "$ref": "#/components/schemas/order-state"
+          },
+          "state-change-timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "robot-id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "is-fallback": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "order-type": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "serial-order-status-event-request": {
+        "type": "object",
+        "properties": {
+          "is-snapshot": {
+            "type": "boolean"
+          },
+          "serial-order-status-events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/serial-order-status-event"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "serial-order-status-snapshot-response": {
+        "type": "object",
+        "properties": {
+          "serial-order-status-events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/serial-order-status-event"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "shutting-down": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "site-event": {
+        "required": [
+          "entity-id",
+          "entity-type"
+        ],
+        "type": "object",
+        "properties": {
+          "entity-id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "entity-type": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "action-type": {
+            "type": "string",
+            "nullable": true
+          },
+          "status-change-timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "map": {
+            "$ref": "#/components/schemas/map-1"
+          },
+          "position": {
+            "$ref": "#/components/schemas/position-1"
+          },
+          "zone": {
+            "$ref": "#/components/schemas/zone"
+          },
+          "mission": {
+            "$ref": "#/components/schemas/mission"
+          }
+        },
+        "additionalProperties": false
+      },
+      "site-event-request": {
+        "type": "object",
+        "properties": {
+          "site-event-type": {
+            "type": "string"
+          },
+          "site-events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/site-event"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "site-snapshot-response": {
+        "type": "object",
+        "properties": {
+          "site-events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/site-event"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "starting": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "subscribe-event-request": {
+        "type": "object",
+        "properties": {
+          "base-url": {
+            "type": "string"
+          },
+          "endpoints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/event-type-with-endpoints-1"
+            }
+          },
+          "state": {
+            "$ref": "#/components/schemas/subscription-state"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "subscription-event-type": {
+        "enum": [
+          "Alert",
+          "Error",
+          "Payload",
+          "RobotIdentity",
+          "RobotRuntime",
+          "RobotState",
+          "SerialOrderStatus",
+          "Site",
+          "Subscription",
+          "System",
+          "TopModule",
+          "Group",
+          "Resource"
+        ],
+        "type": "string"
+      },
+      "subscription-request": {
+        "required": [
+          "base-url",
+          "endpoints"
+        ],
+        "type": "object",
+        "properties": {
+          "base-url": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "endpoints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/event-type-with-endpoints"
+            }
+          },
+          "access-token": {
+            "type": "string",
+            "nullable": true
+          },
+          "max-retries": {
+            "type": "integer",
+            "nullable": true
+          },
+          "ignore-certificate-errors": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "subscription-response": {
+        "required": [
+          "base-url",
+          "endpoints"
+        ],
+        "type": "object",
+        "properties": {
+          "base-url": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "endpoints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/event-type-with-endpoints"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "subscription-state": {
+        "enum": [
+          "Subscribed",
+          "Unsubscribed"
+        ],
+        "type": "string"
+      },
+      "subscription-type-response": {
+        "type": "object",
+        "properties": {
+          "event_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "system-busy": {
+        "type": "object",
+        "properties": {
+          "starting": {
+            "$ref": "#/components/schemas/starting"
+          },
+          "shutting-down": {
+            "$ref": "#/components/schemas/shutting-down"
+          }
+        },
+        "additionalProperties": false
+      },
+      "system-event": {
+        "type": "object",
+        "properties": {
+          "evacuation": {
+            "$ref": "#/components/schemas/evacuation"
+          },
+          "robot": {
+            "$ref": "#/components/schemas/robot"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "system-event-request": {
+        "type": "object",
+        "properties": {
+          "is-snapshot": {
+            "type": "boolean"
+          },
+          "system-events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/system-event"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "system-version-response": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "fleet-name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "top-module-event": {
+        "required": [
+          "name",
+          "payload"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": { }
+          }
+        },
+        "additionalProperties": false
+      },
+      "top-module-event-request": {
+        "type": "object",
+        "properties": {
+          "event-type": {
+            "$ref": "#/components/schemas/top-module-event-type"
+          },
+          "event": {
+            "$ref": "#/components/schemas/event"
+          },
+          "error": {
+            "$ref": "#/components/schemas/error-1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "top-module-event-request-1": {
+        "required": [
+          "event",
+          "robot-id"
+        ],
+        "type": "object",
+        "properties": {
+          "robot-id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "event": {
+            "$ref": "#/components/schemas/top-module-event"
+          }
+        },
+        "additionalProperties": false
+      },
+      "top-module-event-type": {
+        "enum": [
+          "Event",
+          "Error"
+        ],
+        "type": "string"
+      },
+      "unsubscribe-request": {
+        "required": [
+          "base-url"
+        ],
+        "type": "object",
+        "properties": {
+          "base-url": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "update-phase-request": {
+        "required": [
+          "index",
+          "phase",
+          "serial-order-id"
+        ],
+        "type": "object",
+        "properties": {
+          "serial-order-id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "index": {
+            "type": "integer"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/phase"
+          }
+        },
+        "additionalProperties": false
+      },
+      "update-position-request": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "map-pose": {
+            "$ref": "#/components/schemas/pose"
+          },
+          "offset-pose": {
+            "$ref": "#/components/schemas/pose"
+          },
+          "bar": {
+            "$ref": "#/components/schemas/bar"
+          },
+          "elevation": {
+            "$ref": "#/components/schemas/elevation"
+          },
+          "entry-position-offset": {
+            "$ref": "#/components/schemas/pose"
+          },
+          "entry-positions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/entry-position"
+            },
+            "nullable": true
+          },
+          "deep-lane-setting": {
+            "$ref": "#/components/schemas/deep-lane-setting"
+          }
+        },
+        "additionalProperties": false
+      },
+      "update-serial-order-request": {
+        "required": [
+          "serial-order-id"
+        ],
+        "type": "object",
+        "properties": {
+          "serial-order-id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/serial-order-priority"
+          },
+          "earliest-start-time": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "robot-id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "utility-position": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/position"
+          },
+          {
+            "required": [
+              "utility-position-type"
+            ],
+            "type": "object",
+            "properties": {
+              "utility-position-type": {
+                "$ref": "#/components/schemas/utility-position-type"
+              },
+              "offset-pose": {
+                "$ref": "#/components/schemas/pose"
+              },
+              "bar": {
+                "$ref": "#/components/schemas/bar"
+              },
+              "elevation": {
+                "$ref": "#/components/schemas/elevation"
+              },
+              "deep-lane-setting": {
+                "$ref": "#/components/schemas/deep-lane-setting"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "utility-position-1": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/position-properties"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "entry-positions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/entry-position-1"
+                }
+              },
+              "offset-pose": {
+                "$ref": "#/components/schemas/pose-1"
+              },
+              "bar": {
+                "$ref": "#/components/schemas/bar-1"
+              },
+              "elevation": {
+                "$ref": "#/components/schemas/elevation-1"
+              },
+              "deep-lane-setting": {
+                "$ref": "#/components/schemas/deep-lane-setting-1"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "utility-position-type": {
+        "enum": [
+          "Cart",
+          "Shelf",
+          "PalletFloor",
+          "ElevatedVlPallet",
+          "ElevatedBarPallet",
+          "ElevatedPalletRack",
+          "DeepLane"
+        ],
+        "type": "string"
+      },
+      "zone": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "map-id": {
+            "type": "string"
+          },
+          "polygon": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/point"
+            }
+          },
+          "type": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/zone-event"
+            },
+            "nullable": true
+          },
+          "lock-zone-state": {
+            "$ref": "#/components/schemas/lock-zone-state"
+          }
+        },
+        "additionalProperties": false
+      },
+      "zone-1": {
+        "required": [
+          "geojson",
+          "map-id",
+          "name",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "map-id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "geojson": {
+            "$ref": "#/components/schemas/geo-json"
+          },
+          "type": {
+            "$ref": "#/components/schemas/zone-type"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/zone-event"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "zone-event": {
+        "required": [
+          "address",
+          "event",
+          "name",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "event": {
+            "type": "object",
+            "additionalProperties": { }
+          },
+          "type": {
+            "$ref": "#/components/schemas/zone-event-type"
+          },
+          "address": {
+            "$ref": "#/components/schemas/zone-event-address"
+          }
+        },
+        "additionalProperties": false
+      },
+      "zone-event-address": {
+        "enum": [
+          "Integration",
+          "TopModule"
+        ],
+        "type": "string"
+      },
+      "zone-event-type": {
+        "enum": [
+          "Entry",
+          "Exit"
+        ],
+        "type": "string"
+      },
+      "zone-request": {
+        "required": [
+          "zone"
+        ],
+        "type": "object",
+        "properties": {
+          "zone": {
+            "$ref": "#/components/schemas/zone-1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "zone-type": {
+        "enum": [
+          "IntegrationZone",
+          "LockZone"
+        ],
+        "type": "string"
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "name": "x-api-key",
+        "in": "header"
+      }
+    }
+  },
+  "security": [
+    {
+      "ApiKeyAuth": [ ]
+    }
+  ],
+  "tags": [
+    {
+      "name": "group",
+      "description": "Manage groups in MiR Fleet."
+    },
+    {
+      "name": "missions",
+      "description": "Import/export missions from MiR Fleet."
+    },
+    {
+      "name": "order-log",
+      "description": "Download order log."
+    },
+    {
+      "name": "robot",
+      "description": "Robot management endpoints."
+    },
+    {
+      "name": "serial-order",
+      "description": "Start or update serial-orders on MiR Fleet."
+    },
+    {
+      "name": "site",
+      "description": "Retrieve or update maps, positions, and missions."
+    },
+    {
+      "name": "subscription",
+      "description": "Set up subscriptions to events. Set up a webhook client to monitor the events you subscribe and unsubscribe to."
+    },
+    {
+      "name": "system",
+      "description": "Error logs, evacuations, and system information."
+    },
+    {
+      "name": "top-module",
+      "description": "Trigger top module events."
+    }
+  ]
+}
