@@ -29,15 +29,12 @@ schemas. Everything below that references "Stripe-style" means one of these.
       target the selected software version's path prefix. Acceptance: copy
       any sample, run it unmodified, get the same response the console shows.
 
-- [x] **Stripe-style API reference, per software version.** A reference
-      section generated in-browser from the selected version's swagger:
-      operations grouped by resource, expandable per-operation blocks with
-      path-parameter and body-attribute tables (types, required flags,
-      nested children), documented response codes, and a code sample in the
-      active language. The existing version picker switches the entire
-      reference — diffing 2.x vs 3.x docs is two clicks. Acceptance: every
-      operation in the served swagger appears; samples honor the selected
-      version; works on the public demo and against a local `mir-emulator`.
+- [x] ~~Stripe-style API reference, per software version.~~ **Shipped,
+      then deliberately removed** (2026-07-04): rebuilding reference docs
+      duplicates official source material. The console now links to MiR's
+      official docs instead — the public Fleet Swagger UI and the portal's
+      REST API files page — and keeps only interface/sim features (console,
+      catalog, samples). If MiR ever unpublishes the docs, revisit.
 
 ## Next
 
@@ -69,15 +66,23 @@ schemas. Everything below that references "Stripe-style" means one of these.
 
 ## Later
 
+*(MiR Fleet emulation graduated from this list — see above.)*
+
 - [ ] **WebSocket bridge.** Real robots expose a ROS-bridge WebSocket next
       to REST; even a minimal `/status` push channel lets reactive UIs be
       tested. Gate: needs a persistent-connection deploy target (the Lambda
       demo can't hold sockets; local/container mode can).
 
-- [ ] **MiR Fleet API emulation.** Fleet is a separate API family (its PDFs
-      are deliberately excluded from the robot scrape). Most serious
-      customers code against Fleet: robot assignment, mission dispatch
-      across robots. Would enter the registry as its own spec family.
+- [x] **MiR Fleet API emulation.** Shipped 2026-07-04: fleet family in the
+      registry (official OpenAPI 3, 1.5.0/1.4.2/1.3.1, public URLs — no PDF
+      conversion), `mir_emulator.fleet` with x-api-key auth and embedded
+      robot emulators driven over their own REST API, serial-order dispatch
+      into real robot mission queues, session isolation composing across
+      both layers, `/fleet/<version>/` dispatcher mounts, `--fleet-version`
+      CLI, credential-free scraper half. Remaining fleet follow-ups: the
+      Top Module and Compatibility APIs (published beside the Integration
+      API), richer order phases (fallback missions, priorities affecting
+      robot choice), and evacuation/zone behaviors.
 
 - [ ] **Generated Python SDK.** The tracked swaggers are machine-readable;
       publish a typed client generated from them (Python first) so emulator
