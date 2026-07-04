@@ -1,124 +1,92 @@
 # Developer-experience roadmap
 
 What integrators building against MiR robots need from this project, in the
-order we intend to ship it. Checked items are done and verified; each item
-carries its acceptance bar so "done" is testable, not vibes.
+order we intend to ship it. Open items carry their acceptance bar so "done"
+is testable, not vibes; shipped items are compressed to one line each at the
+bottom.
 
 North star: [Stripe's API documentation](https://docs.stripe.com/api) — the
-reference bar for developer docs. The features worth stealing, mapped to this
-project: a persistent language switcher with runnable samples per operation,
-a three-pane reference (nav / prose / code) generated from the source of
-truth, versioned docs where the picker switches the *whole* surface, copy
-buttons everywhere, and expandable attribute tables for request/response
-schemas. Everything below that references "Stripe-style" means one of these.
+reference bar for developer experience. Applied here: runnable samples per
+operation with a persistent language switcher, versioned surfaces where the
+picker switches *everything*, and interfaces generated from the source of
+truth rather than hand-maintained.
 
 ## Now
 
-- [x] **Track the newest 4 minor lines of every major release.**
-      3.8.1 / 3.7.2 / 3.6.7 / 3.5.6 (+ pinned 3.5.4 oracle) and
-      2.14.7 / 2.13.5.4 / 2.12.0.4 / 2.10.5.8, scraped from the official
-      portal PDFs. Selection rule lives in `mir_spec_scraper.versions`;
-      the weekly scrape keeps it current.
+- [ ] **Case-study scenarios** (in review, PR #26). Seven self-contained
+      `uv run` scripts replaying published MiR customer deployments against
+      the emulator — together a guided tour of sessions, missions, the queue,
+      faults, registers, metrics, latency shaping, and the Fleet API.
+      Acceptance: each script passes unmodified against a fresh emulator.
 
-- [x] **Multi-language code samples in the console** (cURL, Python,
-      JavaScript, Go, Rust). Stripe-style language tabs on the request
-      mirror: pick a language once, every sample on the page follows, choice
-      persists across visits. Samples are complete programs — they derive
-      MiR's `Basic BASE64(user:SHA-256(password))` token in-language, carry
-      the `X-MiR-Session` header when a virtual robot session is active, and
-      target the selected software version's path prefix. Acceptance: copy
-      any sample, run it unmodified, get the same response the console shows.
+- [ ] **Scenario CI lane.** Once #26 lands, run the scenarios in CI as an
+      end-to-end smoke of the whole surface — they exercise paths unit tests
+      don't compose. Acceptance: a CI job boots the robot and fleet
+      emulators, runs all scenarios, and fails the build on any non-zero
+      exit.
 
-- [x] ~~Stripe-style API reference, per software version.~~ **Shipped,
-      then deliberately removed** (2026-07-04): rebuilding reference docs
-      duplicates official source material. The console now links to MiR's
-      official docs instead — the public Fleet Swagger UI and the portal's
-      REST API files page — and keeps only interface/sim features (console,
-      catalog, samples). If MiR ever unpublishes the docs, revisit.
+- [ ] **Publish `mir-client` to PyPI.** The SDK is generated, gated, and
+      contract-tested, but only installable from a checkout; `release.yml`
+      already builds attested wheels and has a publish step waiting on
+      credentials. Prefer PyPI trusted publishing (OIDC) over a long-lived
+      `PYPI_API_TOKEN`, per the note in the workflow. Acceptance:
+      `pip install mir-client` in a clean venv, drive a local emulator with
+      `robot_client()`.
 
 ## Next
 
-- [x] **Version-diff surface.** Shipped 2026-07-04:
-      `GET /_emulator/diff?from=2.14.7&to=3.8.1` on the dispatcher (works
-      for fleet pairs too; cross-family refused), plus a "Compare versions"
-      console view. Signature granularity deliberately matches the scrape
-      oracle (type/format/enum/properties; PDF-lossy keys ignored), so the
-      acceptance invariant holds: 3.5.4 → 3.5.6 reports structurally
-      identical, verified in tests and in the browser.
+- [ ] **Richer fleet order phases.** Fallback missions, priorities that
+      influence robot choice, and evacuation/zone behaviors — the open half
+      of the fleet emulation work. Source of truth first: behavior must be
+      pinned by the official Fleet docs, not guessed. Acceptance: an order
+      whose primary mission faults falls back as documented, and a
+      higher-priority order observably preempts robot selection.
 
-- [x] **Fault injection.** Shipped 2026-07-04: `GET/PUT/DELETE
-      /_emulator/faults` per robot (session-isolated) with emergency_stop,
-      error, localization_lost, battery_critical, blocked_path. Holding
-      faults freeze the mission simulation and release it exactly where it
-      stopped; resettable faults clear via the documented `PUT /status
-      {"clear_error": true}`; the fleet reports faulted robots with official
-      `robot-end-state` enum values ("Emergency Stop", "Error"). State ids
-      beyond the writable {3,4,11} are pinned by MiR's own ROS message table
-      (mir_msgs/RobotState.msg) — not guessed. mission_failure landed as a
-      follow-up: running and queued missions abort at the sim instant
-      (finished ones keep their history), the robot errors until
-      clear_error, and the fleet reports the orders as Aborted.
+- [ ] **Connection-drop injection.** The missing fault class from latency
+      shaping: an ASGI app can't portably sever a socket mid-response, so
+      this needs a raw-transport shim in front of uvicorn. Acceptance: a
+      `connection_drop` fault makes an in-flight request die with a
+      transport error (not an HTTP status), and clients observe the same
+      failure shape a rebooting robot produces.
 
-- [x] **Mission lifecycle realism.** Already satisfied by the mission
-      simulation shipped with per-session statefulness, verified against the
-      acceptance bar by existing tests: Pending → Executing → Done with
-      spec-shaped timestamps (`test_queue_entry_timestamps_follow_the_lifecycle`),
-      position interpolation along the patrol loop while executing
-      (`test_battery_drains_and_position_moves_while_executing`),
-      `--mission-duration` for configurable durations, battery drain tied to
-      executed seconds. Deeper path realism (waypoints from site maps) can
-      ride on the fleet site model later if needed.
-
-- [x] **Latency shaping.** Shipped 2026-07-04: `X-MiR-Latency: <ms>`
-      per-request header (robot and fleet; applied after auth so 401s stay
-      fast; capped at 10 s) plus a `--latency-ms` baseline flag. Acceptance
-      met: shaped requests observably delay, defaults stay instant.
-      Deferred: true connection *drops* — an ASGI app cannot portably sever
-      a socket mid-response; needs a raw-transport shim if we want it.
+- [ ] **Path realism from site maps.** Positions currently interpolate
+      along a canned patrol loop; ride the fleet site model so executing
+      missions move along map-plausible waypoints. Acceptance: a mission
+      between two named positions reports coordinates that traverse the
+      site map's path, not a straight line.
 
 ## Later
 
-*(MiR Fleet emulation graduated from this list — see above.)*
+- [ ] **ROS-bridge protocol emulation.** Faithful rosbridge
+      subscribe/publish on :9090 plus fleet event streams — the fidelity
+      projects deferred from the WebSocket status push, each needing its
+      own primary-source work before any code.
 
-- [x] **WebSocket status push.** Shipped 2026-07-04 for local/container
-      mode: `/_emulator/ws/status` streams the /status document on an
-      interval (token or header auth, session-isolated, emulator-namespaced
-      so no MiR surface is invented). Optional extra `mir-emulator[ws]`
-      pulls the uvicorn WS protocol; the Lambda demo still can't hold
-      sockets, as gated. Deferred: faithful ROS-bridge protocol (rosbridge
-      subscribe/publish on :9090) and fleet event streams — bigger fidelity
-      projects with their own primary-source work.
+- [ ] **Reference docs contingency.** We deliberately deleted our
+      Stripe-style reference in favor of linking MiR's official docs. If
+      MiR ever unpublishes the Fleet Swagger UI or the portal's REST API
+      files, resurrect ours from the scraped registry.
 
-- [x] **MiR Fleet API emulation.** Shipped 2026-07-04: fleet family in the
-      registry (official OpenAPI 3, 1.5.0/1.4.2/1.3.1, public URLs — no PDF
-      conversion), `mir_emulator.fleet` with x-api-key auth and embedded
-      robot emulators driven over their own REST API, serial-order dispatch
-      into real robot mission queues, session isolation composing across
-      both layers, `/fleet/<version>/` dispatcher mounts, `--fleet-version`
-      CLI, credential-free scraper half. The Top Module and Compatibility
-      APIs landed as a follow-up (2026-07-04): all three official documents
-      per version are tracked, served verbatim at their CDN filenames, and
-      emulated on ONE fleet app sharing state/sessions/robots — the
-      Compatibility API's growing surface (18→34 paths across 1.3.1→1.5.0)
-      stays version-faithful. Still open: richer order phases (fallback
-      missions, priorities affecting robot choice) and evacuation/zone
-      behaviors.
+## Shipped
 
-- [x] **Generated Python SDK.** Shipped 2026-07-04: `packages/mir-client`
-      — typed clients for the newest robot API (`mir_client.robot`, from the
-      swagger via our OpenAPI 3 converter) and the Fleet Integration API
-      (`mir_client.fleet`), generated by openapi-python-client (dev-group
-      dep only) via `scripts/generate_client.py`. `robot_client()` /
-      `fleet_client()` constructors wire MiR's auth schemes. The gate holds:
-      `--check` regenerates into a temp dir and CI's integration lane fails
-      on any drift from the registry (generation pinned deterministic via
-      --isolated ruff post-hooks); the generated dirs are lint-excluded and
-      never hand-edited. Contract tests drive the SDK against the emulator
-      over in-process ASGI with typed models.
-
-- [x] **Scenario record/replay.** Shipped 2026-07-04: `GET/PUT/DELETE
-      /_emulator/recorder` per virtual robot (robot and fleet), and
-      `mir-emulator --replay scenario.json` replays against a fresh emulator.
-      Acceptance exceeded: replay re-freezes the simulation clock to each
-      recorded instant, so sessions reproduce **fully byte-identical** —
-      timestamps included — and any divergence is a reported regression.
+- 2026-07-04 — **Scenario record/replay**: `/_emulator/recorder` +
+  `--replay`, byte-identical replays including timestamps.
+- 2026-07-04 — **Generated Python SDK**: `packages/mir-client`, drift-gated
+  in CI, contract-tested against the emulator.
+- 2026-07-04 — **MiR Fleet API emulation**: 1.5.0/1.4.2/1.3.1, all three
+  official documents per version, embedded robots, session isolation.
+- 2026-07-04 — **WebSocket status push**: `/_emulator/ws/status`
+  (local/container; Lambda demo can't hold sockets).
+- 2026-07-04 — **Latency shaping**: `X-MiR-Latency` header + `--latency-ms`.
+- 2026-07-04 — **Fault injection**: `/_emulator/faults`, holding and
+  resettable faults, official end-state enums, mission_failure.
+- 2026-07-04 — **Version-diff surface**: `/_emulator/diff` + console
+  compare view, 3.5.4→3.5.6 structurally identical invariant.
+- **Mission lifecycle realism**: Pending → Executing → Done with spec-shaped
+  timestamps, interpolated motion, battery drain.
+- **Multi-language console samples**: cURL/Python/JS/Go/Rust, runnable
+  unmodified, persistent language choice.
+- **Version tracking**: newest 4 minor lines per major (robot) + fleet
+  versions, kept current by the weekly scrape.
+- 2026-07-04 — ~~Stripe-style API reference~~: shipped, then deliberately
+  removed — official MiR docs are linked instead; see contingency above.
