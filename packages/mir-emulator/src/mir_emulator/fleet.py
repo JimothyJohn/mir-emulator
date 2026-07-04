@@ -297,6 +297,18 @@ class FleetEmulator(Emulator):
         if robot is None:
             return 400, _error_body(400, "Unknown robot-id")
 
+        # Validate every phase against the robot BEFORE enqueueing anything —
+        # a rejected order must be atomic, never a partial dispatch.
+        for phase in phases:
+            mission_id = phase.get("mission-id")
+            code, _mission = await self._robot_call(
+                robot, "GET", f"/missions/{mission_id}", ctx.session_id
+            )
+            if code != 200:
+                return 400, _error_body(
+                    400, "Robot rejected a phase: mission-id does not match an existing mission"
+                )
+
         order_ids: list[str] = []
         stored_phases: list[dict] = []
         for phase in phases:

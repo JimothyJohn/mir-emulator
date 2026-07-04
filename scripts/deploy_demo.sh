@@ -139,8 +139,12 @@ check 200 "${API_URL}/healthz"
 check 200 "${API_URL}/"
 check 200 "${API_URL}/console"
 check 401 "${API_URL}/latest/api/v2.0.0/status"
+check 401 "${API_URL}/fleet/latest/api/v1/robots"
 for v in $(curl -s "${API_URL}/healthz" | python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin)["versions"]))'); do
     check 200 "${API_URL}/${v}/api/v2.0.0/status" -H "Authorization: Basic ${AUTH_TOKEN}"
+done
+for v in $(curl -s "${API_URL}/healthz" | python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin).get("fleet_versions", [])))'); do
+    check 200 "${API_URL}/fleet/${v}/api/v1/robots" -H "x-api-key: distributor"
 done
 
 if [[ -n "$DOMAIN_NAME" ]]; then

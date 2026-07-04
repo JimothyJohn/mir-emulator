@@ -325,3 +325,145 @@ def test_custom_api_key_replaces_the_default():
     client = TestClient(create_fleet_app("1.5.0", api_key="s3cret"))
     assert client.get("/api/v1/robots", headers=KEY).status_code == 401
     assert client.get("/api/v1/robots", headers={"x-api-key": "s3cret"}).status_code == 200
+
+
+# ---- edge cases: atomicity, cross-generation fleets, adversarial inputs --------
+
+
+def test_failed_multiphase_dispatch_enqueues_nothing(clock, app, fleet):
+    # Atomicity: if any phase is invalid, NO mission may reach a robot.
+    mission = site_mission_id(fleet)
+    response = fleet.post(
+        "/api/v1/serial-order",
+        headers=KEY,
+        json={
+            "serial-order": {
+                "phases": [
+                    {"mission-id": mission},
+                    {"mission-id": "emulated-ffff-ffff-ffff-000000000000"},
+                ]
+            }
+        },
+    )
+    assert response.status_code == 400
+    for i in range(2):
+        queue = robot_client(app, i).get("/api/v2.0.0/mission_queue", headers=ROBOT_AUTH)
+        assert queue.json() == [], "a failed order must not leave partial dispatch behind"
+    assert fleet.get("/api/v1/order", headers=KEY).json() == []
+
+
+def test_multiphase_order_runs_fifo_on_one_robot(clock, app, fleet):
+    mission = site_mission_id(fleet)
+    robot_id = fleet.get("/api/v1/robots", headers=KEY).json()["robots"][0]["robot-id"]
+    response = fleet.post(
+        "/api/v1/serial-order",
+        headers=KEY,
+        json={
+            "serial-order": {
+                "robot-id": robot_id,
+                "phases": [{"mission-id": mission}, {"mission-id": mission}],
+            }
+        },
+    )
+    assert response.status_code == 201
+    clock.tick(2.0)  # first executing, second pending (FIFO, one robot)
+    statuses = sorted(o["order-status"] for o in fleet.get("/api/v1/order", headers=KEY).json())
+    assert statuses == ["Executing", "Pending"]
+    clock.tick(10.0)  # first finished, second executing
+    statuses = sorted(o["order-status"] for o in fleet.get("/api/v1/order", headers=KEY).json())
+    assert statuses == ["Executing", "Finished"]
+
+
+def test_round_robin_spreads_orders_across_robots(clock, app, fleet):
+    mission = site_mission_id(fleet)
+    assert post_order(fleet, mission).status_code == 201
+    assert post_order(fleet, mission).status_code == 201
+    for i in range(2):
+        queue = robot_client(app, i).get("/api/v2.0.0/mission_queue", headers=ROBOT_AUTH)
+        assert len(queue.json()) == 1, f"robot {i} should hold exactly one mission"
+
+
+def test_cross_generation_fleet_dispatches_to_2x_robots(clock):
+    # A fleet managing one 3.x and one 2.x robot — both must accept orders.
+    app = create_fleet_app("1.5.0", robot_versions=("3.8.1", "2.10.5.8"))
+    fleet = TestClient(app)
+    robots = fleet.get("/api/v1/robots", headers=KEY).json()["robots"]
+    assert [r["software-version"] for r in robots] == ["3.8.1", "2.10.5.8"]
+    mission = site_mission_id(fleet)
+    for robot in robots:
+        response = post_order(fleet, mission, **{"robot-id": robot["robot-id"]})
+        assert response.status_code == 201, robot["software-version"]
+    for i in range(2):
+        queue = robot_client(app, i).get("/api/v2.0.0/mission_queue", headers=ROBOT_AUTH)
+        assert len(queue.json()) == 1
+
+
+def test_robot_side_queue_clear_degrades_order_to_waiting(clock, app, fleet):
+    # An operator wiping the robot's queue directly must not crash the fleet
+    # view — the order degrades to Waiting (no robot truth to derive from).
+    mission = site_mission_id(fleet)
+    post_order(fleet, mission)
+    robot_client(app, 0).delete("/api/v2.0.0/mission_queue", headers=ROBOT_AUTH)
+    orders = fleet.get("/api/v1/order", headers=KEY).json()
+    assert orders[0]["order-status"] == "Waiting"
+
+
+def test_mission_created_on_robot_appears_in_site_missions(clock, app, fleet):
+    robot = robot_client(app, 0)
+    created = robot.post(
+        "/api/v2.0.0/missions",
+        headers=ROBOT_AUTH,
+        json={"name": "hot-swap-mission", "group_id": "emulated"},
+    )
+    assert created.status_code in (200, 201)
+    names = {m["name"] for m in fleet.get("/api/v1/site/mission", headers=KEY).json()["missions"]}
+    assert "hot-swap-mission" in names
+
+
+def test_unknown_order_and_serial_order_are_404(fleet):
+    assert fleet.get("/api/v1/order/nope", headers=KEY).status_code == 404
+    assert fleet.get("/api/v1/serial-order/nope", headers=KEY).status_code == 404
+    assert fleet.delete("/api/v1/serial-order/nope", headers=KEY).status_code == 404
+
+
+def test_hostile_api_keys_fail_closed(fleet):
+    # Only transmissible header values reach the server; non-ASCII and control
+    # bytes are already refused at the HTTP layer. What does arrive must be
+    # compared exactly (no strip, no prefix match, no case folding).
+    hostiles = ("distributor" * 500, "distributor ", " distributor", "Distributor", "distributo")
+    for hostile in hostiles:
+        response = fleet.get("/api/v1/robots", headers={"x-api-key": hostile})
+        assert response.status_code == 401, repr(hostile)
+
+
+def test_oversized_body_is_rejected(fleet):
+    huge = '{"serial-order": {"phases": [{"mission-id": "' + "a" * (2 * 1024 * 1024) + '"}]}}'
+    response = fleet.post(
+        "/api/v1/serial-order",
+        headers={**KEY, "Content-Type": "application/json"},
+        content=huge,
+    )
+    assert response.status_code == 400
+
+
+def test_sessions_do_not_leak_under_concurrency(clock, fleet):
+    mission = site_mission_id(fleet)
+    errors: list[str] = []
+
+    def crew(name: str) -> None:
+        headers = {**KEY, "X-MiR-Session": name}
+        for n in range(3):
+            r = post_order(fleet, mission, headers=headers, id=f"{name}-{n}")
+            if r.status_code != 201:
+                errors.append(f"{name}-{n}: {r.status_code}")
+        seen = fleet.get("/api/v1/order", headers=headers).json()
+        if len(seen) != 3 or any(not o["order-id"] for o in seen):
+            errors.append(f"{name}: saw {len(seen)} orders")
+
+    threads = [threading.Thread(target=crew, args=(f"crew-{i}",)) for i in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    assert fleet.get("/api/v1/order", headers=KEY).json() == []  # default robot untouched

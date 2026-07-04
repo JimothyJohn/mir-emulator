@@ -15,7 +15,7 @@ machine-regular). This module reverses that rendering:
   ``required``/``optional`` flag lines.
 
 Fidelity is validated against MiR's official 3.5.4 swagger.json (the one
-non-PDF artifact we have) — see tests and scripts/validate_conversion.py.
+non-PDF artifact we have) — see tests and mir_spec_scraper.validate.compare.
 """
 
 from __future__ import annotations
