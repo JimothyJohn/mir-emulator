@@ -50,9 +50,13 @@ POSITION_HOME_X = 5.0
 POSITION_HOME_Y = 5.0
 
 
-def _now() -> float:
-    """Wall clock, in one place so tests can freeze it."""
+def _wall_clock() -> float:
     return time.time()
+
+
+# The one clock everything reads. A plain reassignable attribute on purpose:
+# frozen-clock tests and scenario replay (record.py) substitute it.
+_now: Callable[[], float] = _wall_clock
 
 
 # Values overlaid onto the schema-derived /status example. Only keys that

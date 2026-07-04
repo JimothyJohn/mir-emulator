@@ -64,6 +64,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Seconds a queued mission spends Executing before it is Done (default: 10)",
     )
     parser.add_argument(
+        "--replay",
+        default=None,
+        metavar="SCENARIO.json",
+        help=(
+            "Replay a scenario recorded via /_emulator/recorder against a fresh "
+            "emulator and exit non-zero on any mismatch"
+        ),
+    )
+    parser.add_argument(
         "--export",
         choices=("swagger2", "openapi3"),
         default=None,
@@ -85,6 +94,23 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.replay:
+        import json
+
+        from mir_emulator.record import replay
+
+        with open(args.replay) as fh:
+            scenario = json.load(fh)
+        problems = replay(scenario)
+        label = f"{scenario.get('family', 'robot')} {scenario.get('version', '?')}"
+        if problems:
+            for problem in problems:
+                print(problem)
+            print(f"replay: {len(problems)} mismatches against {label}")
+            return 1
+        print(f"replay: {len(scenario.get('steps', []))} steps reproduced exactly ({label})")
+        return 0
 
     if args.export:
         import json

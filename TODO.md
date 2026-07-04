@@ -99,7 +99,9 @@ schemas. Everything below that references "Stripe-style" means one of these.
       + SDK is a complete dev kit. Gate: generation must be reproducible in
       CI from the registry, never hand-edited.
 
-- [ ] **Scenario record/replay.** Capture a request sequence against the
-      emulator and replay it as a regression test — pairs with per-session
-      virtual robots. Acceptance: a recorded session replays byte-identical
-      (modulo timestamps) against the same version.
+- [x] **Scenario record/replay.** Shipped 2026-07-04: `GET/PUT/DELETE
+      /_emulator/recorder` per virtual robot (robot and fleet), and
+      `mir-emulator --replay scenario.json` replays against a fresh emulator.
+      Acceptance exceeded: replay re-freezes the simulation clock to each
+      recorded instant, so sessions reproduce **fully byte-identical** —
+      timestamps included — and any divergence is a reported regression.

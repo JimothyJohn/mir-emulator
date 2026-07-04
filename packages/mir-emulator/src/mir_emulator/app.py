@@ -42,6 +42,12 @@ from mir_emulator.behaviors import (
 )
 from mir_emulator.examples import example_from_schema, overlay_compatible
 from mir_emulator.openapi3 import to_openapi3
+from mir_emulator.record import (
+    clear_recording,
+    record_step,
+    scenario_doc,
+    set_recording,
+)
 from mir_emulator.spec import Operation, Spec, load_spec
 from mir_emulator.state import StateStore
 
@@ -281,7 +287,18 @@ class Emulator:
         override = self._override_for(op)
         result = await override(ctx) if override else self._generic(ctx)
         status, payload, *rest = result
-        return _respond(status, payload, rest[0] if rest else "application/json")
+        media_type = rest[0] if rest else "application/json"
+        record_step(
+            state,
+            method=op.method,
+            path=request.scope.get("path", op.path),
+            query=request.scope.get("query_string", b"").decode("latin-1"),
+            body=body,
+            status=status,
+            payload=payload,
+            media_type=media_type,
+        )
+        return _respond(status, payload, media_type)
 
     def _generic(self, ctx: RequestCtx) -> tuple[int, Any]:
         op = ctx.op
@@ -527,6 +544,33 @@ def create_app(
             set_faults(state, names)
         return _respond(200, faults_doc(state))
 
+    async def recorder_endpoint(request: Request) -> Response:
+        """Emulator-only scenario recorder (/_emulator/recorder)."""
+        if not emulator._authorized(request):
+            return _respond(401, _error_body(401, "Not authorized"))
+        session_id = request.headers.get(SESSION_HEADER, "")
+        if session_id and not SESSION_ID_RE.match(session_id):
+            return _respond(
+                400, _error_body(400, "Invalid X-MiR-Session: 1-64 chars from [A-Za-z0-9._-]")
+            )
+        state = emulator.state_for(session_id)
+        if request.method == "DELETE":
+            clear_recording(state)
+        elif request.method == "PUT":
+            raw = await request.body()
+            if len(raw) > MAX_BODY_BYTES:
+                return _respond(400, _error_body(400, "Payload too large"))
+            try:
+                body = json.loads(raw) if raw else {}
+            except ValueError:
+                return _respond(400, _error_body(400, "Invalid JSON"))
+            if not isinstance(body, dict) or not isinstance(body.get("recording"), bool):
+                return _respond(400, _error_body(400, 'Body must be {"recording": true|false}'))
+            set_recording(state, body["recording"])
+        doc = scenario_doc(state, version=version, family="robot")
+        doc["replay"] = "save this document; mir-emulator --replay <file> re-runs it"
+        return _respond(200, doc)
+
     async def not_found(_request: Request, _exc: Exception) -> JSONResponse:
         return JSONResponse(_error_body(404, "Not found"), status_code=404)
 
@@ -547,6 +591,7 @@ def create_app(
             Route("/swagger.json", swagger_json),
             Route("/openapi.json", openapi_json),
             Route("/_emulator/faults", faults_endpoint, methods=["GET", "PUT", "DELETE"]),
+            Route("/_emulator/recorder", recorder_endpoint, methods=["GET", "PUT", "DELETE"]),
             *routes,
         ],
         exception_handlers={404: not_found},
