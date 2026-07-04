@@ -136,7 +136,7 @@ def test_network_failure_keeps_existing_coverage(specs_dir):
 
 
 def _client_with_extras(
-    published: dict[str, bytes], extras: frozenset[str] = frozenset()
+    published: dict[str, bytes], extras: "set[str] | frozenset[str]" = frozenset()
 ) -> httpx.Client:
     def handler(request: httpx.Request) -> httpx.Response:
         url = str(request.url)
