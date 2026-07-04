@@ -36,7 +36,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from mir_emulator import auth, registry
+from mir_emulator import auth, behaviors, registry
 from mir_emulator.app import (
     Emulator,
     _error_body,
@@ -46,6 +46,7 @@ from mir_emulator.app import (
 )
 from mir_emulator.behaviors import MISSION_DURATION_S, RequestCtx
 from mir_emulator.examples import example_from_schema, overlay_compatible
+from mir_emulator.record import clear_recording, scenario_doc, set_recording
 from mir_emulator.spec import Operation, load_spec
 
 DEFAULT_API_KEY = "distributor"
@@ -58,9 +59,21 @@ ORDER_STATUS_BY_ROBOT_STATE = {
     "Done": "Finished",
 }
 
+# Robot /status state_text → the fleet spec's official robot-end-state enum.
+END_STATE_BY_STATE_TEXT = {
+    "Ready": "Idle",
+    "Executing": "Operational",
+    "Pause": "Paused",
+    "Manualcontrol": "Manual Control",
+    "EmergencyStop": "Emergency Stop",
+    "Error": "Error",
+}
+
 
 def _iso_now() -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
+    # Via behaviors._now so frozen-clock tests and scenario replay reproduce
+    # fleet timestamps exactly.
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(behaviors._now()))
 
 
 @dataclass(frozen=True)
@@ -260,8 +273,21 @@ class FleetEmulator(Emulator):
                             "orientation": position.get("orientation"),
                         },
                     )
-            executing = status.get("state_text") == "Executing"
-            doc["robot-end-state"] = "Operational" if executing else "Idle"
+            doc["robot-end-state"] = END_STATE_BY_STATE_TEXT.get(
+                str(status.get("state_text")), "Idle"
+            )
+            errors = status.get("errors")
+            if isinstance(errors, list):
+                doc["errors"] = [
+                    {
+                        "code": int(e.get("code", 0)),
+                        "description": str(e.get("description", "")),
+                        "module": str(e.get("module", "")),
+                        "timestamp": _iso_now(),
+                    }
+                    for e in errors
+                    if isinstance(e, dict) and e.get("module") != "emulated"
+                ]
         patch = ctx.state.singleton(f"/fleet_robot/{robot.robot_id}", {})
         if patch:
             overlay_compatible(doc, patch)
@@ -557,6 +583,38 @@ def create_fleet_app(
             }
         )
 
+    async def recorder_endpoint(request: Request) -> JSONResponse:
+        """Same recorder as the robot apps, scoped to this fleet's sessions."""
+        import json as _json
+
+        from mir_emulator.app import MAX_BODY_BYTES, SESSION_HEADER, SESSION_ID_RE
+
+        def error(status: int, human: str) -> JSONResponse:
+            return JSONResponse(_error_body(status, human), status_code=status)
+
+        if not emulator._authorized(request):
+            return error(401, "Not authorized")
+        session_id = request.headers.get(SESSION_HEADER, "")
+        if session_id and not SESSION_ID_RE.match(session_id):
+            return error(400, "Invalid X-MiR-Session: 1-64 chars from [A-Za-z0-9._-]")
+        state = emulator.state_for(session_id)
+        if request.method == "DELETE":
+            clear_recording(state)
+        elif request.method == "PUT":
+            raw = await request.body()
+            if len(raw) > MAX_BODY_BYTES:
+                return error(400, "Payload too large")
+            try:
+                body = _json.loads(raw) if raw else {}
+            except ValueError:
+                return error(400, "Invalid JSON")
+            if not isinstance(body, dict) or not isinstance(body.get("recording"), bool):
+                return error(400, 'Body must be {"recording": true|false}')
+            set_recording(state, body["recording"])
+        doc = scenario_doc(state, version=version, family="fleet")
+        doc["replay"] = "save this document; mir-emulator --replay <file> re-runs it"
+        return JSONResponse(doc)
+
     async def not_found(_request: Request, _exc: Exception) -> JSONResponse:
         return JSONResponse(_error_body(404, "Not found"), status_code=404)
 
@@ -576,6 +634,7 @@ def create_fleet_app(
             Route("/", index),
             Route("/openapi.json", spec_json),
             Route("/swagger.json", spec_json),  # parity with the robot apps
+            Route("/_emulator/recorder", recorder_endpoint, methods=["GET", "PUT", "DELETE"]),
             *routes,
         ],
         exception_handlers={404: not_found},

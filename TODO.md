@@ -38,40 +38,54 @@ schemas. Everything below that references "Stripe-style" means one of these.
 
 ## Next
 
-- [ ] **Version-diff surface.** `GET /_emulator/diff?from=2.14.7&to=3.8.1`
-      returning added/removed/changed operations and definitions, plus a
-      console view. The scraper's `diff.py` already computes this at scrape
-      time; expose it at runtime so integrators can preflight a fleet
-      upgrade. Acceptance: diff of the pinned 3.5.4 against 3.5.6 reports no
-      structural changes (the converter-oracle invariant, now user-visible).
+- [x] **Version-diff surface.** Shipped 2026-07-04:
+      `GET /_emulator/diff?from=2.14.7&to=3.8.1` on the dispatcher (works
+      for fleet pairs too; cross-family refused), plus a "Compare versions"
+      console view. Signature granularity deliberately matches the scrape
+      oracle (type/format/enum/properties; PDF-lossy keys ignored), so the
+      acceptance invariant holds: 3.5.4 → 3.5.6 reports structurally
+      identical, verified in tests and in the browser.
 
-- [ ] **Fault injection.** A `/_emulator/faults` control surface (and/or
-      scenario file) that drives the robot into the states integrators must
-      handle: emergency stop, localization lost, battery critical, blocked
-      path, mission failure. Documented error payloads matching the spec's
-      400/404/409 shapes. Acceptance: each fault flips `/status` state_id and
-      errors[] the way the real robot documents, and clears on demand.
+- [x] **Fault injection.** Shipped 2026-07-04: `GET/PUT/DELETE
+      /_emulator/faults` per robot (session-isolated) with emergency_stop,
+      error, localization_lost, battery_critical, blocked_path. Holding
+      faults freeze the mission simulation and release it exactly where it
+      stopped; resettable faults clear via the documented `PUT /status
+      {"clear_error": true}`; the fleet reports faulted robots with official
+      `robot-end-state` enum values ("Emergency Stop", "Error"). State ids
+      beyond the writable {3,4,11} are pinned by MiR's own ROS message table
+      (mir_msgs/RobotState.msg) — not guessed. Follow-up: mission_failure
+      (needs abort semantics in the queue timeline).
 
-- [ ] **Mission lifecycle realism, deepened.** Time-based mission
-      progression with position interpolation along a path, configurable
-      durations, battery drain tied to motion. Builds on the per-session
-      statefulness that already exists. Acceptance: enqueue → poll shows
-      Pending → Executing → Done with plausible intermediate positions.
+- [x] **Mission lifecycle realism.** Already satisfied by the mission
+      simulation shipped with per-session statefulness, verified against the
+      acceptance bar by existing tests: Pending → Executing → Done with
+      spec-shaped timestamps (`test_queue_entry_timestamps_follow_the_lifecycle`),
+      position interpolation along the patrol loop while executing
+      (`test_battery_drains_and_position_moves_while_executing`),
+      `--mission-duration` for configurable durations, battery drain tied to
+      executed seconds. Deeper path realism (waypoints from site maps) can
+      ride on the fleet site model later if needed.
 
-- [ ] **Latency and network shaping.** Configurable response delay, jitter,
-      and connection drops (`X-MiR-Latency` header or emulator flag) so
-      timeout and retry paths can be tested. Robots live on factory Wi-Fi;
-      the happy path is not the interesting path. Acceptance: a request with
-      shaping enabled observably delays/drops; defaults stay instant.
+- [x] **Latency shaping.** Shipped 2026-07-04: `X-MiR-Latency: <ms>`
+      per-request header (robot and fleet; applied after auth so 401s stay
+      fast; capped at 10 s) plus a `--latency-ms` baseline flag. Acceptance
+      met: shaped requests observably delay, defaults stay instant.
+      Deferred: true connection *drops* — an ASGI app cannot portably sever
+      a socket mid-response; needs a raw-transport shim if we want it.
 
 ## Later
 
 *(MiR Fleet emulation graduated from this list — see above.)*
 
-- [ ] **WebSocket bridge.** Real robots expose a ROS-bridge WebSocket next
-      to REST; even a minimal `/status` push channel lets reactive UIs be
-      tested. Gate: needs a persistent-connection deploy target (the Lambda
-      demo can't hold sockets; local/container mode can).
+- [x] **WebSocket status push.** Shipped 2026-07-04 for local/container
+      mode: `/_emulator/ws/status` streams the /status document on an
+      interval (token or header auth, session-isolated, emulator-namespaced
+      so no MiR surface is invented). Optional extra `mir-emulator[ws]`
+      pulls the uvicorn WS protocol; the Lambda demo still can't hold
+      sockets, as gated. Deferred: faithful ROS-bridge protocol (rosbridge
+      subscribe/publish on :9090) and fleet event streams — bigger fidelity
+      projects with their own primary-source work.
 
 - [x] **MiR Fleet API emulation.** Shipped 2026-07-04: fleet family in the
       registry (official OpenAPI 3, 1.5.0/1.4.2/1.3.1, public URLs — no PDF
@@ -89,7 +103,9 @@ schemas. Everything below that references "Stripe-style" means one of these.
       + SDK is a complete dev kit. Gate: generation must be reproducible in
       CI from the registry, never hand-edited.
 
-- [ ] **Scenario record/replay.** Capture a request sequence against the
-      emulator and replay it as a regression test — pairs with per-session
-      virtual robots. Acceptance: a recorded session replays byte-identical
-      (modulo timestamps) against the same version.
+- [x] **Scenario record/replay.** Shipped 2026-07-04: `GET/PUT/DELETE
+      /_emulator/recorder` per virtual robot (robot and fleet), and
+      `mir-emulator --replay scenario.json` replays against a fresh emulator.
+      Acceptance exceeded: replay re-freezes the simulation clock to each
+      recorded instant, so sessions reproduce **fully byte-identical** —
+      timestamps included — and any divergence is a reported regression.

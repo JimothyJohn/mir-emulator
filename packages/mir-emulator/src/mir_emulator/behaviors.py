@@ -50,9 +50,13 @@ POSITION_HOME_X = 5.0
 POSITION_HOME_Y = 5.0
 
 
-def _now() -> float:
-    """Wall clock, in one place so tests can freeze it."""
+def _wall_clock() -> float:
     return time.time()
+
+
+# The one clock everything reads. A plain reassignable attribute on purpose:
+# frozen-clock tests and scenario replay (record.py) substitute it.
+_now: Callable[[], float] = _wall_clock
 
 
 # Values overlaid onto the schema-derived /status example. Only keys that
@@ -91,6 +95,108 @@ class RequestCtx:
     # fleet emulator forwards it on embedded robot calls so session isolation
     # composes across emulators.
     session_id: str = ""
+
+
+# --- fault injection ---------------------------------------------------------
+# Drives the robot into the states integrators must handle. Read-side state
+# ids beyond the writable {3, 4, 11}: the official swagger never enumerates
+# them; they are pinned by MiR's own ROS message table (mir_msgs/RobotState.msg
+# in DFKI-NI/mir_robot, mirrored from real robots: EMERGENCYSTOP=10, ERROR=12)
+# and match the open-rmf fleet adapter's constants. Error codes here are
+# deliberately in a 10xxx emulator range and every description says
+# "(emulated fault)" — they are not official MiR error codes.
+FAULTS: dict[str, dict[str, Any]] = {
+    "emergency_stop": {
+        "description": "Emergency stop pressed: state 10, execution freezes until cleared.",
+        "state_id": 10,
+        "state_text": "EmergencyStop",
+        "holds": True,
+        "error": {
+            "code": 10010,
+            "description": "Emergency stop pressed (emulated fault)",
+            "module": "SafetySystem",
+            "non_resettable": True,
+        },
+    },
+    "error": {
+        "description": "General error: state 12; clears via PUT /status {'clear_error': true}.",
+        "state_id": 12,
+        "state_text": "Error",
+        "holds": True,
+        "resettable": True,
+        "error": {
+            "code": 10012,
+            "description": "General error (emulated fault)",
+            "module": "MissionController",
+            "non_resettable": False,
+        },
+    },
+    "localization_lost": {
+        "description": "Robot lost localization: state 12; clear_error resets it.",
+        "state_id": 12,
+        "state_text": "Error",
+        "holds": True,
+        "resettable": True,
+        "error": {
+            "code": 10013,
+            "description": "Robot is not localized (emulated fault)",
+            "module": "Localization",
+            "non_resettable": False,
+        },
+    },
+    "battery_critical": {
+        "description": "Battery forced to 1.5%; state unchanged.",
+        "battery": 1.5,
+        "error": {
+            "code": 10014,
+            "description": "Battery level critical (emulated fault)",
+            "module": "Battery",
+            "non_resettable": False,
+        },
+    },
+    "blocked_path": {
+        "description": "Path blocked: an active planner error while the robot keeps trying.",
+        "error": {
+            "code": 10015,
+            "description": "Path is blocked (emulated fault)",
+            "module": "Planner",
+            "non_resettable": False,
+        },
+    },
+}
+
+
+def active_faults(state: StateStore) -> list[str]:
+    return [n for n in state.singleton("/faults", {"active": []}).get("active", []) if n in FAULTS]
+
+
+def set_faults(state: StateStore, names: list[str]) -> None:
+    """Replace the active fault set; holding faults freeze the sim clock."""
+    state.merge_singleton("/faults", {"active": [n for n in names if n in FAULTS]})
+    holds = any(FAULTS[n].get("holds") for n in active_faults(state))
+    sim = state.singleton("/mission_sim", {"paused_at": None, "paused_total": 0.0, "hold": None})
+    if holds and sim.get("paused_at") is None:
+        state.merge_singleton("/mission_sim", {"paused_at": _now(), "hold": "fault"})
+    elif not holds and sim.get("hold") == "fault" and sim.get("paused_at") is not None:
+        state.merge_singleton(
+            "/mission_sim",
+            {
+                "paused_at": None,
+                "paused_total": sim.get("paused_total", 0.0) + (_now() - sim["paused_at"]),
+                "hold": None,
+            },
+        )
+
+
+def faults_doc(state: StateStore) -> dict:
+    return {
+        "active": active_faults(state),
+        "available": {name: fault["description"] for name, fault in FAULTS.items()},
+        "clearing": (
+            'PUT {"faults": [...]} replaces the set; DELETE clears everything; '
+            'resettable faults also clear via PUT /status {"clear_error": true}'
+        ),
+    }
 
 
 # --- mission simulation core -------------------------------------------------
@@ -278,6 +384,30 @@ def _status_doc(ctx: RequestCtx) -> dict:
         if "angular" in velocity:
             velocity["angular"] = 0.0
         doc["velocity"] = velocity
+
+    # Injected faults are the outermost layer: they win over user PUTs and
+    # the simulation, exactly like a physical fault would.
+    active = active_faults(ctx.state)
+    if active:
+        if "errors" in doc:
+            doc["errors"] = [dict(FAULTS[name]["error"]) for name in active]
+        for name in active:
+            fault = FAULTS[name]
+            if "battery" in fault:
+                if "battery_percentage" in doc:
+                    doc["battery_percentage"] = fault["battery"]
+                if "battery_time_remaining" in doc:
+                    doc["battery_time_remaining"] = int(
+                        fault["battery"] * BATTERY_SECONDS_PER_PERCENT
+                    )
+        state_fault = next((FAULTS[n] for n in active if "state_id" in FAULTS[n]), None)
+        if state_fault is not None:
+            if "state_id" in doc:
+                doc["state_id"] = state_fault["state_id"]
+            if "state_text" in doc:
+                doc["state_text"] = state_fault["state_text"]
+            if "velocity" in doc and isinstance(doc["velocity"], dict):
+                doc["velocity"] = {k: 0.0 for k in doc["velocity"]}
     return doc
 
 
@@ -338,6 +468,10 @@ async def put_status(ctx: RequestCtx) -> tuple[int, Any]:
             patch["_position_anchor_m"] = _executed_seconds(ctx) * MISSION_SPEED_M_S
     if body.get("clear_error") is True:
         patch["errors"] = []
+        # A real robot's error reset clears resettable faults; an emergency
+        # stop cannot be cleared from the API.
+        remaining = [n for n in active_faults(ctx.state) if not FAULTS[n].get("resettable")]
+        set_faults(ctx.state, remaining)
     if patch:
         ctx.state.merge_singleton("/status", patch)
     return ctx.op.success_status, _status_doc(ctx)

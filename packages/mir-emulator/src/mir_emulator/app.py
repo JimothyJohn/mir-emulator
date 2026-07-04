@@ -14,6 +14,7 @@ invented session ids.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import threading
@@ -28,17 +29,37 @@ from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
-from starlette.routing import Route
+from starlette.routing import Route, WebSocketRoute
+from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from mir_emulator import auth, registry
-from mir_emulator.behaviors import MISSION_DURATION_S, OVERRIDES, RequestCtx
+from mir_emulator.behaviors import (
+    FAULTS,
+    MISSION_DURATION_S,
+    OVERRIDES,
+    RequestCtx,
+    faults_doc,
+    get_status,
+    set_faults,
+)
 from mir_emulator.examples import example_from_schema, overlay_compatible
 from mir_emulator.openapi3 import to_openapi3
+from mir_emulator.record import (
+    clear_recording,
+    record_step,
+    scenario_doc,
+    set_recording,
+)
 from mir_emulator.spec import Operation, Spec, load_spec
 from mir_emulator.state import StateStore
 
 MAX_BODY_BYTES = 2 * 1024 * 1024
 SESSION_HEADER = "x-mir-session"
+# Emulator-only network shaping: X-MiR-Latency: <milliseconds> delays the
+# response (robots live on factory Wi-Fi; timeout paths deserve tests).
+# Capped so a hostile header can't hold a worker hostage.
+LATENCY_HEADER = "x-mir-latency"
+MAX_LATENCY_MS = 10_000.0
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 MAX_SESSIONS = 256
 
@@ -65,6 +86,19 @@ def _starlette_path(op: Operation) -> str:
 
 def _is_item_op(op: Operation) -> bool:
     return op.path.rsplit("/", 1)[-1].startswith("{")
+
+
+def parse_latency_ms(header_value: str | None, default: float) -> float | None:
+    """Effective delay in ms; None signals an invalid header (a 400)."""
+    if header_value is None:
+        return min(max(default, 0.0), MAX_LATENCY_MS)
+    try:
+        requested = float(header_value)
+    except ValueError:
+        return None
+    if requested < 0 or requested != requested:  # NaN guard
+        return None
+    return min(requested, MAX_LATENCY_MS)
 
 
 def _draft4_nullable(schema: Any) -> Any:
@@ -103,6 +137,7 @@ class Emulator:
         password: str = auth.DEFAULT_PASSWORD,
         seed: bool = True,
         mission_duration: float = MISSION_DURATION_S,
+        latency_ms: float = 0.0,
     ) -> None:
         self.spec = spec
         self.state = StateStore()  # the shared default robot (no session header)
@@ -111,6 +146,7 @@ class Emulator:
         self.password = password
         self.seed = seed
         self.mission_duration = mission_duration
+        self.latency_ms = latency_ms
         self._sessions: OrderedDict[str, StateStore] = OrderedDict()
         self._sessions_lock = threading.Lock()
 
@@ -208,6 +244,12 @@ class Emulator:
         if not self._authorized(request):
             return _respond(401, _error_body(401, "Not authorized"))
 
+        delay_ms = parse_latency_ms(request.headers.get(LATENCY_HEADER), self.latency_ms)
+        if delay_ms is None:
+            return _respond(400, _error_body(400, "Invalid X-MiR-Latency: milliseconds >= 0"))
+        if delay_ms:
+            await asyncio.sleep(delay_ms / 1000.0)
+
         session_id = request.headers.get(SESSION_HEADER, "")
         if session_id and not SESSION_ID_RE.match(session_id):
             return _respond(
@@ -247,7 +289,18 @@ class Emulator:
         override = self._override_for(op)
         result = await override(ctx) if override else self._generic(ctx)
         status, payload, *rest = result
-        return _respond(status, payload, rest[0] if rest else "application/json")
+        media_type = rest[0] if rest else "application/json"
+        record_step(
+            state,
+            method=op.method,
+            path=request.scope.get("path", op.path),
+            query=request.scope.get("query_string", b"").decode("latin-1"),
+            body=body,
+            status=status,
+            payload=payload,
+            media_type=media_type,
+        )
+        return _respond(status, payload, media_type)
 
     def _generic(self, ctx: RequestCtx) -> tuple[int, Any]:
         op = ctx.op
@@ -388,6 +441,7 @@ def create_app(
     seed: bool = True,
     cors: bool = False,
     mission_duration: float = MISSION_DURATION_S,
+    latency_ms: float = 0.0,
 ) -> Starlette:
     version, path = registry.spec_path(mir_version)
     spec = load_spec(path, version)
@@ -398,6 +452,7 @@ def create_app(
         password=password,
         seed=seed,
         mission_duration=mission_duration,
+        latency_ms=latency_ms,
     )
 
     routes = [
@@ -436,6 +491,14 @@ def create_app(
                     "virtual robot; omit it for the shared default robot"
                 ),
                 "specs": {"swagger2": "/swagger.json", "openapi3": "/openapi.json"},
+                "latency": (
+                    "Send X-MiR-Latency: <ms> (cap 10000) to delay any response; "
+                    "or start with --latency-ms for a baseline"
+                ),
+                "faults": (
+                    "GET/PUT/DELETE /_emulator/faults — emulator-only fault injection "
+                    f"({', '.join(sorted(FAULTS))})"
+                ),
                 "source": {
                     "primary_source": registry.primary_source(),
                     "provenance": entry["provenance"],
@@ -447,6 +510,119 @@ def create_app(
                 },
             }
         )
+
+    async def faults_endpoint(request: Request) -> Response:
+        """Emulator-only fault injection (/_emulator/faults) — not part of the
+        MiR API surface, hence the reserved prefix. Same auth as the API."""
+        if not emulator._authorized(request):
+            return _respond(401, _error_body(401, "Not authorized"))
+        session_id = request.headers.get(SESSION_HEADER, "")
+        if session_id and not SESSION_ID_RE.match(session_id):
+            return _respond(
+                400, _error_body(400, "Invalid X-MiR-Session: 1-64 chars from [A-Za-z0-9._-]")
+            )
+        state = emulator.state_for(session_id)
+        if request.method == "DELETE":
+            set_faults(state, [])
+        elif request.method == "PUT":
+            raw = await request.body()
+            if len(raw) > MAX_BODY_BYTES:
+                return _respond(400, _error_body(400, "Payload too large"))
+            try:
+                body = json.loads(raw) if raw else {}
+            except ValueError:
+                return _respond(400, _error_body(400, "Invalid JSON"))
+            names = body.get("faults") if isinstance(body, dict) else None
+            if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+                return _respond(
+                    400, _error_body(400, 'Body must be {"faults": ["emergency_stop", ...]}')
+                )
+            unknown = sorted(set(names) - set(FAULTS))
+            if unknown:
+                return _respond(
+                    400,
+                    _error_body(400, f"Unknown faults; available: {sorted(FAULTS)}"),
+                )
+            set_faults(state, names)
+        return _respond(200, faults_doc(state))
+
+    async def status_websocket(websocket: WebSocket) -> None:
+        """Emulator-only status push (/_emulator/ws/status): the /status
+        document every `interval` seconds until the client disconnects.
+        Browsers cannot set an Authorization header on WebSockets, so the
+        Basic token may come as ?token=<BASE64(user:SHA-256-hex(password))>.
+        Needs a WS-capable server: pip install 'mir-emulator[ws]' (or
+        uvicorn[standard]); the Lambda demo cannot hold sockets."""
+        supplied = websocket.headers.get("authorization", "")
+        query_token = websocket.query_params.get("token", "")
+        if not supplied and query_token:
+            supplied = f"Basic {query_token}"
+        if emulator.enforce_auth and not auth.is_authorized(
+            supplied, emulator.username, emulator.password
+        ):
+            await websocket.close(code=4401)
+            return
+        session_id = websocket.headers.get(SESSION_HEADER, "") or websocket.query_params.get(
+            "session", ""
+        )
+        if session_id and not SESSION_ID_RE.match(session_id):
+            await websocket.close(code=4400)
+            return
+        try:
+            interval = float(websocket.query_params.get("interval", "1.0"))
+        except ValueError:
+            await websocket.close(code=4400)
+            return
+        interval = min(max(interval, 0.1), 10.0)
+
+        await websocket.accept()
+        state = emulator.state_for(session_id)
+        status_op = spec.operations.get(("GET", "/status"))
+        try:
+            while True:
+                ctx = RequestCtx(
+                    spec=spec,
+                    state=state,
+                    op=status_op or next(iter(spec.operations.values())),
+                    path_params={},
+                    query={},
+                    body=None,
+                    mission_duration=emulator.mission_duration,
+                    seed_collection=lambda key, path: emulator._seed_collection(state, key, path),
+                    session_id=session_id,
+                )
+                _status, doc = await get_status(ctx)
+                await websocket.send_json(doc)
+                await asyncio.sleep(interval)
+        except WebSocketDisconnect:
+            pass
+
+    async def recorder_endpoint(request: Request) -> Response:
+        """Emulator-only scenario recorder (/_emulator/recorder)."""
+        if not emulator._authorized(request):
+            return _respond(401, _error_body(401, "Not authorized"))
+        session_id = request.headers.get(SESSION_HEADER, "")
+        if session_id and not SESSION_ID_RE.match(session_id):
+            return _respond(
+                400, _error_body(400, "Invalid X-MiR-Session: 1-64 chars from [A-Za-z0-9._-]")
+            )
+        state = emulator.state_for(session_id)
+        if request.method == "DELETE":
+            clear_recording(state)
+        elif request.method == "PUT":
+            raw = await request.body()
+            if len(raw) > MAX_BODY_BYTES:
+                return _respond(400, _error_body(400, "Payload too large"))
+            try:
+                body = json.loads(raw) if raw else {}
+            except ValueError:
+                return _respond(400, _error_body(400, "Invalid JSON"))
+            if not isinstance(body, dict) or not isinstance(body.get("recording"), bool):
+                return _respond(400, _error_body(400, 'Body must be {"recording": true|false}'))
+            set_recording(state, body["recording"])
+        doc = scenario_doc(state, version=version, family="robot")
+        doc["replay"] = "save this document; mir-emulator --replay <file> re-runs it"
+        return _respond(200, doc)
 
     async def not_found(_request: Request, _exc: Exception) -> JSONResponse:
         return JSONResponse(_error_body(404, "Not found"), status_code=404)
@@ -467,6 +643,9 @@ def create_app(
             Route("/", index),
             Route("/swagger.json", swagger_json),
             Route("/openapi.json", openapi_json),
+            Route("/_emulator/faults", faults_endpoint, methods=["GET", "PUT", "DELETE"]),
+            Route("/_emulator/recorder", recorder_endpoint, methods=["GET", "PUT", "DELETE"]),
+            WebSocketRoute("/_emulator/ws/status", status_websocket),
             *routes,
         ],
         exception_handlers={404: not_found},

@@ -419,3 +419,22 @@ def test_arbitrary_requests_never_crash_the_handler(method, path, query, body):
     )
     assert isinstance(response["statusCode"], int)
     assert 200 <= response["statusCode"] < 600
+
+
+def test_diff_endpoint_serves_upgrade_preflight(call):
+    ok = call(event("GET", "/_emulator/diff", query="from=2.14.7&to=3.8.1"))
+    assert ok["statusCode"] == 200
+    doc = body_json(ok)
+    assert doc["from"] == "2.14.7" and doc["to"] == "3.8.1"
+    assert not doc["structurally_identical"]
+
+    oracle = body_json(call(event("GET", "/_emulator/diff", query="from=3.5.4&to=3.5.6")))
+    assert oracle["structurally_identical"]
+
+    missing = call(event("GET", "/_emulator/diff"))
+    assert missing["statusCode"] == 400
+    unknown = call(event("GET", "/_emulator/diff", query="from=9.9.9&to=3.8.1"))
+    assert unknown["statusCode"] == 404
+    mixed = call(event("GET", "/_emulator/diff", query="from=3.8.1&to=1.5.0"))
+    assert mixed["statusCode"] == 400
+    assert "family" in body_json(mixed)["error_human"]
