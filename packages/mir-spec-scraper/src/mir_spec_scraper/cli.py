@@ -347,6 +347,15 @@ def main(argv: list[str] | None = None) -> int:
         force=args.force,
         report_path=args.report,
     )
+
+    # The Fleet Enterprise specs are public OpenAPI JSON (no credentials), so
+    # this half of the sync runs even when the portal half is skipped.
+    from mir_spec_scraper.fleet import sync_fleet
+
+    fleet_changed, fleet_summary = sync_fleet(args.specs_dir, args.minors_per_major, args.dry_run)
+    changed = changed or fleet_changed
+    summary = f"{summary}; {fleet_summary}"
+
     print(summary)
     _github_output(changed, summary)
     return 0
