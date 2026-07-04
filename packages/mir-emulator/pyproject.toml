@@ -5,6 +5,7 @@ description = "Local emulator for the Mobile Industrial Robots (MiR) robot REST 
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "starlette>=0.40",
     "uvicorn>=0.30",
