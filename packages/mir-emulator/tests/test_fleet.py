@@ -421,9 +421,10 @@ def test_mission_created_on_robot_appears_in_site_missions(clock, app, fleet):
 
 
 def test_unknown_order_and_serial_order_are_404(fleet):
-    assert fleet.get("/api/v1/order/nope", headers=KEY).status_code == 404
-    assert fleet.get("/api/v1/serial-order/nope", headers=KEY).status_code == 404
-    assert fleet.delete("/api/v1/serial-order/nope", headers=KEY).status_code == 404
+    order = fleet.get("/api/v1/order/nope", headers=KEY)
+    serial = fleet.get("/api/v1/serial-order/nope", headers=KEY)
+    deleted = fleet.delete("/api/v1/serial-order/nope", headers=KEY)
+    assert (order.status_code, serial.status_code, deleted.status_code) == (404, 404, 404)
 
 
 def test_hostile_api_keys_fail_closed(fleet):
