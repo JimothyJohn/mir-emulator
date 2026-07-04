@@ -139,12 +139,15 @@ check 200 "${API_URL}/healthz"
 check 200 "${API_URL}/"
 check 200 "${API_URL}/console"
 check 401 "${API_URL}/latest/api/v2.0.0/status"
-check 401 "${API_URL}/fleet/latest/api/v1/robots"
+check 401 "${API_URL}/fleet/latest/api/v1/system/version"
 for v in $(curl -s "${API_URL}/healthz" | python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin)["versions"]))'); do
     check 200 "${API_URL}/${v}/api/v2.0.0/status" -H "Authorization: Basic ${AUTH_TOKEN}"
 done
+# /api/v1/system/version is the one operation every tracked fleet version
+# serves (e.g. /robots only exists from 1.4.0 on — the emulator is
+# version-faithful, so the smoke must be too).
 for v in $(curl -s "${API_URL}/healthz" | python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin).get("fleet_versions", [])))'); do
-    check 200 "${API_URL}/fleet/${v}/api/v1/robots" -H "x-api-key: distributor"
+    check 200 "${API_URL}/fleet/${v}/api/v1/system/version" -H "x-api-key: distributor"
 done
 
 if [[ -n "$DOMAIN_NAME" ]]; then
