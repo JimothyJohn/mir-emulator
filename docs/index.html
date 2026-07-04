@@ -204,6 +204,21 @@ textarea { width: 100%; min-height: 96px; resize: vertical; line-height: 1.5; ma
 }
 .copy:hover { color: var(--blue-deep); border-color: var(--brand); }
 
+/* ---------- version compare ---------- */
+#compare { scroll-margin-top: 96px; }
+.cmp-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+.cmp-row select { min-width: 150px; }
+#cmp-result { margin-top: 14px; }
+.cmp-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 14px; }
+@media (max-width: 860px) { .cmp-cols { grid-template-columns: 1fr; } }
+.cmp-col h4 { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; }
+.cmp-col ul { list-style: none; font-family: var(--mono); font-size: 12px; display: grid; gap: 4px; }
+.cmp-col li { color: var(--ink-dim); word-break: break-all; }
+.cmp-col.add li::before { content: "+ "; color: var(--green); font-weight: 700; }
+.cmp-col.del li::before { content: "\2212 "; color: var(--red); font-weight: 700; }
+.cmp-col.chg li::before { content: "~ "; color: var(--amber); font-weight: 700; }
+.cmp-clean { color: var(--green); font-weight: 600; font-size: 14px; }
+
 /* ---------- language tabs (Stripe-style: pick once, everything follows) ---------- */
 .lang-tabs { display: inline-flex; gap: 4px; flex-wrap: wrap; }
 .lang-tab {
@@ -648,6 +663,20 @@ curl -H 'x-api-key: distributor' https://mir.advin.io/fleet/latest/api/v1/robots
     <tbody id="prov-body"></tbody>
   </table>
   <div class="hint" id="prov-hint">connect to the demo endpoint to load per-version provenance&hellip;</div>
+
+  <h2 class="sect-title" id="compare">Compare versions</h2>
+  <p class="lead">
+    Preflight an upgrade: the structural API changes between any two tracked versions of one
+    family (robot or fleet; descriptions ignored) &mdash; served by
+    <code>GET /_emulator/diff?from=&hellip;&amp;to=&hellip;</code> on this endpoint.
+  </p>
+  <div class="cmp-row">
+    <select id="cmp-from" disabled><option>from&hellip;</option></select>
+    <span style="color:var(--ink-faint)">&rarr;</span>
+    <select id="cmp-to" disabled><option>to&hellip;</option></select>
+    <button class="connect-btn" id="cmp-go" style="width:auto; padding:8px 26px" disabled>Diff</button>
+  </div>
+  <div id="cmp-result" class="hint">connect to the demo endpoint to compare versions&hellip;</div>
 
   <h2 class="sect-title">Endpoints</h2>
   <table class="plain">
@@ -1582,7 +1611,77 @@ async function connectTo(rawBase) {
     ? "connected — emulator fleet, " + versions.length + " versions"
     : "connected — direct MiR API at " + base.replace(/^https?:\/\//, "") + "/api/v2.0.0";
   renderVersions(); renderPresets(); syncAuthPanel();
-  loadVersionMeta(); loadSpec(); loadProvenance(); refreshSample();
+  loadVersionMeta(); loadSpec(); loadProvenance(); fillCompare(); refreshSample();
+}
+
+/* ---------- version compare (GET /_emulator/diff) ---------- */
+function fillCompare() {
+  const from = $("cmp-from"), to = $("cmp-to"), go = $("cmp-go");
+  const usable = MODE === "fleet" && versions.length;
+  [from, to, go].forEach((el) => (el.disabled = !usable));
+  if (!usable) return;
+  const fill = (sel) => {
+    sel.innerHTML = "";
+    const grp = (label, list) => {
+      if (!list.length) return;
+      const og = document.createElement("optgroup");
+      og.label = label;
+      list.forEach((v) => {
+        const o = document.createElement("option");
+        o.value = v; o.textContent = v;
+        og.appendChild(o);
+      });
+      sel.appendChild(og);
+    };
+    grp("robot", versions);
+    grp("fleet", fleetVersions);
+  };
+  fill(from); fill(to);
+  if (versions.length > 1) from.value = versions[1];
+  to.value = versions[0];
+  $("cmp-result").className = "hint";
+  $("cmp-result").textContent = "pick two versions of one family and hit Diff";
+}
+
+async function runCompare() {
+  const box = $("cmp-result");
+  box.className = "hint";
+  box.textContent = "diffing…";
+  try {
+    const url = BASE + "/_emulator/diff?from=" + encodeURIComponent($("cmp-from").value) +
+      "&to=" + encodeURIComponent($("cmp-to").value);
+    const r = await fetchT(url, {}, 15000);
+    const d = await r.json();
+    if (!r.ok) {
+      box.className = "hint warn";
+      box.textContent = d.error_human || ("diff failed: " + r.status);
+      return;
+    }
+    if (d.structurally_identical) {
+      box.className = "";
+      box.innerHTML = '<span class="cmp-clean">&#10003; ' + esc(d.from) + " &rarr; " + esc(d.to) +
+        ": structurally identical APIs</span>";
+      return;
+    }
+    const col = (cls, title, entries) =>
+      '<div class="cmp-col ' + cls + '"><h4>' + title + " (" + entries.length + ")</h4><ul>" +
+      entries.slice(0, 40).map((e) => "<li>" + esc(e) + "</li>").join("") +
+      (entries.length > 40 ? "<li>… and " + (entries.length - 40) + " more</li>" : "") +
+      "</ul></div>";
+    box.className = "";
+    box.innerHTML =
+      "<b>" + esc(d.from) + " &rarr; " + esc(d.to) + "</b> (" + esc(d.family) + " API)" +
+      '<div class="cmp-cols">' +
+      col("add", "added operations", d.operations.added) +
+      col("del", "removed operations", d.operations.removed) +
+      col("chg", "changed operations", d.operations.changed) +
+      "</div>" +
+      '<div class="hint">definitions: +' + d.definitions.added.length + " / \u2212" +
+      d.definitions.removed.length + " / ~" + d.definitions.changed.length + "</div>";
+  } catch (e) {
+    box.className = "hint warn";
+    box.textContent = "diff failed: " + e.message;
+  }
 }
 
 function selectedEndpoint() {
@@ -1631,6 +1730,7 @@ $("op-select").addEventListener("change", () => {
 try { hist = JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch { hist = []; }
 renderHistory();
 $("connect").onclick = () => connectTo(selectedEndpoint());
+$("cmp-go").onclick = runCompare;
 $("tele-toggle").onclick = () => setTelemetry(!teleTimer);
 $("new-session").onclick = () => {
   $("session").value = newSessionId();

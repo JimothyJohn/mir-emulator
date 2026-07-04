@@ -38,12 +38,13 @@ schemas. Everything below that references "Stripe-style" means one of these.
 
 ## Next
 
-- [ ] **Version-diff surface.** `GET /_emulator/diff?from=2.14.7&to=3.8.1`
-      returning added/removed/changed operations and definitions, plus a
-      console view. The scraper's `diff.py` already computes this at scrape
-      time; expose it at runtime so integrators can preflight a fleet
-      upgrade. Acceptance: diff of the pinned 3.5.4 against 3.5.6 reports no
-      structural changes (the converter-oracle invariant, now user-visible).
+- [x] **Version-diff surface.** Shipped 2026-07-04:
+      `GET /_emulator/diff?from=2.14.7&to=3.8.1` on the dispatcher (works
+      for fleet pairs too; cross-family refused), plus a "Compare versions"
+      console view. Signature granularity deliberately matches the scrape
+      oracle (type/format/enum/properties; PDF-lossy keys ignored), so the
+      acceptance invariant holds: 3.5.4 → 3.5.6 reports structurally
+      identical, verified in tests and in the browser.
 
 - [ ] **Fault injection.** A `/_emulator/faults` control surface (and/or
       scenario file) that drives the robot into the states integrators must

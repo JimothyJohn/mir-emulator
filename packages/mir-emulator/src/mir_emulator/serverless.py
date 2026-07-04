@@ -148,6 +148,7 @@ def build_app() -> Starlette:
                 ),
                 "specs": {v: f"{base}/{v}/swagger.json" for v in versions},
                 "console": f"{base}/console",
+                "diff": f"{base}/_emulator/diff?from=2.14.7&to=3.8.1",
                 "sessions": (
                     "Send X-MiR-Session: <1-64 chars of A-Za-z0-9._-> to control your own "
                     "isolated virtual robot; omit it for the shared default robot"
@@ -158,6 +159,29 @@ def build_app() -> Starlette:
                 ),
             }
         )
+
+    async def emulator_diff(request: Request) -> JSONResponse:
+        from mir_emulator.diff import diff_versions
+
+        from_version = request.query_params.get("from", "")
+        to_version = request.query_params.get("to", "")
+        if not from_version or not to_version:
+            return JSONResponse(
+                {
+                    "error_code": "400",
+                    "error_human": "provide ?from=<version>&to=<version> (tracked versions; "
+                    "robot or fleet, not mixed)",
+                },
+                status_code=400,
+            )
+        try:
+            return JSONResponse(diff_versions(from_version, to_version))
+        except KeyError as exc:
+            return JSONResponse(
+                {"error_code": "404", "error_human": str(exc.args[0])}, status_code=404
+            )
+        except ValueError as exc:
+            return JSONResponse({"error_code": "400", "error_human": str(exc)}, status_code=400)
 
     async def healthz(_request: Request) -> JSONResponse:
         return JSONResponse(
@@ -187,6 +211,7 @@ def build_app() -> Starlette:
     routes: list[Route | Mount] = [
         Route("/", index),
         Route("/healthz", healthz),
+        Route("/_emulator/diff", emulator_diff),
         Route("/console", console),
         Mount("/latest", app=version_apps[latest]),
         *[Mount(f"/fleet/{v}", app=app) for v, app in fleet_apps.items()],
