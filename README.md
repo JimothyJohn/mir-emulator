@@ -1,24 +1,42 @@
 # MiR emulator
 
-Self-updating emulator of the [Mobile Industrial Robots (MiR) robot REST API](https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/).
+Self-updating emulator of the [Mobile Industrial Robots (MiR) robot REST API](https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/)
+**and the [MiR Fleet Enterprise Integration API](https://supportportal.mobile-industrial-robots.com/support-files/manuals/MiR_Fleet_Enterprise_OpenAPI_Specification/1.5.0/index.html?urls.primaryName=MiR+Fleet+Integration+API+v1)**.
 Develop and test MiR integrations against a local, spec-faithful `/api/v2.0.0`
-without a robot — across the last three major MiR software generations.
+(robot) or `/api/v1` (fleet) without owning either — across the newest four
+minor lines of every major software generation.
 
 ```sh
 ./Quickstart -t          # lint + unit + conformance + integration
-./Quickstart -s          # serve the newest tracked version on :8080
+./Quickstart -s          # serve the newest tracked robot version on :8080
 
 curl -H "Authorization: Basic $(printf '%s:%s' distributor "$(printf distributor | shasum -a 256 | cut -d' ' -f1)" | base64)" \
   http://127.0.0.1:8080/api/v2.0.0/status
+
+uv run mir-emulator --fleet-version 1.5.0   # a MiR Fleet with two embedded robots
+curl -H 'x-api-key: distributor' http://127.0.0.1:8080/api/v1/robots
 ```
+
+## The fleet emulates MiR Fleet Enterprise — by driving robot emulators
+
+`mir_emulator.fleet` embeds a configurable set of robot emulators and controls
+them the way a real MiR Fleet does: **over the robots' own REST API** (auth,
+validation, mission simulation — the full HTTP stack, via an in-process ASGI
+transport). A `POST /api/v1/serial-order` really enqueues missions on a robot's
+`/mission_queue`; order status is derived live from the robot's simulation, so
+the fleet view and the robot view can never disagree. `X-MiR-Session` composes:
+one session id gets an isolated fleet **and** isolated robots. Fleet specs are
+MiR's official OpenAPI 3 documents, served verbatim (no PDF conversion) —
+see the public [Swagger UI](https://supportportal.mobile-industrial-robots.com/support-files/manuals/MiR_Fleet_Enterprise_OpenAPI_Specification/1.5.0/index.html?urls.primaryName=MiR+Fleet+Integration+API+v1)
+for the canonical reference; the emulator links to it rather than rebuilding it.
 
 ## How it stays current
 
 1. **`scrape.yml`** runs weekly: logs into the MiR support portal, parses the
    REST API files listing (~500 PDFs, one per product per version), and
-   applies the **selection rule** — *the latest minor.patch of each of the
-   newest 3 major versions* (filling remaining slots with the newest major's
-   previous minor lines if fewer than 3 majors publish files).
+   applies the **selection rule** — *for every major release line, the
+   latest patch of each of its newest 4 minor lines* (so both MiR software
+   generations stay covered four API revisions deep).
 2. MiR publishes the API definitions **as PDFs only** (swagger2markup +
    Asciidoctor renderings of their internal swagger doc). The scraper picks
    one robot PDF per selected version (MIR250 preferred; FLEET/HOOK are
@@ -33,7 +51,11 @@ curl -H "Authorization: Basic $(printf '%s:%s' distributor "$(printf distributor
    `packages/mir-emulator/src/mir_emulator/specs/` + `registry.json` via an
    automated PR; **`ci.yml`** proves every tracked version against the full
    conformance + adversarial suite before it merges.
-5. **`release.yml`** builds one `mir-emulator` distribution per tracked MiR
+5. The **fleet half** of the same scrape needs no credentials: MiR publishes
+   Fleet Enterprise as native OpenAPI 3 JSON at public URLs. Discovery probes
+   forward from the tracked versions (new patches, minors, majors) and the
+   same selection rule applies per major line.
+6. **`release.yml`** builds one `mir-emulator` distribution per tracked MiR
    version: `pip install mir-emulator==3.8.1` gets a 3.8.1 robot.
 
 ### Secrets
@@ -51,12 +73,12 @@ curl -H "Authorization: Basic $(printf '%s:%s' distributor "$(printf distributor
 `packages/mir-emulator/src/mir_emulator/specs/registry.json` is the
 authoritative list (versions, hashes, provenance, source PDF URLs). Currently:
 
-| MiR version | Source |
-|---|---|
-| 3.8.1 | Converted from the official MiR250 3.8.1 REST API PDF |
-| 3.7.2 | Converted from the official MiR250 3.7.2 REST API PDF |
-| 3.5.4 | Official `swagger.json` (pinned — the converter's oracle) |
-| 2.14.7 | Converted from the official MiR250 2.14.7 REST API PDF |
+| Family | Versions | Source |
+|---|---|---|
+| Robot REST API 3.x | 3.8.1, 3.7.2, 3.6.7, 3.5.6 | Converted from the official MiR250 REST API PDFs |
+| Robot REST API 3.x | 3.5.4 (pinned) | Official `swagger.json` — the converter's oracle |
+| Robot REST API 2.x | 2.14.7, 2.13.5.4, 2.12.0.4, 2.10.5.8 | Converted from the official MiR250 REST API PDFs |
+| Fleet Integration API | 1.5.0, 1.4.2, 1.3.1 | Official OpenAPI 3 JSON, served verbatim (public URLs) |
 
 ## What the emulator does
 

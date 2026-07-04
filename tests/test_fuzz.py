@@ -133,3 +133,50 @@ def test_unknown_paths_never_5xx(fuzz_client, path):
     client, _ops, base = fuzz_client
     response = client.get(base + "/" + quote(path, safe="/"), headers=AUTH_HEADER)
     assert response.status_code < 500
+
+
+# ---- the fleet surface holds the same invariant --------------------------------
+
+from mir_emulator import registry  # noqa: E402
+from mir_emulator.fleet import DEFAULT_API_KEY, create_fleet_app  # noqa: E402
+
+
+@pytest.fixture(params=registry.fleet_supported_versions(), scope="module")
+def fleet_fuzz_client(request):
+    app = create_fleet_app(request.param)
+    ops = list(app.state.emulator.spec.operations.values())
+    base = app.state.emulator.spec.base_path  # "" — fleet paths are absolute
+    with TestClient(app, base_url="http://fleet.test", raise_server_exceptions=False) as client:
+        yield client, ops, base
+
+
+@FUZZ_SETTINGS
+@given(
+    op_index=st.integers(min_value=0),
+    values=st.lists(_param_value, min_size=1, max_size=3),
+    payload=_payload,
+    authed=st.booleans(),
+)
+def test_fleet_never_5xx_and_errors_stay_json(fleet_fuzz_client, op_index, values, payload, authed):
+    client, ops, base = fleet_fuzz_client
+    op = ops[op_index % len(ops)]
+    headers = {"x-api-key": DEFAULT_API_KEY} if authed else {}
+    headers["Content-Type"] = "application/json"
+
+    response = client.request(op.method, _url(base, op, values), content=payload, headers=headers)
+
+    assert response.status_code < 500, f"{op.method} {op.path} -> {response.status_code}"
+    if response.status_code >= 400:
+        body = response.json()
+        assert "error_code" in body
+
+
+@FUZZ_SETTINGS
+@given(header=st.one_of(_header_text, st.binary(max_size=100).map(lambda b: b.hex())))
+def test_fleet_garbage_api_keys_never_authenticate_or_crash(fleet_fuzz_client, header):
+    client, ops, _base = fleet_fuzz_client
+    # Pick from this version's own spec — the fleet surface varies by version.
+    path = next(op.path for op in ops if op.method == "GET" and "{" not in op.path)
+    response = client.get(path, headers={"x-api-key": header})
+    assert response.status_code == 401
+    assert response.json()["error_code"] == "401"

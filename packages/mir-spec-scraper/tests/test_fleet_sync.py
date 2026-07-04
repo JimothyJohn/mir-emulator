@@ -1,0 +1,135 @@
+"""Fleet spec sync: discovery probing, selection, and registry updates —
+exercised offline via an httpx.MockTransport standing in for the portal CDN."""
+
+import json
+from pathlib import Path
+
+import httpx
+import pytest
+from mir_spec_scraper.fleet import FLEET_BASE, discover_versions, sync_fleet
+
+
+def _openapi(version: str) -> bytes:
+    return json.dumps(
+        {
+            "openapi": "3.0.4",
+            "info": {"title": "MiR Fleet Integration API v1", "version": "v1"},
+            "paths": {"/healthz": {"get": {"responses": {"200": {"description": "ok"}}}}},
+        }
+    ).encode()
+
+
+def _client(published: dict[str, bytes]) -> httpx.Client:
+    def handler(request: httpx.Request) -> httpx.Response:
+        for version, payload in published.items():
+            if str(request.url) == f"{FLEET_BASE}/{version}/openapi_v1.json":
+                if request.method == "HEAD":
+                    return httpx.Response(200)
+                return httpx.Response(200, content=payload)
+        return httpx.Response(404)
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+@pytest.fixture
+def specs_dir(tmp_path: Path) -> Path:
+    d = tmp_path / "specs"
+    d.mkdir()
+    (d / "registry.json").write_text(
+        json.dumps(
+            {
+                "tracked": [],
+                "fleet": {
+                    "source": FLEET_BASE + "/",
+                    "tracked": [
+                        {
+                            "fleet_version": "1.3.0",
+                            "api_path_version": "v1",
+                            "format": "openapi-3.0",
+                            "file": "fleet/1.3.0/openapi_v1.json",
+                            "sha256": "x",
+                            "official": True,
+                            "provenance": "seed",
+                        }
+                    ],
+                },
+            }
+        )
+        + "\n"
+    )
+    (d / "fleet" / "1.3.0").mkdir(parents=True)
+    (d / "fleet" / "1.3.0" / "openapi_v1.json").write_bytes(_openapi("1.3.0"))
+    return d
+
+
+def _registry(specs_dir: Path) -> dict:
+    return json.loads((specs_dir / "registry.json").read_text())
+
+
+def test_discovery_probes_past_gaps():
+    published = {v: _openapi(v) for v in ["1.3.0", "1.4.0", "1.5.0", "1.5.2", "2.0.0"]}
+    with _client(published) as client:
+        found = discover_versions(client, {(1, 3, 0)})
+    assert (1, 5, 2) in found  # 1.5.1 missing: patch gap crossed
+    assert (2, 0, 0) in found  # next major found
+
+
+def test_sync_adds_new_versions_and_keeps_files(specs_dir):
+    published = {v: _openapi(v) for v in ["1.3.0", "1.4.0", "1.5.0"]}
+    changed, summary = sync_fleet(specs_dir, client=_client(published))
+    assert changed
+    tracked = [t["fleet_version"] for t in _registry(specs_dir)["fleet"]["tracked"]]
+    assert tracked == ["1.5.0", "1.4.0", "1.3.0"]
+    for version in ("1.4.0", "1.5.0"):
+        assert (specs_dir / "fleet" / version / "openapi_v1.json").is_file()
+    assert "added 1.5.0" in summary
+
+
+def test_resync_is_idempotent(specs_dir):
+    published = {v: _openapi(v) for v in ["1.3.0", "1.4.0"]}
+    sync_fleet(specs_dir, client=_client(published))
+    changed, summary = sync_fleet(specs_dir, client=_client(published))
+    assert not changed
+    assert "no changes" in summary
+
+
+def test_selection_drops_old_minor_lines_and_prunes_files(specs_dir):
+    published = {f"1.{m}.0": _openapi(f"1.{m}.0") for m in range(3, 9)}  # 1.3..1.8
+    changed, _ = sync_fleet(specs_dir, client=_client(published))
+    assert changed
+    tracked = [t["fleet_version"] for t in _registry(specs_dir)["fleet"]["tracked"]]
+    assert tracked == ["1.8.0", "1.7.0", "1.6.0", "1.5.0"]
+    assert not (specs_dir / "fleet" / "1.3.0" / "openapi_v1.json").exists()
+
+
+def test_non_openapi_payload_is_skipped(specs_dir):
+    published = {
+        "1.3.0": _openapi("1.3.0"),
+        "1.4.0": b"<html>login page</html>",
+    }
+    changed, summary = sync_fleet(specs_dir, client=_client(published))
+    assert "1.4.0: skipped" in summary
+    tracked = [t["fleet_version"] for t in _registry(specs_dir)["fleet"]["tracked"]]
+    assert tracked == ["1.3.0"]
+    assert not changed
+
+
+def test_dry_run_writes_nothing(specs_dir):
+    published = {v: _openapi(v) for v in ["1.3.0", "1.4.0"]}
+    changed, _ = sync_fleet(specs_dir, dry_run=True, client=_client(published))
+    assert changed
+    assert not (specs_dir / "fleet" / "1.4.0").exists()
+    tracked = [t["fleet_version"] for t in _registry(specs_dir)["fleet"]["tracked"]]
+    assert tracked == ["1.3.0"]
+
+
+def test_network_failure_keeps_existing_coverage(specs_dir):
+    def explode(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("cdn down")
+
+    client = httpx.Client(transport=httpx.MockTransport(explode))
+    changed, summary = sync_fleet(specs_dir, client=client)
+    assert not changed
+    tracked = [t["fleet_version"] for t in _registry(specs_dir)["fleet"]["tracked"]]
+    assert tracked == ["1.3.0"]
+    assert "kept existing coverage" in summary or "no changes" in summary

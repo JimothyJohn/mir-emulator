@@ -63,6 +63,39 @@ def supported_versions() -> list[str]:
     return sorted((t.mir_version for t in tracked_specs()), key=version_key, reverse=True)
 
 
+def fleet_registry() -> dict:
+    """The MiR Fleet Enterprise family block (empty dict if absent)."""
+    return load_registry().get("fleet", {})
+
+
+def fleet_tracked_entry(fleet_version: str) -> dict:
+    for entry in fleet_registry().get("tracked", []):
+        if entry["fleet_version"] == fleet_version:
+            return entry
+    raise KeyError(f"Fleet version {fleet_version!r} is not tracked")
+
+
+def fleet_supported_versions() -> list[str]:
+    """Tracked MiR Fleet versions, newest first."""
+    versions = (t["fleet_version"] for t in fleet_registry().get("tracked", []))
+    return sorted(versions, key=version_key, reverse=True)
+
+
+def fleet_spec_path(fleet_version: str | None = None) -> tuple[str, Path]:
+    """Resolve a Fleet version (or the newest) to its bundled spec file."""
+    entries = {t["fleet_version"]: t for t in fleet_registry().get("tracked", [])}
+    if not entries:
+        raise KeyError("no MiR Fleet versions are tracked in this build")
+    if fleet_version is None:
+        fleet_version = fleet_supported_versions()[0]
+    if fleet_version not in entries:
+        raise KeyError(
+            f"Fleet version {fleet_version!r} is not tracked; "
+            f"available: {fleet_supported_versions()}"
+        )
+    return fleet_version, _specs_dir() / entries[fleet_version]["file"]
+
+
 def spec_path(mir_version: str | None = None) -> tuple[str, Path]:
     """Resolve a MiR version (or the default) to its bundled spec file.
 

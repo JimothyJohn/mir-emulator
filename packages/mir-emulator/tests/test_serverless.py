@@ -72,7 +72,27 @@ def test_index_lists_every_tracked_version(call):
 def test_healthz(call):
     response = call(event("GET", "/healthz"))
     assert response["statusCode"] == 200
-    assert body_json(response)["status"] == "ok"
+    doc = body_json(response)
+    assert doc["status"] == "ok"
+    assert doc["versions"] == registry.supported_versions()
+    assert doc["fleet_versions"] == registry.fleet_supported_versions()
+
+
+def test_index_lists_fleet_versions(call):
+    doc = body_json(call(event("GET", "/")))
+    for version in registry.fleet_supported_versions():
+        assert doc["fleet"]["versions"][version].endswith(f"/fleet/{version}/api/v1")
+        assert doc["fleet"]["official_docs"][version].startswith("https://supportportal")
+
+
+def test_fleet_mount_serves_the_fleet_api(call):
+    denied = call(event("GET", "/fleet/1.5.0/api/v1/robots"))
+    assert denied["statusCode"] == 401
+    allowed = call(event("GET", "/fleet/1.5.0/api/v1/robots", headers={"x-api-key": "distributor"}))
+    assert allowed["statusCode"] == 200
+    assert len(body_json(allowed)["robots"]) == 2
+    latest = call(event("GET", "/fleet/latest/"))
+    assert body_json(latest)["emulated_fleet_version"] == registry.fleet_supported_versions()[0]
 
 
 def test_console_404s_when_not_bundled(call):

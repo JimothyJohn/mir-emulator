@@ -83,8 +83,9 @@ class _HstsMiddleware:
 class _LazyVersionApp:
     """Builds the per-version emulator app on first request, then delegates."""
 
-    def __init__(self, mir_version: str) -> None:
-        self.mir_version = mir_version
+    def __init__(self, version: str, factory=create_app) -> None:
+        self.version = version
+        self._factory = factory
         self._app: Starlette | None = None
         self._lock = asyncio.Lock()
 
@@ -92,15 +93,19 @@ class _LazyVersionApp:
         if self._app is None:
             async with self._lock:
                 if self._app is None:
-                    self._app = create_app(self.mir_version)
+                    self._app = self._factory(self.version)
         await self._app(scope, receive, send)
 
 
 def build_app() -> Starlette:
-    """Top-level dispatcher: /<version>/... , /latest/... , / index."""
+    """Top-level dispatcher: /<version>/... , /fleet/<version>/... , / index."""
+    from mir_emulator.fleet import create_fleet_app
+
     versions = registry.supported_versions()
     version_apps = {v: _LazyVersionApp(v) for v in versions}
     latest = versions[0]
+    fleet_versions = registry.fleet_supported_versions()
+    fleet_apps = {v: _LazyVersionApp(v, factory=create_fleet_app) for v in fleet_versions}
 
     async def index(request: Request) -> HTMLResponse | JSONResponse:
         if "text/html" in request.headers.get("accept", "") and CONSOLE_FILE.is_file():
@@ -122,6 +127,21 @@ def build_app() -> Starlette:
                 "primary_source": registry.primary_source(),
                 "versions": {v: f"{base}/{v}/api/v2.0.0" for v in versions},
                 "latest": f"{base}/latest/api/v2.0.0",
+                "fleet": {
+                    "description": (
+                        "MiR Fleet Enterprise Integration API emulator; each fleet "
+                        "embeds robot emulators it controls over their own REST API"
+                    ),
+                    "versions": {v: f"{base}/fleet/{v}/api/v1" for v in fleet_versions},
+                    "auth": "x-api-key header; default key 'distributor'",
+                    "specs": {v: f"{base}/fleet/{v}/openapi.json" for v in fleet_versions},
+                    "official_docs": {
+                        v: registry.fleet_registry()
+                        .get("docs_url_template", "")
+                        .replace("{version}", v)
+                        for v in fleet_versions
+                    },
+                },
                 "auth": (
                     "Authorization: Basic BASE64(user:SHA-256-hex(password)); "
                     "factory default account distributor/distributor"
@@ -140,7 +160,9 @@ def build_app() -> Starlette:
         )
 
     async def healthz(_request: Request) -> JSONResponse:
-        return JSONResponse({"status": "ok", "versions": versions})
+        return JSONResponse(
+            {"status": "ok", "versions": versions, "fleet_versions": fleet_versions}
+        )
 
     async def console(_request: Request) -> HTMLResponse | JSONResponse:
         if not CONSOLE_FILE.is_file():
@@ -167,6 +189,8 @@ def build_app() -> Starlette:
         Route("/healthz", healthz),
         Route("/console", console),
         Mount("/latest", app=version_apps[latest]),
+        *[Mount(f"/fleet/{v}", app=app) for v, app in fleet_apps.items()],
+        *([Mount("/fleet/latest", app=fleet_apps[fleet_versions[0]])] if fleet_versions else []),
         *[Mount(f"/{v}", app=app) for v, app in version_apps.items()],
     ]
     middleware = [

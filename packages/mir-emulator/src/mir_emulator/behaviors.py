@@ -87,6 +87,10 @@ class RequestCtx:
     # generic collection exactly as a GET on it would, so overrides can check
     # referential integrity against not-yet-touched collections.
     seed_collection: Callable[[str, str], None] | None = None
+    # The validated X-MiR-Session id ("" for the shared default robot). The
+    # fleet emulator forwards it on embedded robot calls so session isolation
+    # composes across emulators.
+    session_id: str = ""
 
 
 # --- mission simulation core -------------------------------------------------

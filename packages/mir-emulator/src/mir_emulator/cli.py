@@ -19,6 +19,30 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=f"MiR software version to emulate; one of {registry.supported_versions()}",
     )
+    parser.add_argument(
+        "--fleet-version",
+        default=None,
+        metavar="VERSION",
+        help=(
+            "Emulate MiR Fleet Enterprise instead of a single robot; one of "
+            f"{registry.fleet_supported_versions()} (the fleet embeds robot emulators "
+            "and controls them over their own REST API)"
+        ),
+    )
+    parser.add_argument(
+        "--fleet-robots",
+        default=None,
+        metavar="V1,V2,...",
+        help=(
+            "Robot software versions the fleet manages, comma-separated "
+            "(default: two robots on the newest tracked version)"
+        ),
+    )
+    parser.add_argument(
+        "--api-key",
+        default=os.environ.get("MIR_EMULATOR_API_KEY", "distributor"),
+        help="Accepted x-api-key for the fleet API (env: MIR_EMULATOR_API_KEY)",
+    )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument(
@@ -81,6 +105,35 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     import uvicorn
+
+    if args.fleet_version:
+        from mir_emulator.fleet import create_fleet_app
+
+        robot_versions = (
+            tuple(v.strip() for v in args.fleet_robots.split(",") if v.strip())
+            if args.fleet_robots
+            else None
+        )
+        app = create_fleet_app(
+            args.fleet_version,
+            robot_versions=robot_versions,
+            api_key=args.api_key,
+            enforce_auth=not args.no_auth,
+            robot_username=args.username,
+            robot_password=args.password,
+            cors=args.cors,
+            mission_duration=args.mission_duration,
+        )
+        version = app.state.fleet_version
+        robots = ", ".join(r.mir_version for r in app.state.emulator.robots)
+        print(
+            f"mir-emulator: MiR Fleet {version} Integration API on "
+            f"http://{args.host}:{args.port}/api/v1 (robots: {robots})"
+        )
+        if not args.no_auth:
+            print("auth: x-api-key header — default key 'distributor'")
+        uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+        return 0
 
     from mir_emulator.app import create_app
 
