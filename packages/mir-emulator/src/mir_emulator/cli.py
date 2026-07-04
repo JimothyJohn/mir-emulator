@@ -52,6 +52,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--cors", action="store_true", help="Allow cross-origin requests (browser dashboards)"
     )
     parser.add_argument(
+        "--latency-ms",
+        type=float,
+        default=0.0,
+        help="Baseline response delay in milliseconds (per-request X-MiR-Latency overrides)",
+    )
+    parser.add_argument(
         "--mission-duration",
         type=float,
         default=10.0,
@@ -144,6 +150,7 @@ def main(argv: list[str] | None = None) -> int:
         password=args.password,
         cors=args.cors,
         mission_duration=args.mission_duration,
+        latency_ms=args.latency_ms,
     )
     version = app.state.mir_version
     print(f"mir-emulator: MiR {version} REST API on http://{args.host}:{args.port}/api/v2.0.0")

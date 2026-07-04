@@ -57,17 +57,22 @@ schemas. Everything below that references "Stripe-style" means one of these.
       (mir_msgs/RobotState.msg) — not guessed. Follow-up: mission_failure
       (needs abort semantics in the queue timeline).
 
-- [ ] **Mission lifecycle realism, deepened.** Time-based mission
-      progression with position interpolation along a path, configurable
-      durations, battery drain tied to motion. Builds on the per-session
-      statefulness that already exists. Acceptance: enqueue → poll shows
-      Pending → Executing → Done with plausible intermediate positions.
+- [x] **Mission lifecycle realism.** Already satisfied by the mission
+      simulation shipped with per-session statefulness, verified against the
+      acceptance bar by existing tests: Pending → Executing → Done with
+      spec-shaped timestamps (`test_queue_entry_timestamps_follow_the_lifecycle`),
+      position interpolation along the patrol loop while executing
+      (`test_battery_drains_and_position_moves_while_executing`),
+      `--mission-duration` for configurable durations, battery drain tied to
+      executed seconds. Deeper path realism (waypoints from site maps) can
+      ride on the fleet site model later if needed.
 
-- [ ] **Latency and network shaping.** Configurable response delay, jitter,
-      and connection drops (`X-MiR-Latency` header or emulator flag) so
-      timeout and retry paths can be tested. Robots live on factory Wi-Fi;
-      the happy path is not the interesting path. Acceptance: a request with
-      shaping enabled observably delays/drops; defaults stay instant.
+- [x] **Latency shaping.** Shipped 2026-07-04: `X-MiR-Latency: <ms>`
+      per-request header (robot and fleet; applied after auth so 401s stay
+      fast; capped at 10 s) plus a `--latency-ms` baseline flag. Acceptance
+      met: shaped requests observably delay, defaults stay instant.
+      Deferred: true connection *drops* — an ASGI app cannot portably sever
+      a socket mid-response; needs a raw-transport shim if we want it.
 
 ## Later
 

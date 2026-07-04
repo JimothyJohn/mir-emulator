@@ -14,6 +14,7 @@ invented session ids.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import threading
@@ -46,6 +47,11 @@ from mir_emulator.state import StateStore
 
 MAX_BODY_BYTES = 2 * 1024 * 1024
 SESSION_HEADER = "x-mir-session"
+# Emulator-only network shaping: X-MiR-Latency: <milliseconds> delays the
+# response (robots live on factory Wi-Fi; timeout paths deserve tests).
+# Capped so a hostile header can't hold a worker hostage.
+LATENCY_HEADER = "x-mir-latency"
+MAX_LATENCY_MS = 10_000.0
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 MAX_SESSIONS = 256
 
@@ -72,6 +78,19 @@ def _starlette_path(op: Operation) -> str:
 
 def _is_item_op(op: Operation) -> bool:
     return op.path.rsplit("/", 1)[-1].startswith("{")
+
+
+def parse_latency_ms(header_value: str | None, default: float) -> float | None:
+    """Effective delay in ms; None signals an invalid header (a 400)."""
+    if header_value is None:
+        return min(max(default, 0.0), MAX_LATENCY_MS)
+    try:
+        requested = float(header_value)
+    except ValueError:
+        return None
+    if requested < 0 or requested != requested:  # NaN guard
+        return None
+    return min(requested, MAX_LATENCY_MS)
 
 
 def _draft4_nullable(schema: Any) -> Any:
@@ -110,6 +129,7 @@ class Emulator:
         password: str = auth.DEFAULT_PASSWORD,
         seed: bool = True,
         mission_duration: float = MISSION_DURATION_S,
+        latency_ms: float = 0.0,
     ) -> None:
         self.spec = spec
         self.state = StateStore()  # the shared default robot (no session header)
@@ -118,6 +138,7 @@ class Emulator:
         self.password = password
         self.seed = seed
         self.mission_duration = mission_duration
+        self.latency_ms = latency_ms
         self._sessions: OrderedDict[str, StateStore] = OrderedDict()
         self._sessions_lock = threading.Lock()
 
@@ -214,6 +235,12 @@ class Emulator:
     async def handle(self, request: Request, op: Operation) -> Response:
         if not self._authorized(request):
             return _respond(401, _error_body(401, "Not authorized"))
+
+        delay_ms = parse_latency_ms(request.headers.get(LATENCY_HEADER), self.latency_ms)
+        if delay_ms is None:
+            return _respond(400, _error_body(400, "Invalid X-MiR-Latency: milliseconds >= 0"))
+        if delay_ms:
+            await asyncio.sleep(delay_ms / 1000.0)
 
         session_id = request.headers.get(SESSION_HEADER, "")
         if session_id and not SESSION_ID_RE.match(session_id):
@@ -395,6 +422,7 @@ def create_app(
     seed: bool = True,
     cors: bool = False,
     mission_duration: float = MISSION_DURATION_S,
+    latency_ms: float = 0.0,
 ) -> Starlette:
     version, path = registry.spec_path(mir_version)
     spec = load_spec(path, version)
@@ -405,6 +433,7 @@ def create_app(
         password=password,
         seed=seed,
         mission_duration=mission_duration,
+        latency_ms=latency_ms,
     )
 
     routes = [
@@ -443,6 +472,10 @@ def create_app(
                     "virtual robot; omit it for the shared default robot"
                 ),
                 "specs": {"swagger2": "/swagger.json", "openapi3": "/openapi.json"},
+                "latency": (
+                    "Send X-MiR-Latency: <ms> (cap 10000) to delay any response; "
+                    "or start with --latency-ms for a baseline"
+                ),
                 "faults": (
                     "GET/PUT/DELETE /_emulator/faults — emulator-only fault injection "
                     f"({', '.join(sorted(FAULTS))})"
