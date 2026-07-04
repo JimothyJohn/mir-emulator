@@ -18,6 +18,7 @@ dev = [
 testpaths = [
     "tests",
     "packages/mir-emulator/tests",
+    "packages/mir-mcp/tests",
     "packages/mir-spec-scraper/tests",
 ]
 markers = [
