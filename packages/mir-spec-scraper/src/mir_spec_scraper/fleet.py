@@ -17,6 +17,7 @@ from __future__ import annotations
 import datetime
 import hashlib
 import json
+import shutil
 from pathlib import Path
 
 import httpx
@@ -28,6 +29,12 @@ FLEET_BASE = (
     "MiR_Fleet_Enterprise_OpenAPI_Specification"
 )
 SPEC_FILENAME = "openapi_v1.json"
+# Published beside the Integration API in every version directory; fetched
+# best-effort — a missing extra never blocks tracking the version itself.
+EXTRA_SPECS = (
+    ("top_module", "openapi_topmodule_v1.json"),
+    ("compatibility", "openapi_compatibility_v1.json"),
+)
 GAP_TOLERANCE = 2  # tolerate up to this many missing consecutive numbers
 MAX_PROBES = 120  # hard cap on HTTP probes per sync, runaway backstop
 MAX_SPEC_BYTES = 16 * 1024 * 1024
@@ -155,22 +162,56 @@ def sync_fleet(
                 target = specs_dir / rel
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(payload)
-            tracked.append(
-                {
-                    "fleet_version": version_str,
-                    "api_path_version": "v1",
-                    "format": "openapi-3.0",
-                    "file": rel,
-                    "sha256": sha,
-                    "official": True,
-                    "provenance": (
-                        "Official MiR Fleet Enterprise Integration API OpenAPI document, "
-                        "downloaded verbatim from the public MiR support portal Swagger UI."
-                    ),
-                    "source_url": url,
-                    "source_sha256": sha,
-                }
-            )
+
+            extras = []
+            for extra_name, extra_filename in EXTRA_SPECS:
+                extra_url = f"{FLEET_BASE}/{version_str}/{extra_filename}"
+                try:
+                    extra_response = client.get(extra_url)
+                    extra_response.raise_for_status()
+                    extra_payload = extra_response.content
+                    if len(extra_payload) > MAX_SPEC_BYTES:
+                        raise ValueError(f"spec exceeds {MAX_SPEC_BYTES} bytes")
+                    extra_doc = json.loads(extra_payload)
+                    if not str(extra_doc.get("openapi", "")).startswith("3"):
+                        raise ValueError("document is not OpenAPI 3")
+                except (httpx.HTTPError, ValueError) as exc:
+                    lines.append(f"fleet {version_str}/{extra_name}: skipped ({exc})")
+                    continue
+                extra_rel = f"fleet/{version_str}/{extra_filename}"
+                if not dry_run:
+                    (specs_dir / extra_rel).parent.mkdir(parents=True, exist_ok=True)
+                    (specs_dir / extra_rel).write_bytes(extra_payload)
+                extra_sha = hashlib.sha256(extra_payload).hexdigest()
+                extras.append(
+                    {
+                        "name": extra_name,
+                        "title": extra_doc.get("info", {}).get("title", extra_name),
+                        "file": extra_rel,
+                        "sha256": extra_sha,
+                        "official": True,
+                        "source_url": extra_url,
+                        "source_sha256": extra_sha,
+                    }
+                )
+
+            entry = {
+                "fleet_version": version_str,
+                "api_path_version": "v1",
+                "format": "openapi-3.0",
+                "file": rel,
+                "sha256": sha,
+                "official": True,
+                "provenance": (
+                    "Official MiR Fleet Enterprise Integration API OpenAPI document, "
+                    "downloaded verbatim from the public MiR support portal Swagger UI."
+                ),
+                "source_url": url,
+                "source_sha256": sha,
+            }
+            if extras:
+                entry["extra_apis"] = extras
+            tracked.append(entry)
             changed = True
             lines.append(f"fleet: {'would add' if dry_run else 'added'} {version_str}")
     finally:
@@ -188,10 +229,8 @@ def sync_fleet(
         registry["updated"] = datetime.date.today().isoformat()
         registry_path.write_text(json.dumps(registry, indent=2) + "\n")
         for version_str in dropped:
-            spec_file = specs_dir / existing[version_str]["file"]
-            spec_file.unlink(missing_ok=True)
-            if spec_file.parent.is_dir() and not any(spec_file.parent.iterdir()):
-                spec_file.parent.rmdir()
+            # Each fleet version owns its directory (integration + extras).
+            shutil.rmtree((specs_dir / existing[version_str]["file"]).parent, ignore_errors=True)
 
     if not changed:
         lines.append("fleet: no changes")

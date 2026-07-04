@@ -1,0 +1,184 @@
+from http import HTTPStatus
+from typing import Any
+from urllib.parse import quote
+
+import httpx
+
+from ...client import AuthenticatedClient, Client
+from ...types import Response
+from ... import errors
+
+from ...models.error import Error
+from ...models.get_mission_actions import GetMissionActions
+from ...models.post_mission_actions import PostMissionActions
+
+
+def _get_kwargs(
+    mission_id: str,
+    *,
+    body: PostMissionActions,
+) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
+
+    _kwargs: dict[str, Any] = {
+        "method": "post",
+        "url": "/missions/{mission_id}/actions".format(
+            mission_id=quote(str(mission_id), safe=""),
+        ),
+    }
+
+    _kwargs["json"] = body.to_dict()
+
+    headers["Content-Type"] = "application/json"
+
+    _kwargs["headers"] = headers
+    return _kwargs
+
+
+def _parse_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Error | GetMissionActions | None:
+    if response.status_code == 201:
+        response_201 = GetMissionActions.from_dict(response.json())
+
+        return response_201
+
+    if response.status_code == 400:
+        response_400 = Error.from_dict(response.json())
+
+        return response_400
+
+    if response.status_code == 409:
+        response_409 = Error.from_dict(response.json())
+
+        return response_409
+
+    if client.raise_on_unexpected_status:
+        raise errors.UnexpectedStatus(response.status_code, response.content)
+    else:
+        return None
+
+
+def _build_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Response[Error | GetMissionActions]:
+    return Response(
+        status_code=HTTPStatus(response.status_code),
+        content=response.content,
+        headers=response.headers,
+        parsed=_parse_response(client=client, response=response),
+    )
+
+
+def sync_detailed(
+    mission_id: str,
+    *,
+    client: AuthenticatedClient | Client,
+    body: PostMissionActions,
+) -> Response[Error | GetMissionActions]:
+    """
+    Args:
+        mission_id (str):
+        body (PostMissionActions):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Response[Error | GetMissionActions]
+    """
+
+    kwargs = _get_kwargs(
+        mission_id=mission_id,
+        body=body,
+    )
+
+    response = client.get_httpx_client().request(
+        **kwargs,
+    )
+
+    return _build_response(client=client, response=response)
+
+
+def sync(
+    mission_id: str,
+    *,
+    client: AuthenticatedClient | Client,
+    body: PostMissionActions,
+) -> Error | GetMissionActions | None:
+    """
+    Args:
+        mission_id (str):
+        body (PostMissionActions):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Error | GetMissionActions
+    """
+
+    return sync_detailed(
+        mission_id=mission_id,
+        client=client,
+        body=body,
+    ).parsed
+
+
+async def asyncio_detailed(
+    mission_id: str,
+    *,
+    client: AuthenticatedClient | Client,
+    body: PostMissionActions,
+) -> Response[Error | GetMissionActions]:
+    """
+    Args:
+        mission_id (str):
+        body (PostMissionActions):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Response[Error | GetMissionActions]
+    """
+
+    kwargs = _get_kwargs(
+        mission_id=mission_id,
+        body=body,
+    )
+
+    response = await client.get_async_httpx_client().request(**kwargs)
+
+    return _build_response(client=client, response=response)
+
+
+async def asyncio(
+    mission_id: str,
+    *,
+    client: AuthenticatedClient | Client,
+    body: PostMissionActions,
+) -> Error | GetMissionActions | None:
+    """
+    Args:
+        mission_id (str):
+        body (PostMissionActions):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Error | GetMissionActions
+    """
+
+    return (
+        await asyncio_detailed(
+            mission_id=mission_id,
+            client=client,
+            body=body,
+        )
+    ).parsed

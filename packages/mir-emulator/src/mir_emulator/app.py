@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import re
 import threading
 from collections import OrderedDict
@@ -96,7 +97,7 @@ def parse_latency_ms(header_value: str | None, default: float) -> float | None:
         requested = float(header_value)
     except ValueError:
         return None
-    if requested < 0 or requested != requested:  # NaN guard
+    if requested < 0 or math.isnan(requested):
         return None
     return min(requested, MAX_LATENCY_MS)
 
@@ -523,7 +524,7 @@ def create_app(
             )
         state = emulator.state_for(session_id)
         if request.method == "DELETE":
-            set_faults(state, [])
+            set_faults(state, [], emulator.mission_duration)
         elif request.method == "PUT":
             raw = await request.body()
             if len(raw) > MAX_BODY_BYTES:
@@ -543,7 +544,7 @@ def create_app(
                     400,
                     _error_body(400, f"Unknown faults; available: {sorted(FAULTS)}"),
                 )
-            set_faults(state, names)
+            set_faults(state, names, emulator.mission_duration)
         return _respond(200, faults_doc(state))
 
     async def status_websocket(websocket: WebSocket) -> None:

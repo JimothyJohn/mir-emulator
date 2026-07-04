@@ -1,0 +1,2393 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "MiR Fleet Compatibility API",
+    "description": "<p>This API provides RESTful endpoints in the format of software 3.X.</p>\n<p>The API is intended to support sites that have an existing integration system that is compatible with the 3.x MiR Fleet API system.</p>",
+    "contact": {
+      "name": "Mobile industrial robots",
+      "url": "https://supportportal.mobile-industrial-robots.com/",
+      "email": "support-docs@mir-robots.com"
+    },
+    "license": {
+      "name": "MiR",
+      "url": "https://www.mobile-industrial-robots.com/"
+    },
+    "version": "v1"
+  },
+  "paths": {
+    "/compatibility_api/v1/area_events/{id}/blocked": {
+      "put": {
+        "tags": [
+          "AreaEvents"
+        ],
+        "summary": "Lock or unlock lock zone",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/put-area-events-request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/put-area-events-response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/log/error_reports": {
+      "post": {
+        "tags": [
+          "ErrorReports"
+        ],
+        "summary": "Create a Fleet error log.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/create-error-report-request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/create-error-report-response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/maps": {
+      "get": {
+        "tags": [
+          "Maps"
+        ],
+        "summary": "Get all maps.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/maps/{id}": {
+      "get": {
+        "tags": [
+          "Maps"
+        ],
+        "summary": "Get a map.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/map"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/maps/{mapId}/positions": {
+      "get": {
+        "tags": [
+          "Maps"
+        ],
+        "summary": "Get positions by the specified map ID.",
+        "parameters": [
+          {
+            "name": "mapId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/position-response-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/missions": {
+      "get": {
+        "tags": [
+          "Mission"
+        ],
+        "summary": "Get all missions.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/mission_scheduler": {
+      "get": {
+        "tags": [
+          "MissionScheduler"
+        ],
+        "summary": "Get all queued orders.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/get-mission-scheduler-response-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "MissionScheduler"
+        ],
+        "summary": "Create a mission in the mission queue.",
+        "requestBody": {
+          "description": "The request to queue an order.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/queue-order-post-request"
+              },
+              "example": {"mission_id":"4ee6ef38-b93f-42cc-87eb-f2f6c15b560d","robot_id":"b528a4d2-a1d6-4689-9dab-b49da466be28","earliest_start_time":"2025-11-24T11:13:55","parameters":"N/A","priority":"N/A","high_priority":false,"description":"N/A","created_by_id":"N/A"}
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/queued-order-response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/error-response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/mission_scheduler/{id}": {
+      "get": {
+        "tags": [
+          "MissionScheduler"
+        ],
+        "summary": "Get single order by ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Guid identifying the order.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/queued-order-response"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "MissionScheduler"
+        ],
+        "summary": "Abort a scheduled order by ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Guid identifying the scheduled order to abort.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "MissionScheduler"
+        ],
+        "summary": "Change a scheduled order by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Guid identifying the scheduled order to change.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The requested changes to the order.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/queue-order-put-request"
+              },
+              "example": {"mission_id":"f89c9f31-ed73-42e5-b56f-676c2f898f9e","robot_id":"9283f71d-18d4-4fc7-99f1-8beeee6f1f73","earliest_start_time":"2025-11-24T11:13:55","parameters":"N/A","priority":"N/A","high_priority":false,"description":"N/A"}
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/queued-order-response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/error-response"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/positions": {
+      "get": {
+        "tags": [
+          "Positions"
+        ],
+        "summary": "Get all positions.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/position-response-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/positions/{id}": {
+      "get": {
+        "tags": [
+          "Positions"
+        ],
+        "summary": "Gets the position by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/position-by-id-response"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/positions/{id}/helper_positions": {
+      "get": {
+        "tags": [
+          "Positions"
+        ],
+        "summary": "Get helper (entry) positions belonging to the given position ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/position-response-item"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/resources/positions": {
+      "get": {
+        "tags": [
+          "Resource"
+        ],
+        "summary": "Get all positions' resource queues.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/position-resource-queue-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/resources/areas": {
+      "get": {
+        "tags": [
+          "Resource"
+        ],
+        "summary": "Get all zones' resource queues.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/area-resource-queue-list-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/resources/positions/{id}": {
+      "get": {
+        "tags": [
+          "Resource"
+        ],
+        "summary": "Gets a position's resource queue by ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/position-resource-queue"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/resources/areas/{id}": {
+      "get": {
+        "tags": [
+          "Resource"
+        ],
+        "summary": "Gets a zone's resource queue by ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/area-resource-queue"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/robots": {
+      "get": {
+        "tags": [
+          "Robot"
+        ],
+        "summary": "Get list of robots",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/robot-url-and-id"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/robots/{id}": {
+      "get": {
+        "tags": [
+          "Robot"
+        ],
+        "summary": "Get robot by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/get-robot-by-id-response"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                },
+                "example": {"type":"/errors/error-type","title":"Error title","status":599,"detail":"Detailed error message","instance":"/runtime/log/abc123"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compatibility_api/v1/zones": {
+      "get": {
+        "tags": [
+          "Zones"
+        ],
+        "summary": "Get all zones.",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/zone-response-item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "angle-hook-data": {
+        "required": [
+          "timestamp"
+        ],
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "$ref": "#/components/schemas/stamp"
+          },
+          "angle": {
+            "type": "number",
+            "description": "Angle of the hook in degrees.",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Angle"
+      },
+      "area-resource-queue": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/resource-queue"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "max_robots": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              },
+              "assigned": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "map_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "blocked_for_entry": {
+                "type": "string",
+                "description": "If the resource is blocked for entry.\nChanged from type bool in order to show \"N/A\"",
+                "readOnly": true
+              },
+              "queue": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "allowed_methods": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              },
+              "guid": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Area resource queue details"
+      },
+      "area-resource-queue-list-item": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/resource-queue"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "queue": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "map_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "blocked_for_entry": {
+                "type": "string",
+                "description": "If the resource is blocked for entry.\nChanged from type bool in order to show \"N/A\"",
+                "readOnly": true
+              },
+              "assigned": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "url": {
+                "maxLength": 200,
+                "type": "string",
+                "description": "The resource URL"
+              },
+              "guid": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Response for area resource queues."
+      },
+      "cart": {
+        "type": "object",
+        "properties": {
+          "width": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "length": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "offset_locked_wheels": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The id of the attached trolley"
+          },
+          "height": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Trolley"
+      },
+      "create-error-report-request": {
+        "required": [
+          "description"
+        ],
+        "type": "object",
+        "properties": {
+          "description": {
+            "minLength": 1,
+            "type": "string",
+            "description": "The mission identifier."
+          }
+        },
+        "additionalProperties": false,
+        "description": ""
+      },
+      "create-error-report-response": {
+        "type": "object",
+        "properties": {
+          "generating": {
+            "type": "boolean",
+            "description": "Indicates whether the error log creation is running or not",
+            "readOnly": true
+          },
+          "allowed_methods": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the error log."
+          },
+          "module": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "download_url": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "time": {
+            "type": "string",
+            "description": "Time of error log creation.",
+            "format": "date-time"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "Is the error log ready for download",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "CreateErrorReport response."
+      },
+      "error": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "error_human": {
+            "type": "string",
+            "description": "Human readable description of the error",
+            "nullable": true
+          },
+          "error_code": {
+            "type": "string",
+            "description": "Machine-readable error code",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "An error",
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "Error": "#/components/schemas/error",
+            "ErrorResponse": "#/components/schemas/error-response"
+          }
+        }
+      },
+      "error-response": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/error"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "element_guid": {
+                "type": "string",
+                "description": "ID of the element the response applies to",
+                "nullable": true
+              },
+              "field_errors": {
+                "type": "object",
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/error-response"
+                    }
+                  ],
+                  "description": "An error"
+                },
+                "description": "Errors per field",
+                "nullable": true
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Error response"
+      },
+      "external-zone-type": {
+        "enum": [
+          0,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          201,
+          202,
+          203,
+          204,
+          205,
+          206,
+          208,
+          301,
+          302
+        ],
+        "type": "integer",
+        "description": "Zone type IDs",
+        "format": "int32"
+      },
+      "get-mission-scheduler-response-item": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Current state of the queued order."
+          },
+          "state": {
+            "$ref": "#/components/schemas/order-status-v3"
+          },
+          "id": {
+            "type": "string",
+            "description": "GUID identifying the order.",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Represents a mission item in the response for the get missions list."
+      },
+      "get-robot-by-id-response": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/status"
+          },
+          "fleet_state_text": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "robot_model": {
+            "type": "string",
+            "description": "Robot model."
+          },
+          "allowed_methods": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.\nChanged from type List<Object> in order to show \"N/A\"",
+            "readOnly": true
+          },
+          "description": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "ip": {
+            "type": "string",
+            "description": "Robot ip address."
+          },
+          "factory_reset_needed": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "created_by_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "fleet_state": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "created_by": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "operation_mode_info ": {
+            "$ref": "#/components/schemas/operation-mode-info"
+          },
+          "created_by_name": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "state_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "active": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "serial_number": {
+            "type": "string",
+            "description": "Robot serial number."
+          },
+          "robot_group_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "Robot id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Robot name."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Robot response"
+      },
+      "header": {
+        "required": [
+          "stamp"
+        ],
+        "type": "object",
+        "properties": {
+          "stamp": {
+            "$ref": "#/components/schemas/stamp"
+          },
+          "frame_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "seq": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Header for legacy response"
+      },
+      "hook-data": {
+        "type": "object",
+        "properties": {
+          "angle": {
+            "$ref": "#/components/schemas/angle-hook-data"
+          },
+          "height_state": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "brake_state": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "height": {
+            "type": "number",
+            "description": "Height of the hook measured from the ground in mm.",
+            "format": "double"
+          },
+          "length": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "gripper_state": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Hook data"
+      },
+      "hook-status": {
+        "type": "object",
+        "properties": {
+          "cart": {
+            "$ref": "#/components/schemas/cart"
+          },
+          "available": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "cart_attached": {
+            "type": "boolean",
+            "description": "Boolean indicating if a trolley is currently attached"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Hook Status"
+      },
+      "list-item": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "maxLength": 200,
+            "type": "string",
+            "description": "The API URL for object details"
+          },
+          "guid": {
+            "type": "string",
+            "description": "Id of the object",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the object"
+          }
+        },
+        "additionalProperties": false,
+        "description": "A reference to an object"
+      },
+      "map": {
+        "type": "object",
+        "properties": {
+          "base_map": {
+            "type": "string",
+            "description": "Map image as base64 encoded byte string"
+          },
+          "allowed_methods": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "description": "Map name"
+          },
+          "positions": {
+            "type": "string",
+            "description": "URL of map positions"
+          },
+          "created_by": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "origin_theta": {
+            "type": "number",
+            "description": "Map orientation",
+            "format": "double",
+            "readOnly": true
+          },
+          "created_by_name": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "origin_y": {
+            "type": "number",
+            "description": "Map origin Y coordinate",
+            "format": "double"
+          },
+          "origin_x": {
+            "type": "number",
+            "description": "Map origin X coordinate",
+            "format": "double"
+          },
+          "path_guides": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "created_by_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "guid": {
+            "type": "string",
+            "description": "Map ID",
+            "format": "uuid"
+          },
+          "resolution": {
+            "type": "number",
+            "description": "Map resolution",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Map object"
+      },
+      "operation-mode-info": {
+        "type": "object",
+        "properties": {
+          "synchronization_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "mission_scheduling_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "resource_management_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "initial_synchronization_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "collision_avoidance_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "mode_name": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "charging_staging_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "communicator_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "OperationModeInfo"
+      },
+      "order-status-v3": {
+        "enum": [
+          "Pending",
+          "Executing",
+          "Done",
+          "Aborted"
+        ],
+        "type": "string",
+        "description": "States of an order."
+      },
+      "position": {
+        "type": "object",
+        "properties": {
+          "y": {
+            "type": "number",
+            "description": "Robot's Y axis position.",
+            "format": "double"
+          },
+          "x": {
+            "type": "number",
+            "description": "Robot's X axis position.",
+            "format": "double"
+          },
+          "orientation": {
+            "type": "number",
+            "description": "Robot's orientation position.",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Position"
+      },
+      "position-by-id-response": {
+        "type": "object",
+        "properties": {
+          "map": {
+            "type": "string",
+            "description": "Url of the map that the position is located at"
+          },
+          "pos_x": {
+            "type": "number",
+            "description": "The x position on the map",
+            "format": "double"
+          },
+          "pos_y": {
+            "type": "number",
+            "description": "The y position on the map",
+            "format": "double"
+          },
+          "map_id": {
+            "type": "string",
+            "description": "The id of the map that the position is located at"
+          },
+          "orientation": {
+            "type": "number",
+            "description": "Orientation of the position",
+            "format": "double"
+          },
+          "parent": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "type_id": {
+            "$ref": "#/components/schemas/position-type-id-v3"
+          },
+          "docking_offsets": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "help_positions": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "created_by_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "created_by": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "parent_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "created_by_name": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "allowed_methods": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "guid": {
+            "type": "string",
+            "description": "ID of the position"
+          },
+          "type": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the position"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Position details"
+      },
+      "position-resource-queue": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/resource-queue"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "max_robots": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              },
+              "queue": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "allowed_methods": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              },
+              "name": {
+                "type": "string"
+              },
+              "assigned": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "map_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "guid": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Position resource queue details"
+      },
+      "position-resource-queue-list-item": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/resource-queue"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "queue": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "map_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "url": {
+                "maxLength": 200,
+                "type": "string",
+                "description": "The resource URL"
+              },
+              "assigned": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "guid": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Position resource queue list item."
+      },
+      "position-response-item": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "map": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility."
+          },
+          "guid": {
+            "type": "string",
+            "description": "Position id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Position name."
+          },
+          "type_id": {
+            "$ref": "#/components/schemas/position-type-id-v3"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response item model for GetPositions"
+      },
+      "position-type-id-v3": {
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          30,
+          31,
+          42,
+          50,
+          51,
+          52,
+          53,
+          106,
+          200,
+          201,
+          202,
+          203,
+          204,
+          205,
+          206,
+          207,
+          208,
+          209,
+          210,
+          211
+        ],
+        "type": "integer",
+        "description": "Position type IDs.",
+        "format": "int32"
+      },
+      "problem-details": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": { }
+      },
+      "put-area-events-request": {
+        "required": [
+          "block"
+        ],
+        "type": "object",
+        "properties": {
+          "block": {
+            "type": "boolean",
+            "description": "The request for locking the lock zone"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request to block/unblock an area."
+      },
+      "put-area-events-response": {
+        "type": "object",
+        "properties": {
+          "block": {
+            "type": "boolean",
+            "description": "The response for locking the lock zone which duplicates the request"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Block area response."
+      },
+      "queue-order-post-request": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/queue-order-request"
+          },
+          {
+            "required": [
+              "mission_id"
+            ],
+            "type": "object",
+            "properties": {
+              "mission_id": {
+                "type": "string",
+                "description": "The mission identifier. Required in POST request.",
+                "format": "uuid"
+              },
+              "created_by_id": {
+                "type": "string",
+                "description": "Not a feature - Kept for backwards compatibility.",
+                "readOnly": true
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Request to queue a new order"
+      },
+      "queue-order-put-request": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/queue-order-request"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false
+          }
+        ],
+        "description": "Request to update an order"
+      },
+      "queue-order-request": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "mission_id": {
+            "type": "string",
+            "description": "The mission identifier.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "robot_id": {
+            "type": "string",
+            "description": "The robot identifier for the robot required to execute the order.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "earliest_start_time": {
+            "type": "string",
+            "description": "The earliest time at which the order can be scheduled.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "parameters": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "priority": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "high_priority": {
+            "type": "boolean",
+            "description": "Whether the mission has high priority."
+          },
+          "description": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request to schedule a mission.",
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "QueueOrderPutRequest": "#/components/schemas/queue-order-put-request",
+            "QueueOrderPostRequest": "#/components/schemas/queue-order-post-request"
+          }
+        }
+      },
+      "queued-order-response": {
+        "type": "object",
+        "properties": {
+          "priority": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "allowed_methods": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "description": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "order_time": {
+            "type": "string",
+            "description": "Time when the order was created.",
+            "format": "date-time"
+          },
+          "state": {
+            "$ref": "#/components/schemas/order-status-v3"
+          },
+          "finish_time": {
+            "type": "string",
+            "description": "The time when the order was finished, or default timestamp if not finished yet",
+            "format": "date-time"
+          },
+          "earliest_start_time": {
+            "type": "string",
+            "description": "The earliest time that the order is allowed to be started.",
+            "format": "date-time"
+          },
+          "start_time": {
+            "type": "string",
+            "description": "The time the order was started, or default timestamp if not yet started.",
+            "format": "date-time"
+          },
+          "mission": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "created_by": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "fleet_scheduled_guid": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "mission_id": {
+            "type": "string",
+            "description": "The GUID identifying the mission referenced by the order.",
+            "format": "uuid"
+          },
+          "high_priority": {
+            "type": "boolean",
+            "description": "Whether the order has high priority."
+          },
+          "mission_name": {
+            "type": "string",
+            "description": "The name of the mission referenced by the order."
+          },
+          "created_by_name": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "robot_id": {
+            "type": "string",
+            "description": "The GUID identifying the robot referenced by the order. Defaults to a zero-GUID for any robot.",
+            "format": "uuid"
+          },
+          "created_by_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "parameters": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "GUID identifying the order.",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Represents a queued mission."
+      },
+      "resource-queue": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "queue": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Robots in queue for the resource."
+          },
+          "assigned": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Robots assigned to the resource."
+          },
+          "guid": {
+            "type": "string",
+            "description": "Id of the resource.",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of resource."
+          },
+          "map_id": {
+            "type": "string",
+            "description": "Id of map the resource is on.",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Base class for resource queues",
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "AreaResourceQueue": "#/components/schemas/area-resource-queue",
+            "AreaResourceQueueListItem": "#/components/schemas/area-resource-queue-list-item",
+            "PositionResourceQueue": "#/components/schemas/position-resource-queue",
+            "PositionResourceQueueListItem": "#/components/schemas/position-resource-queue-list-item"
+          }
+        }
+      },
+      "robot-url-and-id": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Url to get specific information about robot"
+          },
+          "id": {
+            "type": "string",
+            "description": "Id of the robot",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Robot"
+      },
+      "stamp": {
+        "type": "object",
+        "properties": {
+          "secs": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "nsecs": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Stamp for legacy response"
+      },
+      "status": {
+        "required": [
+          "header",
+          "hook_data",
+          "hook_status",
+          "position",
+          "user_prompt"
+        ],
+        "type": "object",
+        "properties": {
+          "joystick_low_speed_mode_enabled": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "mode_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "moved": {
+            "type": "number",
+            "description": "Moved (Total distance in meters).",
+            "format": "double"
+          },
+          "mission_queue_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "header": {
+            "$ref": "#/components/schemas/header"
+          },
+          "robot_name": {
+            "type": "string",
+            "description": "Robot name."
+          },
+          "uptime": {
+            "type": "integer",
+            "description": "Uptime.",
+            "format": "int64"
+          },
+          "errors": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.\nChanged from type List<Object> in order to show \"N/A\"",
+            "readOnly": true
+          },
+          "unloaded_map_changes": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "distance_to_next_target": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "battery_voltage": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "mode_key_state": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "battery_percentage": {
+            "type": "number",
+            "description": "Robot battery percentage.",
+            "format": "double"
+          },
+          "map_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "software_version": {
+            "type": "string",
+            "description": "Robot software version."
+          },
+          "safety_system_muted": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "mission_text": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "velocity": {
+            "$ref": "#/components/schemas/velocity"
+          },
+          "state_text": {
+            "type": "string",
+            "description": "Robot state."
+          },
+          "position": {
+            "$ref": "#/components/schemas/position"
+          },
+          "footprint": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "user_prompt": {
+            "$ref": "#/components/schemas/user-prompt"
+          },
+          "mode_text": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "hook_status": {
+            "$ref": "#/components/schemas/hook-status"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "joystick_web_session_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "hook_data": {
+            "$ref": "#/components/schemas/hook-data"
+          },
+          "battery_time_remaining": {
+            "type": "integer",
+            "description": "Battery time remaining (seconds).",
+            "format": "int64"
+          },
+          "state_id": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Robot status information."
+      },
+      "user-prompt": {
+        "required": [
+          "timeout"
+        ],
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "has_request": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "timeout": {
+            "$ref": "#/components/schemas/stamp"
+          },
+          "user_group": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "guid": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "options": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.\nChanged from type List<Object> in order to show \"N/A\"",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "User prompt"
+      },
+      "velocity": {
+        "type": "object",
+        "properties": {
+          "linear": {
+            "type": "number",
+            "description": "Linear velocity",
+            "format": "double"
+          },
+          "angular": {
+            "type": "number",
+            "description": "Angular velocity",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Velocity"
+      },
+      "zone-response-item": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Not a feature - Kept for backwards compatibility.",
+            "readOnly": true
+          },
+          "map": {
+            "type": "string",
+            "description": "URL of the map the zone belongs to."
+          },
+          "guid": {
+            "type": "string",
+            "description": "Zone id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Zone name."
+          },
+          "type_id": {
+            "$ref": "#/components/schemas/external-zone-type"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Zone"
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "name": "x-api-key",
+        "in": "header"
+      }
+    }
+  },
+  "security": [
+    {
+      "ApiKeyAuth": [ ]
+    }
+  ]
+}

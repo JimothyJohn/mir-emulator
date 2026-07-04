@@ -1,0 +1,4 @@
+Add CONTRIBUTIION.md for future developers' and agents to add helpful features and REQUESTS.md that explain to the user how to
+  open an issue or PR that will help guide the automated agentic development of this emulator. Then create a Claude Skill that
+  will function as an agentic way to use the API to control the robots with a simple human language interface. Use those
+  learnings to also build an MCP server for this so others can do a similar thing remotely.
