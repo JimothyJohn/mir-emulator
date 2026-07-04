@@ -1,0 +1,23 @@
+{
+  "skill_name": "mir-robot-control",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Start a MiR robot I can test against, then tell me its battery level and whether it has any errors.",
+      "expected_output": "An emulator is started (uv run mir-emulator), GET /status is called with correct MiR Basic auth (SHA-256-hashed password), and battery_percentage plus errors are reported in plain language.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Queue up whatever charging-related mission the robot on localhost:8080 has, wait for it to finish, and confirm it completed.",
+      "expected_output": "GET /missions is used to find a mission whose name matches charging (no guessed guids), POST /mission_queue enqueues it, GET /mission_queue/{id} is polled until state is Done, and completion is reported from observed state.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Simulate an emergency stop on the emulator, show me what the fleet sees for that robot, then recover it.",
+      "expected_output": "PUT /_emulator/faults activates emergency_stop, the fleet view (GET /api/v1/robots with x-api-key) shows the Emergency Stop end state, and recovery clears the fault via /_emulator/faults (noting clear_error cannot clear an e-stop, matching MiR).",
+      "files": []
+    }
+  ]
+}
