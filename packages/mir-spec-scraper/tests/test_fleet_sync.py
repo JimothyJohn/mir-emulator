@@ -158,7 +158,7 @@ def _client_with_extras(
 
 def test_sync_records_extra_apis_when_published(specs_dir):
     published = {"1.3.0": _openapi("1.3.0"), "1.4.0": _openapi("1.4.0")}
-    changed, summary = sync_fleet(
+    changed, _summary = sync_fleet(
         specs_dir, client=_client_with_extras(published, extras={"1.4.0"})
     )
     assert changed
