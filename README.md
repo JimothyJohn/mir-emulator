@@ -1,5 +1,8 @@
 # MiR emulator
 
+[![GitHub](https://img.shields.io/badge/GitHub-JimothyJohn%2Fmir--emulator-181717?logo=github)](https://github.com/JimothyJohn/mir-emulator)
+[![Live demo](https://img.shields.io/badge/Live_demo-mir.advin.io-2ea44f)](https://mir.advin.io/console)
+
 Self-updating emulator of the [Mobile Industrial Robots (MiR) robot REST API](https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/)
 **and the [MiR Fleet Enterprise Integration API](https://supportportal.mobile-industrial-robots.com/support-files/manuals/MiR_Fleet_Enterprise_OpenAPI_Specification/1.5.0/index.html?urls.primaryName=MiR+Fleet+Integration+API+v1)**.
 Develop and test MiR integrations against a local, spec-faithful `/api/v2.0.0`
