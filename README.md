@@ -154,3 +154,9 @@ Runtime: `starlette` + `uvicorn` (ASGI routing/serving), `jsonschema`
 publishes PDFs, and its ruled-table extraction is what makes the PDF→swagger
 conversion reliable). Dev: `pytest`, `hypothesis` (property tests on the
 input-handling paths), `ruff`, `ty`.
+
+## License
+
+[MIT](LICENSE) — use it freely, commercially or not; the only ask is that the
+copyright notice stays with the code. If this emulator saves you robot time,
+a mention is appreciated.
