@@ -468,3 +468,54 @@ def test_sessions_do_not_leak_under_concurrency(clock, fleet):
         t.join()
     assert errors == []
     assert fleet.get("/api/v1/order", headers=KEY).json() == []  # default robot untouched
+
+
+# ---- the Top Module and Compatibility APIs share the one fleet ------------------
+
+
+def test_extra_apis_require_the_same_api_key(fleet):
+    assert fleet.get("/api/v1/top-module/status").status_code == 401
+    assert fleet.get("/compatibility_api/v1/missions").status_code == 401
+    assert fleet.get("/api/v1/top-module/status", headers=KEY).status_code == 200
+    assert fleet.get("/compatibility_api/v1/missions", headers=KEY).status_code == 200
+
+
+def test_extra_api_documents_served_verbatim(fleet):
+    top = fleet.get("/openapi_topmodule_v1.json").json()
+    compat = fleet.get("/openapi_compatibility_v1.json").json()
+    assert top["info"]["title"] == "Top Module API v1"
+    assert compat["info"]["title"] == "MiR Fleet Compatibility API"
+    index = fleet.get("/").json()
+    assert [a["name"] for a in index["apis"]] == ["integration", "top_module", "compatibility"]
+
+
+def test_extra_apis_share_fleet_sessions(fleet):
+    session = {**KEY, "X-MiR-Session": "crew-a"}
+    created = fleet.post(
+        "/api/v1/top-module/event",
+        headers=session,
+        json={},
+    )
+    assert created.status_code < 500
+    # the recorder (fleet-level state) sees steps from every API family
+    fleet.put("/_emulator/recorder", headers=session, json={"recording": True})
+    fleet.get("/api/v1/system/version", headers=session)
+    fleet.get("/api/v1/top-module/status", headers=session)
+    fleet.get("/compatibility_api/v1/missions", headers=session)
+    steps = fleet.get("/_emulator/recorder", headers=session).json()["steps"]
+    assert [s["path"] for s in steps] == [
+        "/api/v1/system/version",
+        "/api/v1/top-module/status",
+        "/compatibility_api/v1/missions",
+    ]
+
+
+def test_every_fleet_version_routes_its_extra_apis():
+    from mir_emulator import registry
+
+    for version in registry.fleet_supported_versions():
+        app = create_fleet_app(version)
+        client = TestClient(app)
+        for op in app.state.all_operations:
+            if op.method == "GET" and "{" not in op.path:
+                assert client.get(op.path, headers=KEY).status_code != 404, f"{version} {op.path}"

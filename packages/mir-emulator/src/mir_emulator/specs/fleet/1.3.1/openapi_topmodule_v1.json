@@ -1,0 +1,683 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "Top Module API v1",
+    "description": "Runtime interaction between Fleet and Top Module.",
+    "contact": {
+      "name": "Mobile industrial robots",
+      "url": "https://supportportal.mobile-industrial-robots.com/",
+      "email": "support-docs@mir-robots.com"
+    },
+    "license": {
+      "name": "MiR",
+      "url": "https://www.mobile-industrial-robots.com/"
+    },
+    "version": "v1"
+  },
+  "paths": {
+    "/api/v1/top-module/abort": {
+      "get": {
+        "tags": [
+          "Abort"
+        ],
+        "summary": "Get abort entries",
+        "description": "Get abort entries from robot",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/get-abort-entries-response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/top-module/analytics": {
+      "post": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Sends data to Analytics",
+        "parameters": [
+          {
+            "name": "TopModuleId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/send-data-to-analytics-request"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/send-data-to-analytics-request"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/send-data-to-analytics-request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/top-module/continue": {
+      "post": {
+        "tags": [
+          "Continue"
+        ],
+        "summary": "Send Continue",
+        "description": "Send Continue to robot in response to \"wait for continue\" action",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted"
+          }
+        }
+      }
+    },
+    "/api/v1/top-module/error": {
+      "post": {
+        "tags": [
+          "Error"
+        ],
+        "summary": "Send error to Fleet",
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/error-request"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/error-request"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/error-request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/top-module/event": {
+      "post": {
+        "tags": [
+          "Event"
+        ],
+        "summary": "Send event entry",
+        "description": "Send event entry to Fleet",
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/event-request"
+              },
+              "example": {"name":"EventName","payload":{"Speed":"Low","Height":10,"IsPaused":false,"Orientation":0.5}}
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/event-request"
+              },
+              "example": {"name":"EventName","payload":{"Speed":"Low","Height":10,"IsPaused":false,"Orientation":0.5}}
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/event-request"
+              },
+              "example": {"name":"EventName","payload":{"Speed":"Low","Height":10,"IsPaused":false,"Orientation":0.5}}
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Event"
+        ],
+        "summary": "Get event entries",
+        "description": "Get event entries from Fleet",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/get-event-entries-response"
+                },
+                "example": {"event-entries":[{"name":"Event1","payload":{"Lift":4},"timestamp":"2024-06-21T08:54:42"},{"name":"Event2","payload":{"Lift":0},"timestamp":"2024-06-21T08:54:42"}]}
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/get-event-entries-response"
+                },
+                "example": {"event-entries":[{"name":"Event1","payload":{"Lift":4},"timestamp":"2024-06-21T08:54:42"},{"name":"Event2","payload":{"Lift":0},"timestamp":"2024-06-21T08:54:42"}]}
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/get-event-entries-response"
+                },
+                "example": {"event-entries":[{"name":"Event1","payload":{"Lift":4},"timestamp":"2024-06-21T08:54:42"},{"name":"Event2","payload":{"Lift":0},"timestamp":"2024-06-21T08:54:42"}]}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/top-module/status": {
+      "get": {
+        "tags": [
+          "Status"
+        ],
+        "summary": "Get status entries",
+        "description": "Get status entries from robot",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/get-status-entries-response"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/get-status-entries-response"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/get-status-entries-response"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/top-module/subscription": {
+      "post": {
+        "tags": [
+          "Subscription"
+        ],
+        "summary": "Subscribe to events",
+        "description": "Create a subscription via webhooks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/subscription-request"
+              },
+              "example": {"subscription":{"target-address":"https://myhook.com/abort","event-type":"Abort"}}
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/subscription-request"
+              },
+              "example": {"subscription":{"target-address":"https://myhook.com/abort","event-type":"Abort"}}
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/subscription-request"
+              },
+              "example": {"subscription":{"target-address":"https://myhook.com/abort","event-type":"Abort"}}
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/top-module/subscription/{eventType}": {
+      "delete": {
+        "tags": [
+          "Subscription"
+        ],
+        "summary": "Delete a subscription",
+        "description": "Delete specific subscription to webhook",
+        "parameters": [
+          {
+            "name": "eventType",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/event-type"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/problem-details"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "abort-entry": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "description": "Timestamp of abort",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Abort entry"
+      },
+      "error-request": {
+        "required": [
+          "message",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Error name"
+          },
+          "message": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Error message"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request for a top module to send an error"
+      },
+      "event-entry": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Event name"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": { },
+            "description": "Event payload"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "Event timestamp",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Event entry"
+      },
+      "event-request": {
+        "required": [
+          "name",
+          "payload"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Event name"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": { },
+            "description": "Event payload"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request for top module to send an event"
+      },
+      "event-type": {
+        "enum": [
+          "Event",
+          "Status",
+          "Abort"
+        ],
+        "type": "string",
+        "description": "Subscription event type"
+      },
+      "get-abort-entries-response": {
+        "type": "object",
+        "properties": {
+          "abort-entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/abort-entry"
+            },
+            "description": "List of abort entries"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response with list of abort entries"
+      },
+      "get-event-entries-response": {
+        "type": "object",
+        "properties": {
+          "event-entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/event-entry"
+            },
+            "description": "List of event entries"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response with a list of event entries"
+      },
+      "get-status-entries-response": {
+        "type": "object",
+        "properties": {
+          "status-entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/status-entry"
+            },
+            "description": "List of status entries"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response with list of status entries"
+      },
+      "problem-details": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": { }
+      },
+      "send-data-to-analytics-request": {
+        "required": [
+          "name",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Data name"
+          },
+          "value": {
+            "type": "number",
+            "description": "Data value",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request with information for analytics"
+      },
+      "status-entry": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Robot status"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "Timestamp of status change",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Robot status entry"
+      },
+      "subscription": {
+        "required": [
+          "event-type",
+          "target-address"
+        ],
+        "type": "object",
+        "properties": {
+          "target-address": {
+            "type": "string",
+            "description": "Target address",
+            "format": "uri"
+          },
+          "event-type": {
+            "$ref": "#/components/schemas/event-type"
+          }
+        },
+        "additionalProperties": false,
+        "description": "DTO for subscription"
+      },
+      "subscription-request": {
+        "required": [
+          "subscription"
+        ],
+        "type": "object",
+        "properties": {
+          "subscription": {
+            "$ref": "#/components/schemas/subscription"
+          }
+        },
+        "additionalProperties": false,
+        "description": "DTO for subscription request"
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "name": "x-api-key",
+        "in": "header"
+      }
+    }
+  },
+  "security": [
+    {
+      "ApiKeyAuth": [ ]
+    }
+  ]
+}

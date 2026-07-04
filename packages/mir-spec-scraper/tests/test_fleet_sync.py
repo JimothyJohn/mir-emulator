@@ -133,3 +133,55 @@ def test_network_failure_keeps_existing_coverage(specs_dir):
     tracked = [t["fleet_version"] for t in _registry(specs_dir)["fleet"]["tracked"]]
     assert tracked == ["1.3.0"]
     assert "kept existing coverage" in summary or "no changes" in summary
+
+
+def _client_with_extras(
+    published: dict[str, bytes], extras: "set[str] | frozenset[str]" = frozenset()
+) -> httpx.Client:
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        for version, payload in published.items():
+            if url == f"{FLEET_BASE}/{version}/openapi_v1.json":
+                return (
+                    httpx.Response(200, content=payload)
+                    if request.method == "GET"
+                    else httpx.Response(200)
+                )
+            if version in extras:
+                for fname in ("openapi_topmodule_v1.json", "openapi_compatibility_v1.json"):
+                    if url == f"{FLEET_BASE}/{version}/{fname}":
+                        return httpx.Response(200, content=payload)
+        return httpx.Response(404)
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_sync_records_extra_apis_when_published(specs_dir):
+    published = {"1.3.0": _openapi("1.3.0"), "1.4.0": _openapi("1.4.0")}
+    changed, _summary = sync_fleet(
+        specs_dir, client=_client_with_extras(published, extras={"1.4.0"})
+    )
+    assert changed
+    entries = {t["fleet_version"]: t for t in _registry(specs_dir)["fleet"]["tracked"]}
+    extras = entries["1.4.0"].get("extra_apis", [])
+    assert [e["name"] for e in extras] == ["top_module", "compatibility"]
+    for extra in extras:
+        assert (specs_dir / extra["file"]).is_file()
+
+
+def test_missing_extras_never_block_the_version(specs_dir):
+    published = {"1.3.0": _openapi("1.3.0"), "1.4.0": _openapi("1.4.0")}
+    changed, summary = sync_fleet(specs_dir, client=_client_with_extras(published))
+    assert changed
+    entries = {t["fleet_version"]: t for t in _registry(specs_dir)["fleet"]["tracked"]}
+    assert "1.4.0" in entries
+    assert "extra_apis" not in entries["1.4.0"]
+    assert "top_module: skipped" in summary
+
+
+def test_dropped_version_directory_is_fully_pruned(specs_dir):
+    published = {"1.3.0": _openapi("1.3.0")}
+    sync_fleet(specs_dir, client=_client_with_extras(published, extras={"1.3.0"}))
+    published = {f"1.{m}.0": _openapi(f"1.{m}.0") for m in range(4, 9)}  # 1.3.0 gone
+    sync_fleet(specs_dir, client=_client_with_extras(published))
+    assert not (specs_dir / "fleet" / "1.3.0").exists()

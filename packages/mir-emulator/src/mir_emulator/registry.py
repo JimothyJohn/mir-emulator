@@ -81,6 +81,16 @@ def fleet_supported_versions() -> list[str]:
     return sorted(versions, key=version_key, reverse=True)
 
 
+def fleet_extra_specs(fleet_version: str) -> list[dict]:
+    """The Top Module / Compatibility API records for one fleet version, each
+    with a resolved absolute "path" key added (empty list if none tracked)."""
+    entry = fleet_tracked_entry(fleet_version)
+    extras = []
+    for record in entry.get("extra_apis", []):
+        extras.append({**record, "path": _specs_dir() / record["file"]})
+    return extras
+
+
 def fleet_spec_path(fleet_version: str | None = None) -> tuple[str, Path]:
     """Resolve a Fleet version (or the newest) to its bundled spec file."""
     entries = {t["fleet_version"]: t for t in fleet_registry().get("tracked", [])}

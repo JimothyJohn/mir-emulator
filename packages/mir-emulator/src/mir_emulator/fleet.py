@@ -539,10 +539,53 @@ def create_fleet_app(
         for op in spec.operations.values()
     ]
 
+    # MiR publishes two more APIs beside the Integration API — the Top Module
+    # API and the Compatibility API. One fleet serves all three: secondary
+    # emulators own their spec (validation/examples resolve against the right
+    # document) but share the primary's state, sessions, and robot clients.
+    extra_apis: list[tuple[dict, Any]] = []
+    for record in registry.fleet_extra_specs(version):
+        extra_spec = load_spec(record["path"], version)
+        secondary = FleetEmulator(
+            extra_spec,
+            robots=robots,
+            fleet_version=version,
+            api_key=api_key,
+            enforce_auth=enforce_auth,
+            username=robot_username,
+            password=robot_password,
+            seed=seed,
+            mission_duration=mission_duration,
+        )
+        secondary.state = emulator.state
+        secondary._sessions = emulator._sessions
+        secondary._sessions_lock = emulator._sessions_lock
+        secondary._clients = emulator._clients
+        routes.extend(
+            Route(
+                extra_spec.base_path + _starlette_path(op),
+                secondary.handler_for(op),
+                methods=[op.method],
+            )
+            for op in extra_spec.operations.values()
+        )
+        extra_apis.append((record, extra_spec))
+
     raw_doc = spec.document
 
     async def spec_json(_request: Request) -> JSONResponse:
         return JSONResponse(raw_doc)
+
+    def _doc_route(document: dict):
+        async def serve(_request: Request) -> JSONResponse:
+            return JSONResponse(document)
+
+        return serve
+
+    extra_doc_routes = [
+        Route("/" + record["file"].rsplit("/", 1)[-1], _doc_route(extra_spec.document))
+        for record, extra_spec in extra_apis
+    ]
 
     entry = registry.fleet_tracked_entry(version)
     docs_url = registry.fleet_registry().get("docs_url_template", "").replace("{version}", version)
@@ -555,6 +598,23 @@ def create_fleet_app(
                 "api_title": spec.title,
                 "base_path": "/api/v1",
                 "operations": len(spec.operations),
+                "apis": [
+                    {
+                        "name": "integration",
+                        "title": spec.title,
+                        "operations": len(spec.operations),
+                        "spec": "/openapi.json",
+                    },
+                    *[
+                        {
+                            "name": record["name"],
+                            "title": extra_spec.title,
+                            "operations": len(extra_spec.operations),
+                            "spec": "/" + record["file"].rsplit("/", 1)[-1],
+                        }
+                        for record, extra_spec in extra_apis
+                    ],
+                ],
                 "auth": f"{API_KEY_HEADER} header (default key {DEFAULT_API_KEY!r})"
                 if enforce_auth
                 else "disabled",
@@ -634,7 +694,9 @@ def create_fleet_app(
         routes=[
             Route("/", index),
             Route("/openapi.json", spec_json),
+            Route("/openapi_v1.json", spec_json),  # the CDN's filename for it
             Route("/swagger.json", spec_json),  # parity with the robot apps
+            *extra_doc_routes,
             Route("/_emulator/recorder", recorder_endpoint, methods=["GET", "PUT", "DELETE"]),
             *routes,
         ],
@@ -643,4 +705,8 @@ def create_fleet_app(
     )
     app.state.emulator = emulator
     app.state.fleet_version = version
+    app.state.all_operations = [
+        *spec.operations.values(),
+        *[op for _record, extra in extra_apis for op in extra.operations.values()],
+    ]
     return app
