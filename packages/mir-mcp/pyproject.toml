@@ -8,7 +8,11 @@ license = "MIT"
 dependencies = [
     "mcp>=1.2",
     "httpx>=0.27",
+    "mir-client",
 ]
+
+[tool.uv.sources]
+mir-client = { workspace = true }
 
 [project.scripts]
 mir-mcp = "mir_mcp.server:main"

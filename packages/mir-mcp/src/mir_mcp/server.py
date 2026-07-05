@@ -522,6 +522,71 @@ async def mir_fleet_order_status(serial_order_id: str, abort: bool = False) -> s
     return body if isinstance(body, str) else _dump(body)
 
 
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Generate an HTML status report",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+async def mir_generate_report(
+    output_path: str,
+    target: Literal["robot", "fleet"] = "robot",
+    session_id: str | None = None,
+) -> str:
+    """Generate a self-contained HTML dashboard for the configured robot or
+    fleet: current-status indicators, the daily trend, and a descriptive
+    timeline of actions.
+
+    Reads documented API endpoints only (robot: /status, /mission_queue,
+    /log/error_reports, /statistics/distance; fleet: /robots, /order), so
+    it is safe against real hardware — the only write is the local HTML
+    file at output_path. Returns a JSON summary; open the file to view."""
+    import os
+    from pathlib import Path
+
+    from mir_client.report import collect_report_async, render_report
+
+    try:
+        base = await (
+            client.resolved_robot_base() if target == "robot" else client.resolved_fleet_base()
+        )
+    except client.TargetResolutionError as exc:
+        return str(exc)
+    kwargs: dict[str, Any] = {"transport": client.TRANSPORT} if client.TRANSPORT else {}
+    try:
+        data = await collect_report_async(
+            base,
+            username=os.environ.get("MIR_USERNAME", "distributor"),
+            password=os.environ.get("MIR_PASSWORD", "distributor"),
+            api_key=os.environ.get("MIR_API_KEY", "distributor"),
+            session_id=session_id or os.environ.get("MIR_SESSION") or None,
+            **kwargs,
+        )
+    except Exception as exc:  # unreachable host, auth, kind gate — all actionable
+        return (
+            f"Error: report collection from {base} failed: {exc}. Check the URL is a "
+            "robot or fleet (mir_server_info) and credentials (MIR_USERNAME/"
+            "MIR_PASSWORD or MIR_API_KEY)."
+        )
+    Path(output_path).write_text(render_report(data))
+    return _dump(
+        {
+            "path": output_path,
+            "kind": data["kind"],
+            "version": data.get("version"),
+            "robots": [
+                {"name": r["name"], "battery": r["battery"], "state": r["state"]}
+                for r in data["robots"]
+            ],
+            "timeline_entries": len(data["timeline"]),
+            "trend_days": len(data["trend"]),
+        }
+    )
+
+
 def main() -> int:
     """stdio entry point: `mir-mcp` (or `uv run mir-mcp`)."""
     mcp.run()

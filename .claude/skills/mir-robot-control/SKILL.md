@@ -131,6 +131,18 @@ Full endpoint details, response fields, and emulator-only test surfaces
 (fault injection, battery control, session isolation, latency shaping,
 version diff): read [references/endpoints.md](references/endpoints.md).
 
+**"Give me a report / dashboard / how did the day go"** — don't hand-roll
+it; generate the standing dashboard (current-status indicators, daily
+trend, descriptive action timeline) from official endpoints only:
+
+```sh
+uv run mir-report http://127.0.0.1:8080 -o report.html   # robot or fleet, auto-detected
+```
+
+Python: `mir_client.report.write_report(url, path)`; MCP: the
+`mir_generate_report` tool. Read-only API traffic, so it is safe against
+real hardware; works on any tracked software version.
+
 ## Step 4: Execute and report
 
 - Verify connectivity with a cheap `GET /status` (robot) or

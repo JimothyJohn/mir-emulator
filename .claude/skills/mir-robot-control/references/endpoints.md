@@ -173,6 +173,22 @@ state never disagree.
 - **`GET|PUT|DELETE /_emulator/recorder`** — scenario recorder.
 - **`GET /`** — index: what's being emulated, versions, and how to auth.
 
+## Reporting
+
+- **`mir-report <base-url> -o report.html`** — self-contained HTML
+  dashboard from documented endpoints only (robot: `/status`,
+  `/mission_queue`, `/log/error_reports`, `/statistics/distance`; fleet:
+  `/robots`, `/order`): current-status indicator cards, the daily trend,
+  and a descriptive timeline of actions. Auto-detects robot vs fleet;
+  `--session <id>` reports on an isolated emulator session. Python:
+  `mir_client.report`; MCP: `mir_generate_report`.
+- **`GET /log/error_reports`** (official) — on the emulator, every fault
+  activation appends a spec-shaped report (module, description, time),
+  session-isolated, surviving the fault being cleared.
+- **`GET /statistics/distance`** (official) — on the emulator, per-day
+  driven distance derived from the mission timeline (missions spanning
+  midnight split across both days).
+
 ## CLI quick reference
 
 ```sh

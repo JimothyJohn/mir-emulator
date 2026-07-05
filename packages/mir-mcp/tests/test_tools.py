@@ -78,6 +78,7 @@ def test_every_tool_is_registered():
         "mir_fleet_robots",
         "mir_fleet_dispatch",
         "mir_fleet_order_status",
+        "mir_generate_report",
     }
 
 
@@ -344,3 +345,30 @@ def test_discover_rejects_an_oversized_sweep(monkeypatch):
     out = run(server.mir_discover_robots(["10.0.0.0/16"]))
     assert out.startswith("Error:")
     assert "exceeds" in out
+
+
+def test_generate_report_writes_a_robot_dashboard(robot, tmp_path):
+    out = tmp_path / "report.html"
+    result = json.loads(run(server.mir_generate_report(str(out))))
+    assert result["kind"] == "robot"
+    assert result["path"] == str(out)
+    assert result["robots"] and 0 <= result["robots"][0]["battery"] <= 100
+    html = out.read_text()
+    assert html.startswith("<!DOCTYPE html>")
+    for section in ("Current status", "Daily trend", "Timeline"):
+        assert section in html, section
+
+
+def test_generate_report_writes_a_fleet_dashboard(fleet, tmp_path):
+    out = tmp_path / "fleet.html"
+    result = json.loads(run(server.mir_generate_report(str(out), target="fleet")))
+    assert result["kind"] == "fleet"
+    assert len(result["robots"]) == 2
+    assert "MiR_Emulated_1" in out.read_text()
+
+
+def test_generate_report_unreachable_target_is_an_error_string(monkeypatch, tmp_path):
+    monkeypatch.setenv("MIR_ROBOT_URL", "http://127.0.0.1:1")  # nothing listens
+    result = run(server.mir_generate_report(str(tmp_path / "x.html")))
+    assert result.startswith("Error:")
+    assert not (tmp_path / "x.html").exists()
