@@ -187,6 +187,22 @@ FAULTS: dict[str, dict[str, Any]] = {
             "non_resettable": False,
         },
     },
+    # A rebooting (or network-partitioned) robot doesn't answer with an HTTP
+    # status — the connection dies. While active, every API request is
+    # severed mid-response (a transport error client-side); the /_emulator/*
+    # surfaces stay reachable so the fault can be cleared. Needs a real
+    # server (uvicorn): in-process ASGI test clients surface the abort as an
+    # exception instead of a closed socket.
+    "connection_drop": {
+        "description": "Connections sever mid-response, like a rebooting robot; API unreachable.",
+        "drops_connections": True,
+        "error": {
+            "code": 10017,
+            "description": "Connection dropped (emulated fault)",
+            "module": "Comms",
+            "non_resettable": True,
+        },
+    },
 }
 
 

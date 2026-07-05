@@ -39,6 +39,7 @@ from mir_emulator.behaviors import (
     MISSION_DURATION_S,
     OVERRIDES,
     RequestCtx,
+    active_faults,
     battery_doc,
     clock_doc,
     faults_doc,
@@ -83,6 +84,26 @@ MAX_VALIDATION_ERRORS = 16
 
 def _error_body(status: int, human: str) -> dict:
     return {"error_code": str(status), "error_human": human}
+
+
+class _DroppedConnection(Response):
+    """Sever the connection mid-response: declare a body length, send one
+    byte, then abandon the exchange. A real HTTP server (uvicorn) aborts the
+    connection, so the client observes the transport failure a rebooting
+    robot produces — never an HTTP status. In-process ASGI test clients
+    surface the abandonment as a server-side error instead."""
+
+    async def __call__(self, scope, receive, send) -> None:
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [(b"content-type", b"application/json"), (b"content-length", b"1024")],
+            }
+        )
+        await send({"type": "http.response.body", "body": b"{", "more_body": True})
+        # Returning without completing the declared body makes the server
+        # tear the connection down.
 
 
 def _respond(status: int, body: Any, media_type: str = "application/json") -> Response:
@@ -279,6 +300,14 @@ class Emulator:
                 400,
                 _error_body(400, "Invalid X-MiR-Session: 1-64 chars from [A-Za-z0-9._-]"),
             )
+
+        # A connection-dropping fault kills API traffic before any handling —
+        # a rebooting robot doesn't validate your request first. /_emulator/*
+        # surfaces bypass this (they have their own endpoints), so the fault
+        # stays clearable.
+        drop_state = self.state_for(session_id)
+        if any(FAULTS[n].get("drops_connections") for n in active_faults(drop_state)):
+            return _DroppedConnection()
 
         duration_override: float | None = None
         raw_duration = request.headers.get(DURATION_HEADER)

@@ -200,9 +200,15 @@ class FleetEmulator(Emulator):
         headers = {"Authorization": f"Basic {self._robot_token}"}
         if session_id:
             headers["X-MiR-Session"] = session_id
-        response = await self._client_for(robot).request(
-            method, base + path, headers=headers, json=json_body
-        )
+        try:
+            response = await self._client_for(robot).request(
+                method, base + path, headers=headers, json=json_body
+            )
+        except Exception:
+            # A robot whose connection drops mid-response (connection_drop
+            # fault, in-process abort) is unreachable, not a fleet crash —
+            # exactly how a real fleet treats a rebooting robot.
+            return 503, None
         try:
             payload = response.json()
         except ValueError:
