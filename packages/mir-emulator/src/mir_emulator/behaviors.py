@@ -493,6 +493,23 @@ def battery_doc(state: StateStore, mission_duration: float = MISSION_DURATION_S)
     }
 
 
+def _declared_only(ctx: RequestCtx, doc: dict) -> dict:
+    """*doc* restricted to the fields the op's success schema declares.
+
+    The official files answer some operations with slimmer documents than the
+    emulator's internal entries carry (POST /mission_queue and the GET list
+    return GetMission_queues {id, state, url}; GET /registers/{id} returns
+    GetRegister without the list shape's url) — never emit more than the spec
+    states. A schema without declared properties leaves *doc* untouched."""
+    schema = ctx.spec.deref(ctx.op.success_schema)
+    if schema.get("type") == "array":
+        schema = schema.get("items") or {}
+    props = schema.get("properties")
+    if not isinstance(props, dict) or not props:
+        return doc
+    return {key: value for key, value in doc.items() if key in props}
+
+
 def _mission_snapshot(ctx: RequestCtx) -> dict:
     """Sim-derived /status fields: state, battery, odometry, position."""
     clock = _sim_clock(ctx)
@@ -705,14 +722,19 @@ async def post_mission_queue(ctx: RequestCtx) -> tuple[int, Any]:
     clock = _sim_clock(ctx)
     for stored, start, finish in _timeline(ctx):
         if stored is entry:
-            return ctx.op.success_status, _public_entry(stored, start, finish, clock)
-    return ctx.op.success_status, _public_entry(entry, clock + 1, clock + 2, clock)
+            return ctx.op.success_status, _declared_only(
+                ctx, _public_entry(stored, start, finish, clock)
+            )
+    return ctx.op.success_status, _declared_only(
+        ctx, _public_entry(entry, clock + 1, clock + 2, clock)
+    )
 
 
 async def get_mission_queue(ctx: RequestCtx) -> tuple[int, Any]:
     clock = _sim_clock(ctx)
     return ctx.op.success_status, [
-        _public_entry(entry, start, finish, clock) for entry, start, finish in _timeline(ctx)
+        _declared_only(ctx, _public_entry(entry, start, finish, clock))
+        for entry, start, finish in _timeline(ctx)
     ]
 
 
@@ -731,7 +753,7 @@ async def get_mission_queue_item(ctx: RequestCtx) -> tuple[int, Any]:
         # declared schema, then overlay the live lifecycle fields.
         full = example_from_schema(ctx.spec.deref(ctx.op.success_schema))
         if not isinstance(full, dict) or not full:
-            return ctx.op.success_status, public
+            return ctx.op.success_status, _declared_only(ctx, public)
         overlay_compatible(full, public)
         for key in ("started", "finished"):
             if key in public:
@@ -791,7 +813,9 @@ def _register_doc(ctx: RequestCtx, register_id: int) -> dict:
 
 
 async def get_registers(ctx: RequestCtx) -> tuple[int, Any]:
-    return ctx.op.success_status, [_register_doc(ctx, i) for i in range(1, REGISTER_COUNT + 1)]
+    return ctx.op.success_status, [
+        _declared_only(ctx, _register_doc(ctx, i)) for i in range(1, REGISTER_COUNT + 1)
+    ]
 
 
 def _register_id(ctx: RequestCtx) -> int | None:
@@ -806,7 +830,7 @@ async def get_register(ctx: RequestCtx) -> tuple[int, Any]:
     register_id = _register_id(ctx)
     if register_id is None:
         return 404, {"error_code": "404", "error_human": "register not found"}
-    return ctx.op.success_status, _register_doc(ctx, register_id)
+    return ctx.op.success_status, _declared_only(ctx, _register_doc(ctx, register_id))
 
 
 async def put_register(ctx: RequestCtx) -> tuple[int, Any]:
@@ -828,7 +852,7 @@ async def put_register(ctx: RequestCtx) -> tuple[int, Any]:
     if patch:
         current = ctx.state.singleton("/registers", {}).get(str(register_id), {})
         ctx.state.merge_singleton("/registers", {str(register_id): {**current, **patch}})
-    return ctx.op.success_status, _register_doc(ctx, register_id)
+    return ctx.op.success_status, _declared_only(ctx, _register_doc(ctx, register_id))
 
 
 async def get_metrics(ctx: RequestCtx) -> tuple[int, Any, str]:

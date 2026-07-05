@@ -388,9 +388,12 @@ class Emulator:
                 # Echo body fields only where they fit the response schema —
                 # MiR's files sometimes type a field differently in the body
                 # and the response (e.g. parameters: array in, string out).
+                # A schema that declares properties (even the empty document
+                # POST /factory_reset answers with) caps the reply at exactly
+                # those; only a shapeless schema passes the body through.
                 if item:
                     overlay_compatible(item, ctx.body)
-                else:
+                elif not isinstance(success_schema.get("properties"), dict):
                     item.update(ctx.body)
             if "id" in item and isinstance(item.get("id"), int):
                 new_id: str | int = ctx.state.next_int_id()

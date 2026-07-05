@@ -274,7 +274,17 @@ def test_base64_encoded_body_is_decoded(call):
         )
     )
     assert response["statusCode"] == 201
-    assert body_json(response)["mission_id"] == mission
+    # The 201 alone proves the body decoded (an unknown mission_id is a 400);
+    # the queued entry names the mission at the item endpoint.
+    queue_id = body_json(response)["id"]
+    item = call(
+        event(
+            "GET",
+            f"/3.8.1/api/v2.0.0/mission_queue/{queue_id}",
+            headers={"authorization": AUTH},
+        )
+    )
+    assert body_json(item)["mission_id"] == mission
 
 
 def test_malformed_base64_body_is_400_not_crash(call):

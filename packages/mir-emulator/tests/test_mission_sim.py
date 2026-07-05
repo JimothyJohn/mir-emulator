@@ -298,7 +298,8 @@ def test_created_mission_can_be_enqueued(clock, client):
         headers=AUTH,
     )
     assert created.status_code == 201
-    entry = enqueue(client, mission_id=created.json()["guid"])
+    qid = enqueue(client, mission_id=created.json()["guid"])["id"]
+    entry = client.get(f"/api/v2.0.0/mission_queue/{qid}", headers=AUTH).json()
     assert entry["mission_id"] == created.json()["guid"]
 
 
@@ -378,8 +379,8 @@ def iso(ts: float) -> str:
 
 
 def test_queue_entry_timestamps_follow_the_lifecycle(clock, client):
-    entry = enqueue(client)
-    qid = entry["id"]
+    qid = enqueue(client)["id"]
+    entry = client.get(f"/api/v2.0.0/mission_queue/{qid}", headers=AUTH).json()
     assert entry["ordered"] == iso(T0)
     assert "started" not in entry and "finished" not in entry
 
@@ -398,9 +399,17 @@ def test_queue_entry_timestamps_follow_the_lifecycle(clock, client):
 
 def test_queue_entry_links_back_to_its_mission(clock, client):
     guid = mission_guid(client)
-    entry = enqueue(client, mission_id=guid)
+    qid = enqueue(client, mission_id=guid)["id"]
+    entry = client.get(f"/api/v2.0.0/mission_queue/{qid}", headers=AUTH).json()
     if "mission" in entry:  # field exists in every tracked 3.x spec
         assert entry["mission"] == f"/v2.0.0/missions/{guid}"
+
+
+def test_post_mission_queue_reply_is_the_declared_slim_document(clock, client):
+    """The spec's 201 document is GetMission_queues = {id, state, url} —
+    no lifecycle extras, and never an echo of undeclared body fields."""
+    entry = enqueue(client, undeclared_field="leak")
+    assert set(entry) == {"id", "state", "url"}
 
 
 def test_status_links_to_executing_queue_entry(clock, client):

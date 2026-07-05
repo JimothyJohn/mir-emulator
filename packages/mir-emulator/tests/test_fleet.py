@@ -125,14 +125,24 @@ def test_serial_order_lands_in_the_robot_mission_queue(clock, app, fleet):
     assert created.status_code == 201
     assert created.json()["id"]
 
-    # Robot truth: exactly one of the two robots now holds the mission.
-    queues = [
-        robot_client(app, i).get("/api/v2.0.0/mission_queue", headers=ROBOT_AUTH).json()
+    # Robot truth: exactly one of the two robots now holds the mission. The
+    # list document is the spec's slim {id, state, url}; the full entry (with
+    # mission_id) lives at the item endpoint.
+    holders = [
+        (i, entry)
         for i in range(2)
+        for entry in robot_client(app, i)
+        .get("/api/v2.0.0/mission_queue", headers=ROBOT_AUTH)
+        .json()
     ]
-    entries = [entry for queue in queues for entry in queue]
-    assert len(entries) == 1
-    assert entries[0]["mission_id"] == mission
+    assert len(holders) == 1
+    robot_index, entry = holders[0]
+    item = (
+        robot_client(app, robot_index)
+        .get(f"/api/v2.0.0/mission_queue/{entry['id']}", headers=ROBOT_AUTH)
+        .json()
+    )
+    assert item["mission_id"] == mission
 
 
 def test_order_lifecycle_follows_the_robot_simulation(clock, fleet):
