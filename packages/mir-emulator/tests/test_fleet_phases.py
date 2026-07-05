@@ -112,7 +112,8 @@ def test_unknown_fallback_mission_is_rejected_atomically(fleet, clock):
     r1 = robots(fleet)[0]
     response = post_order(fleet, mission, robot_id=r1, fallback="not-a-mission")
     assert response.status_code == 400
-    assert fleet.get("/api/v1/order", headers=KEY).json() == []
+    orders = fleet.get("/api/v1/order", headers=KEY)
+    assert orders.json() == []
 
 
 def test_delete_fallback_aborts_a_running_fallback(fleet, clock):
@@ -133,8 +134,10 @@ def test_delete_fallback_aborts_a_running_fallback(fleet, clock):
 def test_delete_fallback_without_a_running_fallback_is_a_400(fleet, clock):
     mission = site_mission(fleet)
     serial = post_order(fleet, mission).json()["id"]
-    assert fleet.delete(f"/api/v1/serial-order/fallback/{serial}", headers=KEY).status_code == 400
-    assert fleet.delete("/api/v1/serial-order/fallback/nope", headers=KEY).status_code == 404
+    no_fallback = fleet.delete(f"/api/v1/serial-order/fallback/{serial}", headers=KEY)
+    assert no_fallback.status_code == 400
+    unknown = fleet.delete("/api/v1/serial-order/fallback/nope", headers=KEY)
+    assert unknown.status_code == 404
 
 
 # --- priority -------------------------------------------------------------------
@@ -179,14 +182,17 @@ def test_evacuation_aborts_everything_and_gates_new_orders(fleet, clock):
     mission = site_mission(fleet)
     serial = post_order(fleet, mission).json()["id"]
     clock.tick(2)
-    assert fleet.post("/api/v1/system/evacuation", headers=KEY).status_code == 201
+    evacuated = fleet.post("/api/v1/system/evacuation", headers=KEY)
+    assert evacuated.status_code == 201
     (status,) = order_status(fleet, serial)
     assert status == "Aborted"
     rejected = post_order(fleet, mission)
     assert rejected.status_code == 400
     assert "vacuation" in rejected.json()["error_human"]
-    assert fleet.delete("/api/v1/system/evacuation", headers=KEY).status_code == 200
-    assert post_order(fleet, mission).status_code == 201
+    terminated = fleet.delete("/api/v1/system/evacuation", headers=KEY)
+    assert terminated.status_code == 200
+    accepted = post_order(fleet, mission)
+    assert accepted.status_code == 201
 
 
 def test_evacuation_suppresses_fallback_dispatch(fleet, clock):
@@ -194,7 +200,8 @@ def test_evacuation_suppresses_fallback_dispatch(fleet, clock):
     r1 = robots(fleet)[0]
     serial = post_order(fleet, mission, robot_id=r1, fallback=mission).json()["id"]
     clock.tick(2)
-    assert fleet.post("/api/v1/system/evacuation", headers=KEY).status_code == 201
+    evacuated = fleet.post("/api/v1/system/evacuation", headers=KEY)
+    assert evacuated.status_code == 201
     (status,) = order_status(fleet, serial)
     assert status == "Aborted"  # no fallback resurrection during an evacuation
     fleet.delete("/api/v1/system/evacuation", headers=KEY)

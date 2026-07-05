@@ -701,7 +701,7 @@ def _waypoint_pose(
             waypoints = _mission_waypoints(ctx, entry.get("mission_id"))
             if waypoints:
                 rest = waypoints[-1]
-        elif start <= clock < finish:
+        elif start <= clock:  # and clock < finish, given the branch above
             waypoints = _mission_waypoints(ctx, entry.get("mission_id"))
             if not waypoints:
                 return None  # executing a plain mission: patrol model

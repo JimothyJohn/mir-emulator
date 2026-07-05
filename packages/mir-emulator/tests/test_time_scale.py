@@ -80,7 +80,8 @@ def test_rescale_keeps_sim_time_continuous(wall):
 
 
 def test_scaled_mission_keeps_realistic_timestamps(client, wall):
-    assert client.put("/_emulator/clock", json={"scale": 60}, headers=AUTH).json()["scale"] == 60
+    scaled = client.put("/_emulator/clock", json={"scale": 60}, headers=AUTH)
+    assert scaled.json()["scale"] == 60
     mission = client.get("/api/v2.0.0/missions", headers=AUTH).json()[0]["guid"]
     queued = client.post(
         "/api/v2.0.0/mission_queue",
@@ -111,7 +112,8 @@ def test_battery_curve_follows_scaled_time(client, wall):
 
 
 def test_get_reports_and_delete_restores_without_rewinding(client, wall):
-    assert client.get("/_emulator/clock", headers=AUTH).json()["scale"] == 1.0
+    initial = client.get("/_emulator/clock", headers=AUTH)
+    assert initial.json()["scale"] == 1.0
     client.put("/_emulator/clock", json={"scale": 30}, headers=AUTH)
     wall.tick(2)
     before = behaviors._now()
@@ -128,12 +130,15 @@ def test_invalid_scale_is_rejected_and_clock_untouched(client, body):
     response = client.put("/_emulator/clock", json=body, headers=AUTH)
     assert response.status_code == 400
     assert response.json()["error_human"]
-    assert client.get("/_emulator/clock", headers=AUTH).json()["scale"] == 1.0
+    untouched = client.get("/_emulator/clock", headers=AUTH)
+    assert untouched.json()["scale"] == 1.0
 
 
 def test_clock_requires_auth(client):
-    assert client.get("/_emulator/clock").status_code == 401
-    assert client.put("/_emulator/clock", json={"scale": 60}).status_code == 401
+    unauthenticated_read = client.get("/_emulator/clock")
+    assert unauthenticated_read.status_code == 401
+    unauthenticated_write = client.put("/_emulator/clock", json={"scale": 60})
+    assert unauthenticated_write.status_code == 401
 
 
 def test_index_documents_clock(client):
@@ -142,13 +147,17 @@ def test_index_documents_clock(client):
 
 def test_fleet_serves_the_same_clock_surface(wall):
     fleet = TestClient(create_fleet_app("1.5.0"))
-    assert fleet.get("/_emulator/clock", headers=KEY).json()["scale"] == 1.0
-    assert fleet.put("/_emulator/clock", json={"scale": 60}, headers=KEY).json()["scale"] == 60
+    initial = fleet.get("/_emulator/clock", headers=KEY)
+    assert initial.json()["scale"] == 1.0
+    scaled = fleet.put("/_emulator/clock", json={"scale": 60}, headers=KEY)
+    assert scaled.json()["scale"] == 60
     t0 = behaviors._now()
     wall.tick(1)
     assert behaviors._now() == pytest.approx(t0 + 60)  # embedded robots share it
-    assert fleet.put("/_emulator/clock", json={"scale": 0}, headers=KEY).status_code == 400
-    assert fleet.get("/_emulator/clock").status_code == 401
+    rejected = fleet.put("/_emulator/clock", json={"scale": 0}, headers=KEY)
+    assert rejected.status_code == 400
+    unauthenticated = fleet.get("/_emulator/clock")
+    assert unauthenticated.status_code == 401
     assert "clock" in fleet.get("/", headers=KEY).json()
 
 
