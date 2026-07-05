@@ -633,13 +633,17 @@ def _mission_waypoints(ctx: RequestCtx, mission_id: Any) -> list[dict]:
             continue
         # coordinates live on the client's stored request (the list schema
         # carries only guid/map/name/type_id)
-        request = stored.get("_request") if isinstance(stored.get("_request"), dict) else {}
+        request = stored.get("_request")
+        if not isinstance(request, dict):
+            request = {}
         positions[str(stored["guid"])] = {**stored, **request}
     waypoints: list[dict] = []
     for action in sorted(actions.values(), key=lambda a: float(a.get("priority") or 0)):
         # the response schema types parameters as a string (a real MiR spec
         # quirk), so the client's actual array lives on the stored request
-        request = action.get("_request") if isinstance(action.get("_request"), dict) else {}
+        request = action.get("_request")
+        if not isinstance(request, dict):
+            request = {}
         parameters = request.get("parameters")
         if not isinstance(parameters, list):
             parameters = action.get("parameters")
