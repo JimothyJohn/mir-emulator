@@ -216,14 +216,43 @@ def _abort_queue(state: StateStore, mission_duration: float) -> None:
             entry.setdefault("_aborted_at", now)
 
 
+ERROR_REPORT_KEY = "/log/error_reports"
+
+
+def _log_error_report(state: StateStore, description: str, module: str) -> None:
+    """Append a spec-shaped entry to the /log/error_reports collection —
+    exactly what a real robot accumulates when a fault fires. Uses the
+    generic CRUD storage key, so GET/DELETE on the official endpoint keep
+    their semantics over these entries."""
+    existing = state.collection(ERROR_REPORT_KEY)
+    next_id = max((int(k) for k in existing if k.isdigit()), default=0) + 1
+    state.insert(
+        ERROR_REPORT_KEY,
+        str(next_id),
+        {
+            "id": next_id,
+            "time": _iso(_sim_clock_for(state)),
+            "description": description,
+            "module": module,
+            "generating": False,
+            "ready": True,
+            "download_url": f"/v2.0.0/log/error_reports/{next_id}/download",
+        },
+    )
+
+
 def set_faults(
     state: StateStore, names: list[str], mission_duration: float = MISSION_DURATION_S
 ) -> None:
     """Replace the active fault set; holding faults freeze the sim clock;
-    aborting faults kill the mission queue at the current sim instant."""
+    aborting faults kill the mission queue at the current sim instant.
+    Every newly activated fault leaves an error report in the official log."""
     previous = set(active_faults(state))
     state.merge_singleton("/faults", {"active": [n for n in names if n in FAULTS]})
     newly_active = set(active_faults(state)) - previous
+    for name in (n for n in names if n in newly_active):
+        error = FAULTS[name]["error"]
+        _log_error_report(state, error["description"], error["module"])
     if any(FAULTS[n].get("aborts_queue") for n in newly_active):
         _abort_queue(state, mission_duration)
     holds = any(FAULTS[n].get("holds") for n in active_faults(state))
@@ -940,6 +969,33 @@ async def get_metrics(ctx: RequestCtx) -> tuple[int, Any, str]:
     return ctx.op.success_status, text, "text/plain; version=0.0.4"
 
 
+async def get_statistics_distance(ctx: RequestCtx) -> tuple[int, Any]:
+    """Per-day driven distance, derived from the mission timeline: executed
+    seconds bucketed by sim day x the simulated travel speed. The current
+    day is always present (a dashboard's "today" starts at 0), and a mission
+    spanning midnight splits between both days — real robots report daily
+    statistics, not per-mission ones."""
+    clock = _sim_clock(ctx)
+    day_s = 86400.0
+
+    def day_of(ts: float) -> float:
+        return ts - (ts % day_s)
+
+    buckets: dict[float, float] = {day_of(clock): 0.0}
+    for _entry, start, finish in _timeline(ctx):
+        end = min(finish, clock)
+        cursor = start
+        while cursor < end:
+            day_end = day_of(cursor) + day_s
+            span_end = min(end, day_end)
+            buckets[day_of(cursor)] = buckets.get(day_of(cursor), 0.0) + (span_end - cursor)
+            cursor = span_end
+    return ctx.op.success_status, [
+        {"date": _iso(day), "distance": round(seconds * MISSION_SPEED_M_S, 2)}
+        for day, seconds in sorted(buckets.items())
+    ]
+
+
 OVERRIDES: dict[tuple[str, str], Any] = {
     ("GET", "/status"): get_status,
     ("PUT", "/status"): put_status,
@@ -954,4 +1010,5 @@ OVERRIDES: dict[tuple[str, str], Any] = {
     ("PUT", "/registers/{id}"): put_register,
     ("POST", "/registers/{id}"): put_register,
     ("GET", "/metrics"): get_metrics,
+    ("GET", "/statistics/distance"): get_statistics_distance,
 }
