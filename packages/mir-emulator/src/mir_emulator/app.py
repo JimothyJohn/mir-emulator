@@ -482,6 +482,7 @@ def create_app(
         return JSONResponse(
             {
                 "name": "mir-emulator",
+                "kind": "robot",
                 "emulated_mir_version": version,
                 "api_title": spec.title,
                 "base_path": spec.base_path,

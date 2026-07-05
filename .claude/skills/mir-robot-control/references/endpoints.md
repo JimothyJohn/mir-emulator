@@ -5,6 +5,25 @@ Everything here is verified against `packages/mir-emulator/src/mir_emulator/`
 official MiR REST API; paths under `/_emulator/*` and `X-MiR-*` headers are
 emulator-only test surfaces that do not exist on real hardware.
 
+## Version discovery (connect-time handshake)
+
+Path versions never change (`/api/v2.0.0` robot, `/api/v1` fleet); the
+*software* version decides which endpoints and fields exist. Learn it from
+the target instead of configuring it — probe in order, first hit wins:
+
+| Probe | Identifies | Version field |
+|---|---|---|
+| `GET /healthz` | multi-version dispatcher (`"kind": "dispatcher"`) | `versions[]`, `latest`, `fleet_versions[]`, `fleet_latest` |
+| `GET /` (JSON) | emulator robot or fleet (`"kind"`) | `emulated_mir_version` / `emulated_fleet_version` |
+| `GET /api/v1/system/version` (`x-api-key`) | any MiR Fleet, real included | `version` |
+| `GET /swagger.json` | robot serving its spec | `info.version` |
+| `GET /api/v2.0.0/status` → 200/401 | robot that won't say | none — unknown |
+
+Against a dispatcher, prefix every call with `/<version>` (robot) or
+`/fleet/<version>` (fleet); `latest` aliases the newest. Implementations of
+this handshake: `mir_client.discovery` (SDK), `mir_mcp.client.detect_target`
+(MCP), `connectTo()` in `docs/index.html` (console).
+
 ## Robot API — `/api/v2.0.0`
 
 Auth header: `Authorization: Basic BASE64(<user>:<sha256-hex(password)>)`.

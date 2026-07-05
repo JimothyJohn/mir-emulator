@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import Any
 
 import httpx
 import pytest
@@ -24,6 +25,8 @@ ENV_VARS = (
     "MIR_PASSWORD",
     "MIR_API_KEY",
     "MIR_SESSION",
+    "MIR_VERSION",
+    "MIR_FLEET_VERSION",
 )
 
 
@@ -35,6 +38,9 @@ def run(coro):
 def clean_env(monkeypatch):
     for var in ENV_VARS:
         monkeypatch.delenv(var, raising=False)
+    # Discovery results are cached per base URL; tests swap the transport
+    # under the same URL, so every test starts with a cold handshake.
+    client._detected.clear()
 
 
 @pytest.fixture
@@ -52,6 +58,7 @@ def fleet(monkeypatch):
 def test_every_tool_is_registered():
     tools = {t.name for t in run(server.mcp.list_tools())}
     assert tools == {
+        "mir_server_info",
         "mir_robot_status",
         "mir_set_robot_state",
         "mir_clear_error",
@@ -175,3 +182,89 @@ def test_fleet_wrong_api_key_is_actionable(fleet, monkeypatch):
     out = run(server.mir_fleet_robots())
     assert out.startswith("Error:")
     assert "MIR_API_KEY" in out
+
+
+# ------------------------------------------------- connect-time discovery
+
+
+@pytest.fixture
+def dispatcher(monkeypatch):
+    """The multi-version demo dispatcher at the configured base URL."""
+    from mir_emulator.serverless import build_app
+
+    monkeypatch.setattr(client, "TRANSPORT", httpx.ASGITransport(app=build_app()))
+
+
+def test_server_info_identifies_a_robot(robot):
+    doc = json.loads(run(server.mir_server_info()))
+    assert doc["robot_target"]["kind"] == "robot"
+    assert doc["robot_target"]["software_version"] == "3.8.1"
+    assert "fleet_target" not in doc  # same URL, and it is not fleet-shaped
+
+
+def test_server_info_identifies_a_fleet(fleet):
+    doc = json.loads(run(server.mir_server_info()))
+    assert doc["robot_target"]["kind"] == "fleet"
+    assert doc["fleet_target"]["software_version"] == "1.5.0"
+
+
+def test_tools_work_against_a_dispatcher_root_without_a_version(dispatcher):
+    """The headline: point MIR_ROBOT_URL at the multi-version demo root and
+    every tool adapts — no version installed, configured, or guessed."""
+    from mir_emulator import registry
+
+    doc = json.loads(run(server.mir_robot_status()))
+    assert doc["state_text"] == "Ready"
+    info = json.loads(run(server.mir_server_info()))
+    latest = registry.supported_versions()[0]
+    assert info["robot_target"]["kind"] == "dispatcher"
+    assert info["robot_target"]["resolved_base"].endswith(f"/{latest}")
+    assert info["robot_target"]["available_versions"] == registry.supported_versions()
+    # and the fleet side resolves its own newest mount
+    robots = json.loads(run(server.mir_fleet_robots()))
+    assert len(robots["robots"]) == 2
+
+
+def test_dispatcher_version_pin_is_honored(dispatcher, monkeypatch):
+    from mir_emulator import registry
+
+    oldest = registry.supported_versions()[-1]
+    monkeypatch.setenv("MIR_VERSION", oldest)
+    info = json.loads(run(server.mir_server_info()))
+    assert info["robot_target"]["resolved_base"].endswith(f"/{oldest}")
+    doc = json.loads(run(server.mir_robot_status()))
+    assert doc["state_text"] == "Ready"
+
+
+def test_dispatcher_rejects_an_unserved_version_pin(dispatcher, monkeypatch):
+    monkeypatch.setenv("MIR_VERSION", "9.9.9")
+    out = run(server.mir_robot_status())
+    assert out.startswith("Error: MIR_VERSION=9.9.9 is not served")
+    info = json.loads(run(server.mir_server_info()))
+    assert info["robot_target"]["error"].startswith("Error: MIR_VERSION=9.9.9")
+
+
+def test_handshake_runs_once_per_base_url(robot, monkeypatch):
+    """The probe is a connect-time cost, not a per-request tax."""
+    calls: list[str] = []
+    original = client._identify
+
+    async def counting(base_url: str) -> dict[str, Any] | None:
+        calls.append(base_url)
+        return await original(base_url)
+
+    monkeypatch.setattr(client, "_identify", counting)
+    run(server.mir_robot_status())
+    run(server.mir_robot_status())
+    assert len(calls) == 1
+
+
+def test_unreachable_target_reports_unknown_kind(monkeypatch):
+    class Down(httpx.AsyncBaseTransport):
+        async def handle_async_request(self, request):
+            raise httpx.ConnectError("down", request=request)
+
+    monkeypatch.setattr(client, "TRANSPORT", Down())
+    info = json.loads(run(server.mir_server_info()))
+    assert info["robot_target"]["kind"] == "unknown"
+    assert "note" in info["robot_target"]

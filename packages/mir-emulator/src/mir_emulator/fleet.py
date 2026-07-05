@@ -594,6 +594,7 @@ def create_fleet_app(
         return JSONResponse(
             {
                 "name": "mir-emulator-fleet",
+                "kind": "fleet",
                 "emulated_fleet_version": version,
                 "api_title": spec.title,
                 "base_path": "/api/v1",

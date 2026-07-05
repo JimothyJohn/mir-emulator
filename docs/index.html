@@ -768,6 +768,7 @@ let versions = [];       // robot software versions, newest first
 let fleetVersions = [];  // MiR Fleet Enterprise versions (dispatcher endpoints only)
 let currentVersion = null;
 let currentKind = "robot"; // "robot" | "mirfleet" — which API family is selected
+let detectedVersion = null; // software version the direct target reported at connect time
 
 /* ---------- MiR auth token: BASE64(user ":" SHA256HEX(pass)) ---------- */
 async function sha256hex(text) {
@@ -1063,13 +1064,19 @@ function renderVersions() {
   const box = $("versions");
   box.innerHTML = "";
   if (MODE === "robot") {
+    const fleetDirect = currentKind === "mirfleet";
     const b = document.createElement("button");
     b.className = "vbtn active";
-    b.innerHTML = '<span class="vnum">Robot</span><span class="chip latest">direct</span>' +
-      '<span class="vpath">/api/v2.0.0</span>';
+    b.innerHTML = '<span class="vnum">' + (fleetDirect ? "Fleet" : "Robot") +
+      (detectedVersion ? " " + esc(detectedVersion) : "") +
+      '</span><span class="chip latest">direct</span>' +
+      '<span class="vpath">' + apiPrefix() + '</span>';
     box.appendChild(b);
-    $("vcount").textContent = "direct connection";
-    $("target-tag").textContent = "target: " + BASE.replace(/^https?:\/\//, "");
+    $("vcount").textContent = detectedVersion
+      ? "software " + detectedVersion + " (reported by the target)"
+      : "direct connection — version not reported";
+    $("target-tag").textContent = "target: " + BASE.replace(/^https?:\/\//, "") +
+      (detectedVersion ? " · " + (fleetDirect ? "Fleet " : "") + detectedVersion : "");
     return;
   }
   const select = (kind, v) => () => {
@@ -1311,9 +1318,11 @@ async function loadSpec() {
   renderCatalog();
   if (MODE === "fleet" && !currentVersion) return;
   try {
-    // Fleet mode and a local `mir-emulator` serve swagger.json; a real robot
+    // Fleet mode and a local `mir-emulator` serve their spec; a real robot
     // may not — the catalog quietly stays disabled and free-form still works.
-    const r = await fetchT(apiRoot(currentVersion) + "/swagger.json", {}, 10000);
+    // Fleets publish OpenAPI 3 only; robots publish Swagger 2.0.
+    const specFile = currentKind === "mirfleet" ? "/openapi.json" : "/swagger.json";
+    const r = await fetchT(apiRoot(currentVersion) + specFile, {}, 10000);
     if (!r.ok) return;
     spec = indexSpec(await r.json());
   } catch { /* catalog is progressive enhancement */ }
@@ -1567,8 +1576,11 @@ async function connectTo(rawBase) {
   st.className = "hint"; st.textContent = "probing " + base + " …";
   $("endpoint-label").textContent = base.replace(/^https?:\/\//, "");
 
-  let mode = null, foundVersions = [], foundFleet = [];
-  // Shape 1: this project's multi-version dispatcher.
+  // Connect-time handshake: ask the target what it is and which software
+  // version it runs, instead of assuming one. First hit wins.
+  let mode = null, foundVersions = [], foundFleet = [], directKind = "robot";
+  detectedVersion = null;
+  // Shape 1: this project's multi-version dispatcher (/healthz manifest).
   try {
     const r = await fetchT(base + "/healthz");
     if (r.ok) {
@@ -1578,8 +1590,47 @@ async function connectTo(rawBase) {
         if (Array.isArray(j.fleet_versions)) foundFleet = j.fleet_versions;
       }
     }
-  } catch { /* fall through to robot shape */ }
-  // Shape 2: a MiR robot (or single-version emulator): /api/v2.0.0 at the root.
+  } catch { /* fall through to the direct shapes */ }
+  // Shape 2: an emulator's JSON index — kind and version straight from it.
+  if (!mode) {
+    try {
+      const r = await fetchT(base + "/", { headers: { Accept: "application/json" } });
+      if (r.ok) {
+        const j = await r.json(); // a real robot serves HTML here → throws → next shape
+        if (j.kind === "robot" || j.emulated_mir_version) {
+          mode = "robot"; detectedVersion = j.emulated_mir_version || null;
+        } else if (j.kind === "fleet" || j.emulated_fleet_version) {
+          mode = "robot"; directKind = "mirfleet";
+          detectedVersion = j.emulated_fleet_version || null;
+        }
+      }
+    } catch { /* not a JSON index */ }
+  }
+  // Shape 3: a MiR Fleet — the official version endpoint (real fleets too).
+  if (!mode) {
+    try {
+      const r = await fetchT(base + "/api/v1/system/version", { headers: { "x-api-key": apiKey() } });
+      if (r.ok) {
+        const j = await r.json();
+        if (j && typeof j.version === "string") {
+          mode = "robot"; directKind = "mirfleet"; detectedVersion = j.version;
+        }
+      }
+    } catch { /* not a fleet */ }
+  }
+  // Shape 4: a robot publishing its spec — info.version is the software version.
+  if (!mode) {
+    try {
+      const r = await fetchT(base + "/swagger.json");
+      if (r.ok) {
+        const j = await r.json();
+        if ((j.swagger || j.openapi) && j.info && typeof j.info.version === "string") {
+          mode = "robot"; detectedVersion = j.info.version;
+        }
+      }
+    } catch { /* no spec served */ }
+  }
+  // Shape 5: a locked-down robot: /api/v2.0.0 answers, version stays unknown.
   if (!mode) {
     try {
       // Any HTTP answer (200/401/404...) proves something is listening there;
@@ -1602,14 +1653,16 @@ async function connectTo(rawBase) {
   BASE = base; MODE = mode;
   versions = foundVersions;
   fleetVersions = foundFleet;
-  currentKind = "robot";
+  currentKind = mode === "fleet" ? "robot" : directKind;
   currentVersion = mode === "fleet" ? versions[0] : null;
   try { localStorage.setItem(STORE_KEY, base); } catch { /* private mode */ }
   led.className = "led on"; lt.textContent = "online";
   st.className = "hint ok";
+  const family = currentKind === "mirfleet" ? "MiR Fleet" : "MiR robot";
   st.textContent = mode === "fleet"
     ? "connected — emulator fleet, " + versions.length + " versions"
-    : "connected — direct MiR API at " + base.replace(/^https?:\/\//, "") + "/api/v2.0.0";
+    : "connected — " + family + " " + (detectedVersion || "(version not reported — assuming newest)") +
+      " at " + base.replace(/^https?:\/\//, "") + apiPrefix();
   renderVersions(); renderPresets(); syncAuthPanel();
   loadVersionMeta(); loadSpec(); loadProvenance(); fillCompare(); refreshSample();
 }

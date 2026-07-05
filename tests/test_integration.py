@@ -75,8 +75,26 @@ def test_auth_enforced_over_real_tcp(live_server):
 def test_index_reports_emulated_version(live_server):
     version, base = live_server
     body = httpx.get(f"{base}/", timeout=5.0).json()
+    assert body["kind"] == "robot"
     assert body["emulated_mir_version"] == version
     assert body["base_path"] == "/api/v2.0.0"
+
+
+# connect() warns when the live server's major predates the generated spec —
+# expected for the 2.x half of the version matrix.
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_sync_discovery_and_connect_over_real_tcp(live_server):
+    """The SDK handshake against a real socket: detect the version the server
+    was started with (no client-side pin) and drive it with the result."""
+    from mir_client import connect, detect_server
+    from mir_client.robot.api.default import get_status
+
+    version, base = live_server
+    info = detect_server(base)
+    assert (info.kind, info.version) == ("robot", version)
+    client = connect(base)
+    status = get_status.sync(client=client)
+    assert status.state_text == "Ready"
 
 
 def test_slow_client_cannot_hang_the_server(live_server):
