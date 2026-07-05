@@ -146,6 +146,10 @@ FAULTS: dict[str, dict[str, Any]] = {
             "non_resettable": False,
         },
     },
+    # battery_critical and blocked_path model a physical cause (a drained
+    # battery, an obstruction): an error reset cannot remove the cause, so
+    # clear_error leaves them active and their errors say non_resettable —
+    # they clear only via /_emulator/faults (the "cause removed" action).
     "battery_critical": {
         "description": "Battery forced to 1.5%; state unchanged.",
         "battery": 1.5,
@@ -153,7 +157,7 @@ FAULTS: dict[str, dict[str, Any]] = {
             "code": 10014,
             "description": "Battery level critical (emulated fault)",
             "module": "Battery",
-            "non_resettable": False,
+            "non_resettable": True,
         },
     },
     "blocked_path": {
@@ -162,7 +166,7 @@ FAULTS: dict[str, dict[str, Any]] = {
             "code": 10015,
             "description": "Path is blocked (emulated fault)",
             "module": "Planner",
-            "non_resettable": False,
+            "non_resettable": True,
         },
     },
     "mission_failure": {

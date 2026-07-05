@@ -113,10 +113,16 @@ state never disagree.
 
 - **`GET|PUT|DELETE /_emulator/faults`** — inject/read/clear faults for the
   current session. Names: `emergency_stop`, `error`, `localization_lost`,
-  `battery_critical`, `blocked_path`. Holding faults (emergency stop,
-  blocked path) freeze the mission simulation and release in place;
-  resettable ones clear via the documented `PUT /status
-  {"clear_error": true}`. `PUT` body: `{"faults": ["emergency_stop"]}`.
+  `battery_critical`, `blocked_path`, `mission_failure`. Holding faults
+  (emergency stop, error, localization lost) freeze the mission simulation
+  and release in place. `blocked_path` does NOT hold: it raises an active
+  Planner error while the robot keeps executing (real MiRs replan around
+  obstructions). `mission_failure` aborts the running and queued missions.
+  `error`, `localization_lost`, and `mission_failure` clear via the
+  documented `PUT /status {"clear_error": true}`; `emergency_stop`,
+  `blocked_path`, and `battery_critical` model a physical cause and clear
+  only by removing it — `PUT`/`DELETE` on this endpoint. `PUT` body:
+  `{"faults": ["emergency_stop"]}`.
 - **`GET|PUT|DELETE /_emulator/battery`** — battery control for the current
   session. `PUT` body, any subset: `{"percentage": 0-100, "charging":
   true|false, "charge_rate": <percent per simulated second, default 0.5>,
