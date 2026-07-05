@@ -108,6 +108,12 @@ state never disagree.
   serial-order phases).
 - `GET /system/version` — fleet software version.
 - `GET /openapi.json` — MiR's official Fleet OpenAPI 3 document, verbatim.
+- **`GET|PUT|DELETE /_emulator/robots/{robot-id}/faults` and `.../battery`**
+  (emulator-only) — chaos proxy to an embedded robot's fault-injection and
+  battery surfaces, since fleet robots have no port of their own. Fleet
+  auth (`x-api-key`), robot-surface bodies and errors pass through
+  verbatim, sessions forward. This is how you e-stop or drain a fleet
+  robot mid-order.
 
 ## Emulator-only surfaces (never on real hardware)
 
@@ -137,6 +143,10 @@ state never disagree.
   it.
 - **`X-MiR-Session: <id>`** header (1–64 chars `[A-Za-z0-9._-]`) — fully
   isolated state per session id, robots *and* fleet. Invalid format → 400.
+  Sessions are LRU-capped at 256 per emulator process: the 257th distinct
+  id silently evicts the oldest, which "factory resets" that robot with no
+  error. Size fleet-scale simulations (or long soak tests with churning
+  ids) accordingly.
 - **`X-MiR-Latency: <ms>`** header (cap 10000) — delays that one response;
   for client timeout testing.
 - **`GET /_emulator/diff?from=<v>&to=<v>`** — structural API changes
