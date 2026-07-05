@@ -144,4 +144,11 @@ version diff): read [references/endpoints.md](references/endpoints.md).
 Send `X-MiR-Session: <name>` (1–64 chars of `[A-Za-z0-9._-]`) on every
 request to get a private robot/fleet instance per session id — parallel
 tests never see each other's state. Keep the header consistent across a
-scenario or the state "disappears".
+scenario or the state "disappears". Sessions are LRU-capped at 256 per
+process; past that the oldest silently resets — don't churn ids in big
+simulations.
+
+On a fleet, embedded robots have no port of their own: reach their fault
+and battery surfaces through the chaos proxy,
+`PUT /_emulator/robots/{robot-id}/faults` / `.../battery` (fleet
+`x-api-key` auth, robot body/errors verbatim).

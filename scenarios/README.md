@@ -72,14 +72,18 @@ do not want pointed at a 100+ kg vehicle by accident.
 | `fm_logistic_endurance.py` | [FM Logistic](https://mobile-industrial-robots.com/cases/fm-logistic) | One MiR200 ("Mirek"), 300 m recycling runs, 18.5 km/day, three shifts | Back-to-back cycles, `moved` odometry, battery drain, low-battery guard, `GET /metrics` |
 | `novo_nordisk_crowded_route.py` | [Novo Nordisk China](https://mobile-industrial-robots.com/cases/novo-nordisk-china) | 5× MiR500 through the plant's busiest 100 m; people and forklifts everywhere | `blocked_path` mid-mission, error read-back and clearing, `X-MiR-Latency` timeout/retry drill |
 | `visteon_ondemand_carts.py` | [Visteon](https://mobile-industrial-robots.com/cases/visteon) | 4× MiR200, on-demand tablet requests, ROEQ click-in carts, 10k units/day | Mission authoring (`POST /missions` + action chains), request bursts, `DELETE /mission_queue/{id}` cancellation |
+| `dhl_parcel_hub_wcs.py` | [DHL's AMR pattern](https://www.dhl.com/us-en/home/innovation-in-logistics/logistics-trend-radar/amr-logistics.html) (no MiR-official case study) | 12 AMRs behind a warehouse control system: 120 orders in 3 waves, battery rotation, mid-shift e-stop and mission failure | 12 concurrent sessions at ~50 req/s, least-loaded dispatch, `/_emulator/battery` charge rotation, quarantine + re-dispatch, exactly-once order ledger |
 
 ## Emulator behaviors these scripts rely on (verified)
 
 * Battery drains only while a mission executes (~0.05 %/s at patrol speed);
-  it does not recharge on its own.
+  it does not recharge on its own. To set a level or run a charging curve,
+  use the emulator-only `PUT /_emulator/battery` surface.
 * `blocked_path` raises an **active planner error** while the robot keeps
-  driving and the mission clock keeps running; `DELETE /_emulator/faults`
-  (or `clear_error`) removes the error.
+  driving and the mission clock keeps running. It models a physical cause,
+  so its error reports `non_resettable: true` and `clear_error` does NOT
+  remove it — only `DELETE /_emulator/faults` (the obstruction removed)
+  does. Same for `battery_critical`.
 * `emergency_stop` freezes state, velocity, position, battery, and the
   mission clock; `PUT /status {"clear_error": true}` has no effect, matching
   real MiR firmware — only `DELETE /_emulator/faults` (the "physical reset")
