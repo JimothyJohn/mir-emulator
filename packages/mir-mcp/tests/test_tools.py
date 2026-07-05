@@ -10,10 +10,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import socket
+import threading
+import time
+from contextlib import closing
 from typing import Any
 
 import httpx
 import pytest
+import uvicorn
 from mir_emulator.app import create_app
 from mir_emulator.fleet import create_fleet_app
 from mir_mcp import client, server
@@ -59,6 +64,7 @@ def test_every_tool_is_registered():
     tools = {t.name for t in run(server.mcp.list_tools())}
     assert tools == {
         "mir_server_info",
+        "mir_discover_robots",
         "mir_robot_status",
         "mir_set_robot_state",
         "mir_clear_error",
@@ -268,3 +274,73 @@ def test_unreachable_target_reports_unknown_kind(monkeypatch):
     info = json.loads(run(server.mir_server_info()))
     assert info["robot_target"]["kind"] == "unknown"
     assert "note" in info["robot_target"]
+
+
+# ------------------------------------------------- network discovery (mir_discover_robots)
+
+
+class _LiveApp:
+    """Serve an ASGI app on a real ephemeral port for a scan to find."""
+
+    def __init__(self, app):
+        with closing(socket.socket()) as s:
+            s.bind(("127.0.0.1", 0))
+            self.port = s.getsockname()[1]
+        cfg = uvicorn.Config(app, host="127.0.0.1", port=self.port, log_level="warning")
+        self._server = uvicorn.Server(cfg)
+        self._thread = threading.Thread(target=self._server.run, daemon=True)
+
+    def __enter__(self) -> int:
+        self._thread.start()
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if self._server.started:
+                return self.port
+            time.sleep(0.02)
+        raise RuntimeError("uvicorn did not start")
+
+    def __exit__(self, *exc) -> None:
+        self._server.should_exit = True
+        self._thread.join(timeout=10)
+
+
+def test_discover_finds_a_robot_by_ip(monkeypatch):
+    # A real network scan uses real sockets, not the injected ASGI transport.
+    monkeypatch.setattr(client, "TRANSPORT", None)
+    with _LiveApp(create_app("3.8.1")) as port:
+        # Point the scan's port list at the robot's real ephemeral port.
+        monkeypatch.setattr(client, "SCAN_PORTS", (port,))
+        doc = json.loads(run(server.mir_discover_robots(["127.0.0.1"])))
+    assert doc["count"] == 1
+    got = doc["found"][0]
+    assert got["kind"] == "robot"
+    assert got["version"] == "3.8.1"
+    assert got["url"] == f"http://127.0.0.1:{port}"
+
+
+def test_discover_ignores_a_non_mir_server(monkeypatch):
+    monkeypatch.setattr(client, "TRANSPORT", None)
+
+    class Hello:
+        async def __call__(self, scope, receive, send):
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b'{"hello":"world"}'})
+
+    with _LiveApp(Hello()) as port:
+        monkeypatch.setattr(client, "SCAN_PORTS", (port,))
+        doc = json.loads(run(server.mir_discover_robots(["127.0.0.1"])))
+    assert doc["found"] == []
+
+
+def test_discover_empty_host_list_is_actionable(monkeypatch):
+    monkeypatch.setattr(client, "TRANSPORT", None)
+    out = run(server.mir_discover_robots([]))
+    assert out.startswith("Error:")
+    assert "no hosts to scan" in out
+
+
+def test_discover_rejects_an_oversized_sweep(monkeypatch):
+    monkeypatch.setattr(client, "TRANSPORT", None)
+    out = run(server.mir_discover_robots(["10.0.0.0/16"]))
+    assert out.startswith("Error:")
+    assert "exceeds" in out
