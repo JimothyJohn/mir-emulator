@@ -39,8 +39,11 @@ from mir_emulator.behaviors import (
     MISSION_DURATION_S,
     OVERRIDES,
     RequestCtx,
+    battery_doc,
     faults_doc,
     get_status,
+    reset_battery,
+    set_battery,
     set_faults,
 )
 from mir_emulator.examples import example_from_schema, overlay_compatible
@@ -61,6 +64,12 @@ SESSION_HEADER = "x-mir-session"
 # Capped so a hostile header can't hold a worker hostage.
 LATENCY_HEADER = "x-mir-latency"
 MAX_LATENCY_MS = 10_000.0
+# Emulator-only mission shaping: X-MiR-Mission-Duration: <seconds> on
+# POST /mission_queue freezes that duration onto the new entry, so one
+# robot can mix long hauls and short hops (real routes are not uniform).
+DURATION_HEADER = "x-mir-mission-duration"
+MIN_MISSION_DURATION_S = 0.1
+MAX_MISSION_DURATION_S = 3600.0
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 MAX_SESSIONS = 256
 
@@ -258,6 +267,23 @@ class Emulator:
                 _error_body(400, "Invalid X-MiR-Session: 1-64 chars from [A-Za-z0-9._-]"),
             )
 
+        duration_override: float | None = None
+        raw_duration = request.headers.get(DURATION_HEADER)
+        if raw_duration is not None:
+            try:
+                duration_override = float(raw_duration)
+            except ValueError:
+                duration_override = math.nan
+            if not (MIN_MISSION_DURATION_S <= duration_override <= MAX_MISSION_DURATION_S):
+                return _respond(
+                    400,
+                    _error_body(
+                        400,
+                        "Invalid X-MiR-Mission-Duration: seconds in "
+                        f"[{MIN_MISSION_DURATION_S}, {MAX_MISSION_DURATION_S}]",
+                    ),
+                )
+
         body: Any = None
         if op.method in ("POST", "PUT", "PATCH"):
             raw = await request.body()
@@ -285,6 +311,7 @@ class Emulator:
             mission_duration=self.mission_duration,
             seed_collection=lambda key, path: self._seed_collection(state, key, path),
             session_id=session_id,
+            duration_override=duration_override,
         )
 
         override = self._override_for(op)
@@ -497,9 +524,19 @@ def create_app(
                     "Send X-MiR-Latency: <ms> (cap 10000) to delay any response; "
                     "or start with --latency-ms for a baseline"
                 ),
+                "mission_duration": (
+                    "Send X-MiR-Mission-Duration: <seconds 0.1-3600> on "
+                    "POST /mission_queue to give that entry its own duration "
+                    "(default: --mission-duration)"
+                ),
                 "faults": (
                     "GET/PUT/DELETE /_emulator/faults — emulator-only fault injection "
                     f"({', '.join(sorted(FAULTS))})"
+                ),
+                "battery": (
+                    "GET/PUT/DELETE /_emulator/battery — emulator-only battery control "
+                    "(set percentage, run a charging curve via charging/charge_rate/target; "
+                    "DELETE restores the stock drain model)"
                 ),
                 "source": {
                     "primary_source": registry.primary_source(),
@@ -547,6 +584,33 @@ def create_app(
                 )
             set_faults(state, names, emulator.mission_duration)
         return _respond(200, faults_doc(state))
+
+    async def battery_endpoint(request: Request) -> Response:
+        """Emulator-only battery control (/_emulator/battery): set the level,
+        run a charging curve toward a target, or reset to the stock drain
+        model. Same auth and session semantics as the rest of the surface."""
+        if not emulator._authorized(request):
+            return _respond(401, _error_body(401, "Not authorized"))
+        session_id = request.headers.get(SESSION_HEADER, "")
+        if session_id and not SESSION_ID_RE.match(session_id):
+            return _respond(
+                400, _error_body(400, "Invalid X-MiR-Session: 1-64 chars from [A-Za-z0-9._-]")
+            )
+        state = emulator.state_for(session_id)
+        if request.method == "DELETE":
+            reset_battery(state)
+        elif request.method == "PUT":
+            raw = await request.body()
+            if len(raw) > MAX_BODY_BYTES:
+                return _respond(400, _error_body(400, "Payload too large"))
+            try:
+                body = json.loads(raw) if raw else {}
+            except ValueError:
+                return _respond(400, _error_body(400, "Invalid JSON"))
+            error = set_battery(state, body, emulator.mission_duration)
+            if error is not None:
+                return _respond(400, _error_body(400, error))
+        return _respond(200, battery_doc(state, emulator.mission_duration))
 
     async def status_websocket(websocket: WebSocket) -> None:
         """Emulator-only status push (/_emulator/ws/status): the /status
@@ -646,6 +710,7 @@ def create_app(
             Route("/swagger.json", swagger_json),
             Route("/openapi.json", openapi_json),
             Route("/_emulator/faults", faults_endpoint, methods=["GET", "PUT", "DELETE"]),
+            Route("/_emulator/battery", battery_endpoint, methods=["GET", "PUT", "DELETE"]),
             Route("/_emulator/recorder", recorder_endpoint, methods=["GET", "PUT", "DELETE"]),
             WebSocketRoute("/_emulator/ws/status", status_websocket),
             *routes,

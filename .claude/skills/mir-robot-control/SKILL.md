@@ -42,7 +42,9 @@ Work out where the robot is and whether it is real:
    uv run mir-emulator --fleet-version 1.5.0 &    # a Fleet with embedded robots
    ```
    Useful flags: `--mir-version 2.14.7`, `--port`, `--no-auth`,
-   `--mission-duration 3` (seconds per mission — keep it short for tests).
+   `--mission-duration 3` (seconds per mission — keep it short for tests;
+   an `X-MiR-Mission-Duration` header on `POST /mission_queue` overrides
+   it per entry).
 
 **Then ask the target what it is — never assume a version.** The path
 prefixes are constant (`/api/v2.0.0` robot, `/api/v1` fleet) across all MiR
@@ -104,11 +106,13 @@ Common intents, robot API (prefix every path with `/api/v2.0.0`):
 | "clear the error" | `PUT /status {"clear_error": true}` |
 | "rename it" / "move it to x,y" | `PUT /status {"name": ...}` / `{"position": {"x":, "y":, "orientation":}}` |
 | "what missions exist" | `GET /missions` |
+| "create a mission" | `POST /missions {"name": ..., "group_id": ...}` — `group_id` is required; real robots want a guid from `GET /mission_groups`, the emulator takes any string |
 | "run/queue mission X" | find its guid in `GET /missions` (match by `name`), then `POST /mission_queue {"mission_id": "<guid>"}` |
 | "what's queued / is it done" | `GET /mission_queue` (or `/mission_queue/{id}`) — `state` walks Pending → Executing → Done |
 | "cancel everything" | `DELETE /mission_queue` |
 | "cancel job N" | `DELETE /mission_queue/{id}` |
 | "read/set PLC register N" | `GET /registers/{n}` / `PUT /registers/{n} {"value": ...}` |
+| "set the battery / simulate charging" (emulator only) | `PUT /_emulator/battery {"percentage": 80, "charging": true, "target": 95}` — no `/api` prefix; on a real robot charging happens via its charge mission, poll `GET /status` |
 
 Fleet API (prefix `/api/v1`): `GET /robots`, `GET|PATCH /robots/{id}`,
 `POST /serial-order` (body below), `GET|DELETE /serial-order/{id}`,
@@ -121,8 +125,8 @@ Fleet API (prefix `/api/v1`): `GET /robots`, `GET|PATCH /robots/{id}`,
 ```
 
 Full endpoint details, response fields, and emulator-only test surfaces
-(fault injection, session isolation, latency shaping, version diff):
-read [references/endpoints.md](references/endpoints.md).
+(fault injection, battery control, session isolation, latency shaping,
+version diff): read [references/endpoints.md](references/endpoints.md).
 
 ## Step 4: Execute and report
 
@@ -142,4 +146,11 @@ read [references/endpoints.md](references/endpoints.md).
 Send `X-MiR-Session: <name>` (1–64 chars of `[A-Za-z0-9._-]`) on every
 request to get a private robot/fleet instance per session id — parallel
 tests never see each other's state. Keep the header consistent across a
-scenario or the state "disappears".
+scenario or the state "disappears". Sessions are LRU-capped at 256 per
+process; past that the oldest silently resets — don't churn ids in big
+simulations.
+
+On a fleet, embedded robots have no port of their own: reach their fault
+and battery surfaces through the chaos proxy,
+`PUT /_emulator/robots/{robot-id}/faults` / `.../battery` (fleet
+`x-api-key` auth, robot body/errors verbatim).

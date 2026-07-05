@@ -18,7 +18,10 @@ What this exercises on the emulator:
   * X-MiR-Session — three fully isolated robots on one emulator
   * PUT /status {"name": ...} — naming robots
   * POST /missions + POST /mission_queue — per-robot mission definitions
-  * battery drain across repeated cycles + spare rotation on low battery
+  * X-MiR-Mission-Duration — the 130 m loop outlasts the global default
+  * battery drain across repeated cycles + spare rotation on low battery,
+    with the spare genuinely recharging on /_emulator/battery — the swap
+    is a real trade, not theater
 
 Run:
     uv run mir-emulator --mission-duration 2 &
@@ -36,6 +39,8 @@ MIR_URL = os.environ.get("MIR_URL", "http://127.0.0.1:8080")
 API = "/api/v2.0.0"
 CYCLES = 4
 ROTATE_BELOW = 99.0  # % — artificially high so the demo shows a rotation
+LOOP_DURATION_S = "4"  # the 130 m loop takes longer than the global default
+CHARGE_RATE = 0.25  # %/s on the charger — visibly outpaces the loop's drain
 
 
 def client(session: str) -> httpx.Client:
@@ -66,9 +71,18 @@ def make_mission(c: httpx.Client, name: str) -> str:
 
 
 def run_mission(c: httpx.Client, guid: str) -> int:
-    r = c.post(f"{API}/mission_queue", json={"mission_id": guid})
+    r = c.post(
+        f"{API}/mission_queue",
+        json={"mission_id": guid},
+        headers={"X-MiR-Mission-Duration": LOOP_DURATION_S},
+    )
     r.raise_for_status()
     return r.json()["id"]
+
+
+def set_charging(c: httpx.Client, on: bool) -> None:
+    body = {"charging": True, "charge_rate": CHARGE_RATE} if on else {"charging": False}
+    c.put("/_emulator/battery", json=body).raise_for_status()
 
 
 def wait_done(c: httpx.Client, queue_id: int, timeout: float = 60.0) -> str:
@@ -97,7 +111,8 @@ def main() -> None:
         }
 
     active, spare = [1, 2], 3
-    print(f"fleet up: robots 1-3, active={active}, hot spare={spare}\n")
+    set_charging(robots[spare]["client"], True)  # the hot spare sits on the charger
+    print(f"fleet up: robots 1-3, active={active}, hot spare={spare} (on charger)\n")
 
     for cycle in range(1, CYCLES + 1):
         queued = [(n, run_mission(robots[n]["client"], robots[n]["mission"])) for n in active]
@@ -119,6 +134,8 @@ def main() -> None:
                 f"  rotating: R{weakest} ({levels[weakest]:.2f}%) -> charger, "
                 f"R{spare} ({levels[spare]:.2f}%) -> line"
             )
+            set_charging(robots[spare]["client"], False)  # off the charger, onto the line
+            set_charging(robots[weakest]["client"], True)
             active[active.index(weakest)] = spare
             spare = weakest
 

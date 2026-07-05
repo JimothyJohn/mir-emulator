@@ -23,9 +23,16 @@ source of truth per fact, and CI that proves claims instead of trusting them.
    or randomness in behaviors without going through the existing sim-clock
    machinery in `behaviors.py`. Tests mock time and seed randomness.
 4. **Emulator-only surfaces are namespaced.** Anything that isn't part of the
-   real MiR API lives under `/_emulator/*` (faults, recorder, ws/status) or
-   behind `X-MiR-*` headers (session isolation, latency shaping). Keep it
-   that way so integrators can't accidentally depend on fiction.
+   real MiR API lives under `/_emulator/*` (faults, battery, recorder,
+   ws/status, the fleet's per-robot chaos proxy) or behind `X-MiR-*` headers
+   (session isolation, latency shaping). Keep it that way so integrators
+   can't accidentally depend on fiction.
+5. **`scenarios/` is contract documentation.** The scenario scripts encode
+   deliberate behavior decisions traced to real deployments (e.g.
+   `blocked_path` does not freeze the robot — that's the Novo Nordisk
+   script's whole point). Before changing emulator semantics, check whether
+   a scenario pins the current behavior on purpose; prose docs drift,
+   scenarios run.
 
 ## Setup
 

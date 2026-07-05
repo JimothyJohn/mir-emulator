@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hall B — Shift Replay</title>
+<style>
+  :root {
+    --surface-1: #fcfcfb; --plane: #f9f9f7;
+    --ink-1: #0b0b0b; --ink-2: #52514e; --ink-mute: #898781;
+    --grid: #e1e0d9; --baseline: #c3c2b7; --ring: rgba(11,11,11,0.10);
+    --task-1: #2a78d6; --task-2: #1baf7a; --task-3: #eda100; --task-4: #008300;
+    --battery: #4a3aa7;
+    --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface-1: #1a1a19; --plane: #0d0d0d;
+      --ink-1: #ffffff; --ink-2: #c3c2b7; --ink-mute: #898781;
+      --grid: #2c2c2a; --baseline: #383835; --ring: rgba(255,255,255,0.10);
+      --task-1: #3987e5; --task-2: #199e70; --task-3: #c98500; --task-4: #008300;
+      --battery: #9085e9;
+    }
+  }
+  :root[data-theme="light"] {
+    --surface-1: #fcfcfb; --plane: #f9f9f7;
+    --ink-1: #0b0b0b; --ink-2: #52514e; --ink-mute: #898781;
+    --grid: #e1e0d9; --baseline: #c3c2b7; --ring: rgba(11,11,11,0.10);
+    --task-1: #2a78d6; --task-2: #1baf7a; --task-3: #eda100; --task-4: #008300;
+    --battery: #4a3aa7;
+  }
+  :root[data-theme="dark"] {
+    --surface-1: #1a1a19; --plane: #0d0d0d;
+    --ink-1: #ffffff; --ink-2: #c3c2b7; --ink-mute: #898781;
+    --grid: #2c2c2a; --baseline: #383835; --ring: rgba(255,255,255,0.10);
+    --task-1: #3987e5; --task-2: #199e70; --task-3: #c98500; --task-4: #008300;
+    --battery: #9085e9;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--plane); color: var(--ink-1);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 20px; min-height: 100vh;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  h1 { font-size: 19px; font-weight: 650; }
+  .sub { color: var(--ink-2); font-size: 13px; }
+  .controls { margin-left: auto; display: flex; gap: 8px; }
+  button {
+    font: inherit; font-size: 12.5px; color: var(--ink-2);
+    background: var(--surface-1); border: 1px solid var(--ring);
+    border-radius: 7px; padding: 4px 11px; cursor: pointer;
+  }
+  button[aria-pressed="true"] { color: var(--ink-1); border-color: var(--baseline); font-weight: 600; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px; margin: 14px 0; }
+  .tile { background: var(--surface-1); border: 1px solid var(--ring); border-radius: 10px; padding: 10px 14px; }
+  .tile .v { font-size: 24px; font-weight: 650; }
+  .tile .l { font-size: 12px; color: var(--ink-2); margin-top: 1px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--ink-2); margin: 4px 2px 10px; }
+  .legend .chip { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .sw.hatch { background: repeating-linear-gradient(45deg, var(--good), var(--good) 2px, transparent 2px, transparent 5px); border: 1px solid var(--good); }
+  .sw.estop { background: repeating-linear-gradient(135deg, var(--critical), var(--critical) 2px, transparent 2px, transparent 5px); border: 1px solid var(--critical); }
+  .glyph { font-size: 12px; }
+  .board { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+  .panel { background: var(--surface-1); border: 1px solid var(--ring); border-radius: 12px; padding: 12px; }
+  #chartPanel { flex: 1 1 640px; min-width: 0; }
+  #chart svg { display: block; width: 100%; height: auto; }
+  #logPanel { flex: 0 1 300px; max-height: 520px; overflow-y: auto; }
+  #logPanel h2, #tablePanel h2 { font-size: 13px; font-weight: 650; color: var(--ink-2); margin-bottom: 8px; }
+  .call { display: flex; gap: 8px; padding: 6px 6px; border-radius: 8px; cursor: default; font-size: 12.5px; }
+  .call:hover { background: color-mix(in srgb, var(--ink-1) 6%, transparent); }
+  .call .t { color: var(--ink-mute); font-variant-numeric: tabular-nums; flex: 0 0 40px; }
+  .call .ic { flex: 0 0 16px; text-align: center; }
+  .call .tx { color: var(--ink-2); }
+  .call.manager .tx { color: var(--ink-1); font-weight: 550; }
+  #tablePanel { display: none; flex: 1 1 640px; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th { text-align: left; color: var(--ink-2); font-weight: 600; border-bottom: 1px solid var(--baseline); padding: 5px 10px 5px 0; }
+  td { border-bottom: 1px solid var(--grid); padding: 5px 10px 5px 0; font-variant-numeric: tabular-nums; }
+  td .sw { margin-right: 6px; vertical-align: -1px; }
+  #tooltip {
+    position: fixed; pointer-events: none; z-index: 10; display: none;
+    background: var(--surface-1); color: var(--ink-1); border: 1px solid var(--ring);
+    border-radius: 8px; padding: 7px 10px; font-size: 12px; line-height: 1.5;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.14); max-width: 260px;
+  }
+  #tooltip .h { font-weight: 650; }
+  #tooltip .d { color: var(--ink-2); }
+  footer { color: var(--ink-mute); font-size: 12px; margin-top: 12px; }
+  text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Hall B — shift replay</h1>
+    <span class="sub">8 robots · pallet carts · manager task calls, 06:00–14:00</span>
+    <div class="controls">
+      <button id="viewBtn" aria-pressed="false">Table</button>
+      <button id="themeBtn" aria-label="Toggle color theme">◐ Theme</button>
+    </div>
+  </header>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="board">
+    <div class="panel" id="chartPanel"><div id="chart"></div></div>
+    <div class="panel" id="tablePanel"><h2>Every job, as the robots reported it</h2><div id="tableWrap"></div></div>
+    <aside class="panel" id="logPanel"><h2>Floor log</h2><div id="log"></div></aside>
+  </div>
+
+  <footer>
+    Replayed from a real <a href="https://github.com/JimothyJohn/mir-emulator" style="color:inherit">mir-emulator</a> run:
+    8 session-isolated robots, 36 tasks, timestamps read back from each robot's own
+    <code>mission_queue</code>. 37.7&thinsp;s of wall clock mapped onto a 06:00–14:00 shift.
+    Faults injected via <code>/_emulator/faults</code>, charging via <code>/_emulator/battery</code>,
+    per-task runtimes via <code>X-MiR-Mission-Duration</code>.
+  </footer>
+</div>
+<div id="tooltip" role="tooltip"></div>
+
+<script>
+const DATA = {"wall":37.67,"bots":["WH-R1","WH-R2","WH-R3","WH-R4","WH-R5","WH-R6","WH-R7","WH-R8"],"jobs":[{"bot":"WH-R1","id":1,"task":"Line feed","state":"Done","s":0.68,"f":5.68,"o":-0.32},{"bot":"WH-R1","id":2,"task":"Empty cart return","state":"Done","s":5.68,"f":7.68,"o":-0.32},{"bot":"WH-R1","id":3,"task":"Line feed","state":"Done","s":7.68,"f":12.68,"o":5.68},{"bot":"WH-R1","id":4,"task":"Empty cart return","state":"Done","s":12.68,"f":14.68,"o":11.68},{"bot":"WH-R1","id":5,"task":"Line feed","state":"Done","s":20.68,"f":25.68,"o":19.68},{"bot":"WH-R1","id":6,"task":"Inbound dock pull","state":"Done","s":27.68,"f":30.68,"o":26.68},{"bot":"WH-R1","id":7,"task":"Inbound dock pull","state":"Done","s":30.68,"f":33.68,"o":26.68},{"bot":"WH-R2","id":1,"task":"Outbound staging","state":"Done","s":0.68,"f":4.68,"o":-0.32},{"bot":"WH-R2","id":2,"task":"Inbound dock pull","state":"Done","s":4.68,"f":7.68,"o":-0.32},{"bot":"WH-R2","id":4,"task":"Outbound staging","state":"Done","s":14.68,"f":18.68,"o":13.68},{"bot":"WH-R2","id":5,"task":"Line feed","state":"Done","s":21.68,"f":26.68,"o":20.68},{"bot":"WH-R3","id":1,"task":"Empty cart return","state":"Done","s":12.68,"f":14.68,"o":11.68},{"bot":"WH-R3","id":2,"task":"Inbound dock pull","state":"Done","s":14.68,"f":17.68,"o":11.68},{"bot":"WH-R3","id":3,"task":"Empty cart return","state":"Done","s":20.68,"f":22.68,"o":19.68},{"bot":"WH-R3","id":4,"task":"Outbound staging","state":"Done","s":27.68,"f":31.68,"o":26.68},{"bot":"WH-R4","id":1,"task":"Empty cart return","state":"Done","s":0.68,"f":2.68,"o":-0.32},{"bot":"WH-R4","id":2,"task":"Line feed","state":"Done","s":2.68,"f":7.68,"o":-0.32},{"bot":"WH-R4","id":3,"task":"Outbound staging","state":"Done","s":9.68,"f":13.68,"o":8.68},{"bot":"WH-R4","id":4,"task":"Line feed","state":"Done","s":13.68,"f":18.68,"o":11.68},{"bot":"WH-R4","id":5,"task":"Empty cart return","state":"Done","s":27.68,"f":29.68,"o":26.68},{"bot":"WH-R5","id":1,"task":"Inbound dock pull","state":"Done","s":0.68,"f":3.68,"o":-0.32},{"bot":"WH-R5","id":2,"task":"Outbound staging","state":"Done","s":3.68,"f":7.68,"o":-0.32},{"bot":"WH-R5","id":3,"task":"Inbound dock pull","state":"Done","s":12.68,"f":15.68,"o":11.68},{"bot":"WH-R5","id":4,"task":"Outbound staging","state":"Done","s":15.68,"f":19.68,"o":11.68},{"bot":"WH-R5","id":5,"task":"Inbound dock pull","state":"Done","s":27.68,"f":30.68,"o":26.68},{"bot":"WH-R6","id":1,"task":"Line feed","state":"Done","s":0.68,"f":5.68,"o":-0.32},{"bot":"WH-R6","id":2,"task":"Empty cart return","state":"Done","s":5.68,"f":7.68,"o":-0.32},{"bot":"WH-R6","id":3,"task":"Line feed","state":"Done","s":12.68,"f":17.68,"o":11.68},{"bot":"WH-R6","id":4,"task":"Empty cart return","state":"Done","s":17.68,"f":19.68,"o":11.68},{"bot":"WH-R6","id":5,"task":"Line feed","state":"Done","s":27.68,"f":32.68,"o":26.68},{"bot":"WH-R7","id":1,"task":"Outbound staging","state":"Done","s":27.68,"f":31.68,"o":26.68},{"bot":"WH-R8","id":1,"task":"Outbound staging","state":"Done","s":0.68,"f":4.68,"o":-0.32},{"bot":"WH-R8","id":2,"task":"Inbound dock pull","state":"Done","s":4.68,"f":7.68,"o":-0.32},{"bot":"WH-R8","id":3,"task":"Outbound staging","state":"Done","s":12.68,"f":16.68,"o":11.68},{"bot":"WH-R8","id":4,"task":"Inbound dock pull","state":"Done","s":16.68,"f":19.68,"o":11.68},{"bot":"WH-R8","id":5,"task":"Empty cart return","state":"Done","s":27.68,"f":29.68,"o":26.68}],"spans":[{"kind":"charge","bot":"WH-R3","s":0.15,"f":12.12},{"kind":"charge","bot":"WH-R7","s":0.15,"f":13.69},{"kind":"estop","bot":"WH-R2","s":9.38,"f":15.59},{"kind":"blocked","bot":"WH-R5","s":18.27,"f":23.3}],"markers":[{"t":9.38,"bot":"WH-R2","kind":"fault-estop","text":"Safety scanner tripped at Dock 2 \u2014 e-stop on WH-R2"},{"t":9.42,"bot":"WH-R2","kind":"redispatch","text":"Job pulled off WH-R2, back to the pool"},{"t":15.61,"bot":"WH-R2","kind":"rejoin","text":"WH-R2 back in rotation"},{"t":18.27,"bot":"WH-R5","kind":"fault-blocked","text":"Pallet wrap on the floor in Aisle C ahead of WH-R5"},{"t":26.37,"bot":"WH-R6","kind":"fault-failure","text":"WH-R6 dropped its cart \u2014 mission controller fault"}],"log":[{"t":0.14,"kind":"shift","text":"Shift start \u2014 8 robots on the floor, Hall B","bot":null},{"t":0.14,"kind":"call-wave","text":"Morning rush \u2014 inbound trucks 7 and 9 at the dock","bot":null},{"t":0.15,"kind":"charge-start","text":"WH-R3 at 33% \u2014 sent to charge bay","bot":"WH-R3"},{"t":0.15,"kind":"charge-start","text":"WH-R7 at 26% \u2014 sent to charge bay","bot":"WH-R7"},{"t":6.29,"kind":"call-adhoc","text":"Line 3 is starving \u2014 priority feed, whoever's free","bot":null},{"t":9.38,"kind":"fault-estop","text":"Safety scanner tripped at Dock 2 \u2014 e-stop on WH-R2","bot":"WH-R2"},{"t":9.42,"kind":"redispatch","text":"Job pulled off WH-R2, back to the pool","bot":"WH-R2"},{"t":12.08,"kind":"call-wave","text":"Midday replenishment for assembly lines 1-4","bot":null},{"t":12.12,"kind":"charge-done","text":"WH-R3 charged to 80% \u2014 released","bot":"WH-R3"},{"t":13.69,"kind":"charge-done","text":"WH-R7 charged to 80% \u2014 released","bot":"WH-R7"},{"t":15.59,"kind":"fault-clear","text":"Dock 2 clear, physical reset on WH-R2","bot":"WH-R2"},{"t":15.61,"kind":"rejoin","text":"WH-R2 back in rotation","bot":"WH-R2"},{"t":18.27,"kind":"fault-blocked","text":"Pallet wrap on the floor in Aisle C ahead of WH-R5","bot":"WH-R5"},{"t":20.19,"kind":"call-adhoc","text":"QA hold released \u2014 stage those pallets for outbound","bot":null},{"t":23.3,"kind":"fault-clear","text":"Aisle C swept \u2014 WH-R5 planner error gone","bot":"WH-R5"},{"t":26.37,"kind":"fault-failure","text":"WH-R6 dropped its cart \u2014 mission controller fault","bot":"WH-R6"},{"t":27.14,"kind":"call-wave","text":"Afternoon outbound push \u2014 truck 14 docks at two","bot":null},{"t":37.59,"kind":"shift","text":"Shift complete \u2014 36 tasks done","bot":null}],"battery":{"WH-R1":[[0.14,78.0],[0.9,78.0],[1.68,77.97],[2.44,77.93],[3.21,77.9],[3.99,77.86],[4.75,77.82],[5.53,77.78],[6.29,77.74],[7.06,77.7],[7.83,77.67],[8.61,77.63],[9.37,77.59],[10.16,77.55],[10.93,77.51],[11.69,77.47],[12.49,77.43],[13.26,77.39],[14.04,77.36],[14.81,77.32],[15.58,77.3],[16.33,77.3],[17.11,77.3],[17.88,77.3],[18.65,77.3],[19.41,77.3],[20.19,77.3],[20.98,77.3],[21.74,77.27],[22.51,77.24],[23.29,77.2],[24.07,77.16],[24.83,77.12],[25.61,77.08],[26.37,77.05],[27.14,77.05],[27.93,77.05],[28.71,77.02],[29.47,76.98],[30.25,76.95],[31.01,76.91],[31.77,76.87],[32.54,76.83],[33.31,76.79],[34.09,76.75],[34.86,76.75],[35.64,76.75],[36.4,76.75],[37.17,76.75]],"WH-R2":[[0.14,84.0],[0.9,84.0],[1.68,83.97],[2.44,83.93],[3.21,83.9],[3.99,83.86],[4.75,83.82],[5.53,83.78],[6.29,83.74],[7.06,83.7],[7.83,83.67],[8.61,83.63],[9.37,83.59],[10.16,83.65],[10.93,83.65],[11.69,83.65],[12.49,83.65],[13.26,83.65],[14.04,83.65],[14.81,83.65],[15.58,83.65],[16.33,83.65],[17.11,83.65],[17.88,83.65],[18.65,83.65],[19.41,83.65],[20.19,83.65],[20.98,83.65],[21.74,83.62],[22.51,83.59],[23.29,83.55],[24.07,83.51],[24.83,83.47],[25.61,83.45],[26.37,83.45],[27.14,83.45],[27.93,83.45],[28.71,83.42],[29.47,83.38],[30.25,83.35],[31.01,83.31],[31.77,83.27],[32.54,83.23],[33.31,83.2],[34.09,83.2],[34.86,83.2],[35.64,83.2],[36.4,83.2],[37.17,83.2]],"WH-R3":[[0.14,33.0],[0.9,36.07],[1.68,39.15],[2.44,42.24],[3.21,45.32],[3.99,48.4],[4.75,51.48],[5.53,54.58],[6.29,57.61],[7.06,60.71],[7.83,63.8],[8.61,66.89],[9.37,69.98],[10.16,73.12],[10.93,76.16],[11.69,79.25],[12.49,80.0],[13.26,79.99],[14.04,79.95],[14.81,79.91],[15.58,79.88],[16.33,79.84],[17.11,79.8],[17.88,79.76],[18.65,79.75],[19.41,79.75],[20.19,79.75],[20.98,79.75],[21.74,79.72],[22.51,79.69],[23.29,79.65],[24.07,79.65],[24.83,79.65],[25.61,79.65],[26.37,79.65],[27.14,79.65],[27.93,79.65],[28.71,79.62],[29.47,79.59],[30.25,79.55],[31.01,79.51],[31.77,79.47],[32.54,79.45],[33.31,79.45],[34.09,79.45],[34.86,79.45],[35.64,79.45],[36.4,79.45],[37.17,79.45]],"WH-R4":[[0.14,91.0],[0.9,91.0],[1.68,90.97],[2.44,90.93],[3.21,90.9],[3.99,90.86],[4.75,90.82],[5.53,90.78],[6.29,90.74],[7.06,90.7],[7.83,90.67],[8.61,90.65],[9.37,90.65],[10.16,90.65],[10.93,90.62],[11.69,90.59],[12.49,90.55],[13.26,90.51],[14.04,90.47],[14.81,90.43],[15.58,90.39],[16.33,90.35],[17.11,90.31],[17.88,90.28],[18.65,90.24],[19.41,90.2],[20.19,90.2],[20.98,90.2],[21.74,90.2],[22.51,90.2],[23.29,90.2],[24.07,90.2],[24.83,90.2],[25.61,90.2],[26.37,90.2],[27.14,90.2],[27.93,90.2],[28.71,90.17],[29.47,90.14],[30.25,90.1],[31.01,90.1],[31.77,90.1],[32.54,90.1],[33.31,90.1],[34.09,90.1],[34.86,90.1],[35.64,90.1],[36.4,90.1],[37.17,90.1]],"WH-R5":[[0.14,71.0],[0.9,71.0],[1.68,70.97],[2.44,70.93],[3.21,70.9],[3.99,70.86],[4.75,70.82],[5.53,70.78],[6.29,70.74],[7.06,70.7],[7.83,70.67],[8.61,70.65],[9.37,70.65],[10.16,70.65],[10.93,70.65],[11.69,70.65],[12.49,70.65],[13.26,70.64],[14.04,70.6],[14.81,70.56],[15.58,70.53],[16.33,70.49],[17.11,70.45],[17.88,70.41],[18.65,70.37],[19.41,70.33],[20.19,70.3],[20.98,70.3],[21.74,70.3],[22.51,70.3],[23.29,70.3],[24.07,70.3],[24.83,70.3],[25.61,70.3],[26.37,70.3],[27.14,70.3],[27.93,70.3],[28.71,70.27],[29.47,70.24],[30.25,70.2],[31.01,70.16],[31.77,70.15],[32.54,70.15],[33.31,70.15],[34.09,70.15],[34.86,70.15],[35.64,70.15],[36.4,70.15],[37.17,70.15]],"WH-R6":[[0.14,88.0],[0.9,88.0],[1.68,87.97],[2.44,87.93],[3.21,87.9],[3.99,87.86],[4.75,87.82],[5.53,87.78],[6.29,87.74],[7.06,87.7],[7.83,87.67],[8.61,87.65],[9.37,87.65],[10.16,87.65],[10.93,87.65],[11.69,87.65],[12.49,87.65],[13.26,87.64],[14.04,87.6],[14.81,87.56],[15.58,87.53],[16.33,87.49],[17.11,87.45],[17.88,87.41],[18.65,87.37],[19.41,87.33],[20.19,87.3],[20.98,87.3],[21.74,87.3],[22.51,87.3],[23.29,87.3],[24.07,87.3],[24.83,87.3],[25.61,87.3],[26.37,87.3],[27.14,87.3],[27.93,87.3],[28.71,87.27],[29.47,87.24],[30.25,87.2],[31.01,87.16],[31.77,87.12],[32.54,87.08],[33.31,87.05],[34.09,87.05],[34.86,87.05],[35.64,87.05],[36.4,87.05],[37.17,87.05]],"WH-R7":[[0.14,26.0],[0.9,29.09],[1.68,32.16],[2.44,35.26],[3.21,38.33],[3.99,41.41],[4.75,44.49],[5.53,47.59],[6.29,50.62],[7.06,53.72],[7.83,56.81],[8.61,59.91],[9.37,62.99],[10.16,66.13],[10.93,69.17],[11.69,72.26],[12.49,75.43],[13.26,78.52],[14.04,80.0],[14.81,80.0],[15.58,80.0],[16.33,80.0],[17.11,80.0],[17.88,80.0],[18.65,80.0],[19.41,80.0],[20.19,80.0],[20.98,80.0],[21.74,80.0],[22.51,80.0],[23.29,80.0],[24.07,80.0],[24.83,80.0],[25.61,80.0],[26.37,80.0],[27.14,80.0],[27.93,80.0],[28.71,79.97],[29.47,79.94],[30.25,79.9],[31.01,79.86],[31.77,79.82],[32.54,79.8],[33.31,79.8],[34.09,79.8],[34.86,79.8],[35.64,79.8],[36.4,79.8],[37.17,79.8]],"WH-R8":[[0.14,82.0],[0.9,82.0],[1.68,81.97],[2.44,81.93],[3.21,81.9],[3.99,81.86],[4.75,81.82],[5.53,81.78],[6.29,81.74],[7.06,81.7],[7.83,81.67],[8.61,81.65],[9.37,81.65],[10.16,81.65],[10.93,81.65],[11.69,81.65],[12.49,81.65],[13.26,81.64],[14.04,81.6],[14.81,81.56],[15.58,81.53],[16.33,81.49],[17.11,81.45],[17.88,81.41],[18.65,81.37],[19.41,81.33],[20.19,81.3],[20.98,81.3],[21.74,81.3],[22.51,81.3],[23.29,81.3],[24.07,81.3],[24.83,81.3],[25.61,81.3],[26.37,81.3],[27.14,81.3],[27.93,81.3],[28.71,81.27],[29.47,81.24],[30.25,81.2],[31.01,81.2],[31.77,81.2],[32.54,81.2],[33.31,81.2],[34.09,81.2],[34.86,81.2],[35.64,81.2],[36.4,81.2],[37.17,81.2]]},"kpis":{"done":36,"calls":5,"incidents":3,"charges":2,"redispatch":1}};
+
+const TASKS = ["Inbound dock pull", "Line feed", "Outbound staging", "Empty cart return"];
+const TASK_VAR = { "Inbound dock pull": "--task-1", "Line feed": "--task-2",
+                   "Outbound staging": "--task-3", "Empty cart return": "--task-4" };
+const SHIFT_START = 6 * 60, SHIFT_LEN = 8 * 60; // minutes
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+function shiftTime(t) {
+  const m = Math.round(SHIFT_START + (t / DATA.wall) * SHIFT_LEN);
+  return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+}
+function shiftMin(sec) { return Math.round((sec / DATA.wall) * SHIFT_LEN); }
+
+/* ---- KPI tiles ---- */
+const K = DATA.kpis;
+document.getElementById("tiles").innerHTML = [
+  [K.done, "tasks completed"], [K.calls, "manager calls"], [K.incidents, "incidents"],
+  [K.charges, "charge stops"], [K.redispatch, "re-dispatched"],
+].map(([v, l]) => `<div class="tile"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+
+/* ---- legend ---- */
+document.getElementById("legend").innerHTML =
+  TASKS.map(t => `<span class="chip"><span class="sw" style="background:var(${TASK_VAR[t]})"></span>${t}</span>`).join("") +
+  `<span class="chip"><span class="sw hatch"></span>charging</span>` +
+  `<span class="chip"><span class="sw estop"></span>e-stopped</span>` +
+  `<span class="chip"><span class="glyph">⚠</span>path blocked</span>` +
+  `<span class="chip"><span class="glyph">✖</span>mission fault</span>` +
+  `<span class="chip"><span class="sw" style="background:var(--battery);border-radius:6px;height:3px"></span>battery %</span>`;
+
+/* ---- floor log ---- */
+const ICON = { "call-wave": "📣", "call-adhoc": "📣", "shift": "▶", "charge-start": "🔌",
+  "charge-done": "🔋", "fault-estop": "⛔", "fault-blocked": "⚠", "fault-failure": "✖",
+  "fault-clear": "✓", "redispatch": "↺", "rejoin": "✓" };
+const logEl = document.getElementById("log");
+logEl.innerHTML = DATA.log.map((e, i) =>
+  `<div class="call ${e.kind.startsWith("call") ? "manager" : ""}" data-t="${e.t}">
+     <span class="t">${shiftTime(e.t)}</span><span class="ic">${ICON[e.kind] || "·"}</span>
+     <span class="tx">${e.text}</span></div>`).join("");
+
+/* ---- tooltip ---- */
+const tip = document.getElementById("tooltip");
+function showTip(html, ev) {
+  tip.innerHTML = html; tip.style.display = "block";
+  const pad = 14, w = tip.offsetWidth;
+  let x = ev.clientX + pad;
+  if (x + w > window.innerWidth - 8) x = ev.clientX - w - pad;
+  tip.style.left = x + "px";
+  tip.style.top = Math.min(ev.clientY + pad, window.innerHeight - tip.offsetHeight - 8) + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+
+/* ---- gantt ---- */
+const chart = document.getElementById("chart");
+const ML = 64, MR = 28, MT = 26, ROW_BAR = 22, ROW_SPARK = 15, ROW_PAD = 10;
+const ROW_H = ROW_BAR + ROW_SPARK + ROW_PAD;
+
+function render() {
+  const W = Math.max(560, chart.clientWidth);
+  const plotW = W - ML - MR;
+  const H = MT + DATA.bots.length * ROW_H + 6;
+  const x = t => ML + (t / DATA.wall) * plotW;
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("width", W); svg.setAttribute("height", H);
+  const el = (n, at, parent) => {
+    const e = document.createElementNS(NS, n);
+    for (const k in at) e.setAttribute(k, at[k]);
+    (parent || svg).appendChild(e); return e;
+  };
+
+  // hatch patterns
+  const defs = el("defs", {});
+  const pat = (id, color, angle) => {
+    const p = el("pattern", { id, width: 5, height: 5, patternUnits: "userSpaceOnUse",
+      patternTransform: `rotate(${angle})` }, defs);
+    el("rect", { width: 5, height: 5, fill: color, opacity: 0.13 }, p);
+    el("line", { x1: 0, y1: 0, x2: 0, y2: 5, stroke: color, "stroke-width": 2 }, p);
+  };
+  pat("hatchCharge", css("--good"), 45);
+  pat("hatchEstop", css("--critical"), 135);
+
+  // hour grid + labels
+  for (let h = 0; h <= 8; h++) {
+    const t = (h / 8) * DATA.wall, gx = x(t);
+    el("line", { x1: gx, y1: MT - 6, x2: gx, y2: H - 4, stroke: css("--grid"), "stroke-width": 1 });
+    el("text", { x: gx, y: MT - 12, "text-anchor": "middle", "font-size": 10.5,
+      fill: css("--ink-mute"), "font-variant-numeric": "tabular-nums" })
+      .textContent = String(6 + h).padStart(2, "0") + ":00";
+  }
+
+  DATA.bots.forEach((bot, r) => {
+    const top = MT + r * ROW_H;
+    el("text", { x: ML - 10, y: top + 15, "text-anchor": "end", "font-size": 12,
+      "font-weight": 600, fill: css("--ink-2") }).textContent = bot;
+    el("line", { x1: ML, y1: top + ROW_BAR + 1, x2: W - MR, y2: top + ROW_BAR + 1,
+      stroke: css("--baseline"), "stroke-width": 1 });
+
+    // charge / e-stop spans (bar lane)
+    DATA.spans.filter(s => s.bot === bot).forEach(s => {
+      const isCharge = s.kind === "charge", isEstop = s.kind === "estop";
+      if (s.kind === "blocked") {
+        const strip = el("rect", { x: x(s.s), y: top + ROW_BAR - 3, width: x(s.f) - x(s.s),
+          height: 4, rx: 2, fill: css("--warning") });
+        attachTip(strip, `<div class="h">⚠ Path blocked</div><div class="d">${bot} kept driving and replanning<br>${shiftTime(s.s)}–${shiftTime(s.f)} (${shiftMin(s.f - s.s)} min)</div>`);
+        return;
+      }
+      const rect = el("rect", { x: x(s.s) + 1, y: top + (isCharge ? 2 : 1),
+        width: Math.max(2, x(s.f) - x(s.s) - 2), height: ROW_BAR - (isCharge ? 4 : 2), rx: 4,
+        fill: `url(#${isCharge ? "hatchCharge" : "hatchEstop"})`,
+        stroke: css(isCharge ? "--good" : "--critical"), "stroke-width": 1 });
+      attachTip(rect, isCharge
+        ? `<div class="h">🔌 Charging</div><div class="d">${bot} on the charge bay<br>${shiftTime(s.s)}–${shiftTime(s.f)} (${shiftMin(s.f - s.s)} min) → 80%</div>`
+        : `<div class="h">⛔ Emergency stop</div><div class="d">${bot} held in place; open jobs pulled and re-dispatched<br>${shiftTime(s.s)}–${shiftTime(s.f)} (${shiftMin(s.f - s.s)} min), physical reset</div>`);
+    });
+
+    // job segments
+    DATA.jobs.filter(j => j.bot === bot && j.s != null).forEach(j => {
+      const seg = el("rect", { x: x(j.s) + 1, y: top + 1, width: Math.max(2, x(j.f) - x(j.s) - 2),
+        height: ROW_BAR - 2, rx: 4, fill: css(TASK_VAR[j.task] || "--task-1"),
+        opacity: j.state === "Done" ? 1 : 0.45 });
+      seg.addEventListener("mouseenter", () => seg.setAttribute("stroke", css("--ink-1")));
+      seg.addEventListener("mouseleave", () => seg.removeAttribute("stroke"));
+      attachTip(seg, `<div class="h">${j.task}</div>
+        <div class="d">${bot} · job #${j.id} · ${j.state}<br>
+        ${shiftTime(j.s)} → ${shiftTime(j.f)} (≈${shiftMin(j.f - j.s)} min)</div>`);
+    });
+
+    // event markers
+    DATA.markers.filter(m => m.bot === bot).forEach(m => {
+      const glyphs = { "fault-estop": ["⛔", "--critical"], "fault-blocked": ["⚠", "--warning"],
+        "fault-failure": ["✖", "--serious"], "redispatch": ["↺", "--ink-mute"], "rejoin": ["✓", "--ink-mute"] };
+      const [g, c] = glyphs[m.kind] || ["·", "--ink-mute"];
+      const gx = x(m.t);
+      const hit = el("circle", { cx: gx, cy: top - 3, r: 9, fill: "transparent" });
+      el("text", { x: gx, y: top + 1, "text-anchor": "middle", "font-size": 11,
+        fill: css(c), "pointer-events": "none" }).textContent = g;
+      attachTip(hit, `<div class="h">${g} ${shiftTime(m.t)}</div><div class="d">${m.text}</div>`);
+    });
+
+    // battery sparkline
+    const sTop = top + ROW_BAR + 4, sH = ROW_SPARK - 4;
+    const pts = DATA.battery[bot] || [];
+    const yb = pct => sTop + sH - (pct / 100) * sH;
+    el("line", { x1: ML, y1: yb(35), x2: W - MR, y2: yb(35), stroke: css("--grid"),
+      "stroke-width": 1, "stroke-dasharray": "2 3" });
+    el("path", { d: pts.map((p, i) => (i ? "L" : "M") + x(p[0]).toFixed(1) + " " + yb(p[1]).toFixed(1)).join(""),
+      fill: "none", stroke: css("--battery"), "stroke-width": 2, "stroke-linejoin": "round" });
+    const hitRow = el("rect", { x: ML, y: sTop - 2, width: plotW, height: sH + 4, fill: "transparent" });
+    hitRow.addEventListener("mousemove", ev => {
+      const t = ((ev.offsetX ?? 0) - ML) / plotW * DATA.wall;
+      let best = pts[0];
+      for (const p of pts) if (Math.abs(p[0] - t) < Math.abs(best[0] - t)) best = p;
+      if (best) showTip(`<div class="h">${bot} battery</div><div class="d">${best[1].toFixed(1)}% at ${shiftTime(best[0])}</div>`, ev);
+    });
+    hitRow.addEventListener("mouseleave", hideTip);
+  });
+
+  // crosshair
+  const cross = el("line", { y1: MT - 6, y2: H - 4, stroke: css("--baseline"),
+    "stroke-width": 1, visibility: "hidden", "pointer-events": "none" });
+  const crossLbl = el("text", { y: MT - 12, "text-anchor": "middle", "font-size": 10.5,
+    "font-weight": 600, fill: css("--ink-1"), visibility: "hidden", "pointer-events": "none" });
+  svg.addEventListener("mousemove", ev => {
+    const r = svg.getBoundingClientRect();
+    const px = (ev.clientX - r.left) * (W / r.width);
+    if (px < ML || px > W - MR) { cross.setAttribute("visibility", "hidden"); crossLbl.setAttribute("visibility", "hidden"); return; }
+    cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("visibility", "visible");
+    crossLbl.setAttribute("x", px); crossLbl.setAttribute("visibility", "visible");
+    crossLbl.textContent = shiftTime((px - ML) / plotW * DATA.wall);
+  });
+  svg.addEventListener("mouseleave", () => { cross.setAttribute("visibility", "hidden"); crossLbl.setAttribute("visibility", "hidden"); });
+  svg.__setCross = t => {
+    const px = x(t);
+    cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("visibility", "visible");
+    crossLbl.setAttribute("x", px); crossLbl.setAttribute("visibility", "visible");
+    crossLbl.textContent = shiftTime(t);
+  };
+  svg.__clearCross = () => { cross.setAttribute("visibility", "hidden"); crossLbl.setAttribute("visibility", "hidden"); };
+
+  chart.replaceChildren(svg);
+  return svg;
+}
+
+function attachTip(node, html) {
+  node.addEventListener("mousemove", ev => showTip(html, ev));
+  node.addEventListener("mouseleave", hideTip);
+}
+
+let svgEl = render();
+addEventListener("resize", () => { svgEl = render(); });
+
+/* log hover -> crosshair */
+logEl.addEventListener("mouseover", ev => {
+  const row = ev.target.closest(".call");
+  if (row && svgEl.__setCross) svgEl.__setCross(parseFloat(row.dataset.t));
+});
+logEl.addEventListener("mouseout", () => svgEl.__clearCross && svgEl.__clearCross());
+
+/* ---- table view ---- */
+const rows = [...DATA.jobs].sort((a, b) => a.s - b.s).map(j =>
+  `<tr><td>${j.bot}</td><td>#${j.id}</td>
+   <td><span class="sw" style="background:var(${TASK_VAR[j.task]})"></span>${j.task}</td>
+   <td>${shiftTime(j.s)}</td><td>${shiftTime(j.f)}</td><td>${shiftMin(j.f - j.s)} min</td><td>${j.state}</td></tr>`).join("");
+document.getElementById("tableWrap").innerHTML =
+  `<table><thead><tr><th>Robot</th><th>Job</th><th>Task</th><th>Start</th><th>End</th><th>Duration</th><th>State</th></tr></thead><tbody>${rows}</tbody></table>`;
+
+const viewBtn = document.getElementById("viewBtn");
+viewBtn.addEventListener("click", () => {
+  const showTable = viewBtn.getAttribute("aria-pressed") !== "true";
+  viewBtn.setAttribute("aria-pressed", showTable);
+  document.getElementById("chartPanel").style.display = showTable ? "none" : "";
+  document.getElementById("tablePanel").style.display = showTable ? "block" : "none";
+});
+
+/* ---- theme toggle ---- */
+document.getElementById("themeBtn").addEventListener("click", () => {
+  const cur = document.documentElement.dataset.theme ||
+    (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  document.documentElement.dataset.theme = cur === "dark" ? "light" : "dark";
+  svgEl = render();
+});
+</script>
+</body>
+</html>

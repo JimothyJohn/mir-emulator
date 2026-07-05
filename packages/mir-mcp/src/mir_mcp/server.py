@@ -402,7 +402,14 @@ async def mir_write_register(register_id: int, value: float) -> str:
 )
 async def mir_manage_faults(
     faults: list[
-        Literal["emergency_stop", "error", "localization_lost", "battery_critical", "blocked_path"]
+        Literal[
+            "emergency_stop",
+            "error",
+            "localization_lost",
+            "battery_critical",
+            "blocked_path",
+            "mission_failure",
+        ]
     ]
     | None = None,
 ) -> str:
@@ -410,10 +417,14 @@ async def mir_manage_faults(
     misbehaving robot, or clear them all.
 
     Pass fault names to make them active (replaces the current set);
-    pass an empty list or nothing to clear every fault. emergency_stop and
-    blocked_path freeze mission execution until cleared; error and
-    localization_lost also clear via mir_clear_error. A real robot returns
-    404 here — this surface does not exist on hardware.
+    pass an empty list or nothing to clear every fault. emergency_stop,
+    error, and localization_lost freeze mission execution until cleared;
+    blocked_path raises an active planner error while the robot keeps
+    executing; mission_failure aborts the queue. error, localization_lost,
+    and mission_failure also clear via mir_clear_error; emergency_stop,
+    blocked_path, and battery_critical model a physical cause and clear
+    only here. A real robot returns 404 — this surface does not exist on
+    hardware.
     """
     if faults:
         body = await _robot("PUT", "/_emulator/faults", json_body={"faults": faults}, api=False)

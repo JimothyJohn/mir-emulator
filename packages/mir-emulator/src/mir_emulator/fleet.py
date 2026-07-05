@@ -206,6 +206,31 @@ class FleetEmulator(Emulator):
             payload = None
         return response.status_code, payload
 
+    async def _robot_emulator_call(
+        self,
+        robot: EmbeddedRobot,
+        method: str,
+        path: str,
+        session_id: str,
+        raw_body: bytes = b"",
+    ) -> tuple[int, Any]:
+        """Call an emulator-only surface (no API base path) on an embedded
+        robot, passing the request body through verbatim so the robot's own
+        validation produces the error messages."""
+        headers = {"Authorization": f"Basic {self._robot_token}"}
+        if session_id:
+            headers["X-MiR-Session"] = session_id
+        if raw_body:
+            headers["Content-Type"] = "application/json"
+        response = await self._client_for(robot).request(
+            method, path, headers=headers, content=raw_body
+        )
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = None
+        return response.status_code, payload
+
     def _robot_by_id(self, robot_id: str | None) -> EmbeddedRobot | None:
         return next((r for r in self.robots if r.robot_id == robot_id), None)
 
@@ -632,6 +657,11 @@ def create_fleet_app(
                     "Send X-MiR-Session: <1-64 chars of A-Za-z0-9._-> for an isolated "
                     "fleet with its own isolated robots; omit it for the shared fleet"
                 ),
+                "chaos": (
+                    "GET/PUT/DELETE /_emulator/robots/{robot-id}/faults and .../battery — "
+                    "emulator-only proxy to an embedded robot's fault injection and "
+                    "battery control (fleet auth; session forwarded)"
+                ),
                 "specs": {"openapi3": "/openapi.json", "swagger2": None},
                 "official_docs": docs_url,
                 "source": {
@@ -677,6 +707,38 @@ def create_fleet_app(
         doc["replay"] = "save this document; mir-emulator --replay <file> re-runs it"
         return JSONResponse(doc)
 
+    async def robot_emulator_proxy(request: Request) -> JSONResponse:
+        """Emulator-only chaos proxy (/_emulator/robots/{robot-id}/{surface}):
+        reach an embedded robot's fault-injection and battery surfaces over
+        the fleet's HTTP port. Without it a fleet integration cannot e-stop
+        or drain a robot mid-order — the embedded robots have no port of
+        their own. Fleet auth outside, the robot's own surface (and its
+        validation) inside; the session id forwards, so the proxied chaos
+        lands on the same isolated robot the fleet's orders run on."""
+        from mir_emulator.app import MAX_BODY_BYTES, SESSION_HEADER, SESSION_ID_RE
+
+        def error(status: int, human: str) -> JSONResponse:
+            return JSONResponse(_error_body(status, human), status_code=status)
+
+        if not emulator._authorized(request):
+            return error(401, "Not authorized")
+        session_id = request.headers.get(SESSION_HEADER, "")
+        if session_id and not SESSION_ID_RE.match(session_id):
+            return error(400, "Invalid X-MiR-Session: 1-64 chars from [A-Za-z0-9._-]")
+        surface = request.path_params["surface"]
+        if surface not in ("faults", "battery"):
+            return error(404, "Unknown surface; available: faults, battery")
+        robot = emulator._robot_by_id(request.path_params["robot_id"])
+        if robot is None:
+            return error(404, "Not found")
+        raw = await request.body()
+        if len(raw) > MAX_BODY_BYTES:
+            return error(400, "Payload too large")
+        status_code, payload = await emulator._robot_emulator_call(
+            robot, request.method, f"/_emulator/{surface}", session_id, raw
+        )
+        return JSONResponse(payload, status_code=status_code)
+
     async def not_found(_request: Request, _exc: Exception) -> JSONResponse:
         return JSONResponse(_error_body(404, "Not found"), status_code=404)
 
@@ -699,6 +761,11 @@ def create_fleet_app(
             Route("/swagger.json", spec_json),  # parity with the robot apps
             *extra_doc_routes,
             Route("/_emulator/recorder", recorder_endpoint, methods=["GET", "PUT", "DELETE"]),
+            Route(
+                "/_emulator/robots/{robot_id}/{surface}",
+                robot_emulator_proxy,
+                methods=["GET", "PUT", "DELETE"],
+            ),
             *routes,
         ],
         exception_handlers={404: not_found},
