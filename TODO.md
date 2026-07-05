@@ -12,11 +12,6 @@ truth rather than hand-maintained.
 
 ## Now
 
-- [ ] **Land the scenario CI lane** (in review, PR #32). The seven
-      case-study scenarios run as an end-to-end smoke job against booted
-      robot + fleet emulators. Acceptance: the PR's CI run shows every
-      scenario green, then merge.
-
 - [ ] **Publish `mir-client` to PyPI.** The SDK is generated, gated, and
       contract-tested; `release.yml` builds attested wheels and has a
       publish step waiting on credentials. BLOCKED on a PyPI-side action
