@@ -520,3 +520,41 @@ def test_every_fleet_version_routes_its_extra_apis():
         for op in app.state.all_operations:
             if op.method == "GET" and "{" not in op.path:
                 assert client.get(op.path, headers=KEY).status_code != 404, f"{version} {op.path}"
+
+
+def test_fleet_route_surface_is_exactly_the_specs_plus_reserved_paths():
+    """Every served API route is an operation of the integration, top-module,
+    or compatibility spec; emulator extras stay on reserved paths outside the
+    official API surface."""
+    import re
+
+    from mir_emulator import registry
+    from mir_emulator.spec import load_spec
+    from starlette.routing import Route
+
+    for version in registry.fleet_supported_versions():
+        app = create_fleet_app(version)
+        served = set()
+        for route in app.routes:
+            if isinstance(route, Route):
+                for method in route.methods - {"HEAD", "OPTIONS"}:
+                    served.add((method, re.sub(r"{(\w+):\w+}", r"{\1}", route.path)))
+
+        expected = set()
+        doc_paths = {"/", "/openapi.json", "/openapi_v1.json", "/swagger.json"}
+        v, path = registry.fleet_spec_path(version)
+        specs = [load_spec(path, v)]
+        for record in registry.fleet_extra_specs(v):
+            specs.append(load_spec(record["path"], v))
+            doc_paths.add("/" + record["file"].rsplit("/", 1)[-1])
+        for spec in specs:
+            expected |= {(op.method, spec.base_path + op.path) for op in spec.operations.values()}
+
+        api_served = {
+            r for r in served if not r[1].startswith("/_emulator/") and r[1] not in doc_paths
+        }
+        assert api_served == expected, f"fleet {version}"
+        for _method, extra_path in served - api_served:
+            assert extra_path in doc_paths or extra_path.startswith("/_emulator/"), (
+                f"fleet {version}: unexpected non-API route {extra_path}"
+            )

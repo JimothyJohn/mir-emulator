@@ -177,6 +177,108 @@ def test_validation_reports_all_missing_required_fields(client, spec):
     assert checked, "no POST operation with >=2 required body fields exercised"
 
 
+def _undeclared_keys(spec, op, body) -> set[str]:
+    """Response keys the op's success schema does not declare.
+
+    Only meaningful when the schema declares properties and does not opt into
+    additionalProperties; list bodies are checked element-by-element (including
+    the MiR quirk of list endpoints declared with the element's object schema).
+    """
+    schema = spec.deref(op.success_schema)
+    if schema.get("type") == "array":
+        schema = schema.get("items") or {}
+    props = schema.get("properties")
+    if not isinstance(props, dict) or schema.get("additionalProperties"):
+        return set()
+    instances = body if isinstance(body, list) else [body]
+    extra: set[str] = set()
+    for instance in instances:
+        if isinstance(instance, dict):
+            extra |= set(instance) - set(props)
+    return extra
+
+
+def test_success_bodies_contain_only_declared_fields(client, spec):
+    """The emulator must not answer with fields the official spec never
+    declares — an integration written against it would then break on a real
+    robot. Strict complement of the validate-against-schema tests above
+    (Draft-4 validation alone accepts undeclared extras)."""
+    failures = []
+    for op in spec.operations.values():
+        if op.method not in ("GET", "POST", "PUT") or "application/json" not in op.produces[0]:
+            continue
+        url = spec.base_path + _fill_path(op, op.path)
+        response = client.request(op.method, url, **_request_kwargs(spec, op))
+        if response.status_code != op.success_status:
+            continue
+        try:
+            body = response.json()
+        except ValueError:
+            continue
+        extra = _undeclared_keys(spec, op, body)
+        if extra:
+            failures.append(f"{op.method} {op.path}: undeclared fields {sorted(extra)}")
+    assert not failures, "\n".join(failures[:30])
+
+
+def test_mission_queue_replies_are_spec_shaped_and_do_not_echo_undeclared_fields(client, spec):
+    """POST /mission_queue and the GET list answer with GetMission_queues —
+    and never echo request-body fields the spec does not declare."""
+    base = spec.base_path
+    mission_id = client.get(f"{base}/missions", headers=AUTH_HEADER).json()[0]["guid"]
+    queued = client.post(
+        f"{base}/mission_queue",
+        json={"mission_id": mission_id, "undeclared_field": "leak"},
+        headers=AUTH_HEADER,
+    )
+    assert queued.status_code == spec.operations[("POST", "/mission_queue")].success_status
+    post_op = spec.operations[("POST", "/mission_queue")]
+    assert not _undeclared_keys(spec, post_op, queued.json())
+
+    list_op = spec.operations[("GET", "/mission_queue")]
+    listed = client.get(f"{base}/mission_queue", headers=AUTH_HEADER).json()
+    assert listed
+    assert not _undeclared_keys(spec, list_op, listed)
+
+    item_op = next(
+        op
+        for (method, path), op in spec.operations.items()
+        if method == "GET" and path.startswith("/mission_queue/{")
+    )
+    item = client.get(f"{base}/mission_queue/{queued.json()['id']}", headers=AUTH_HEADER).json()
+    assert not _undeclared_keys(spec, item_op, item)
+
+    client.delete(f"{base}/mission_queue", headers=AUTH_HEADER)
+
+
+def test_route_surface_is_exactly_the_spec_plus_reserved_emulator_paths(client, spec):
+    """Everything under the API base path is a spec operation (no invented
+    endpoints, none missing); everything else stays on the reserved
+    emulator-only paths, outside the official API surface."""
+    import re
+
+    from starlette.routing import Route, WebSocketRoute
+
+    served = set()
+    for route in client.app.routes:
+        if isinstance(route, Route):
+            for method in route.methods - {"HEAD", "OPTIONS"}:
+                served.add((method, re.sub(r"{(\w+):\w+}", r"{\1}", route.path)))
+        elif isinstance(route, WebSocketRoute):
+            served.add(("WS", route.path))
+
+    expected = {(op.method, spec.base_path + op.path) for op in spec.operations.values()}
+    api_served = {r for r in served if r[1].startswith(spec.base_path)}
+    assert api_served == expected
+
+    for method, path in served - api_served:
+        assert (
+            path == "/"
+            or path in ("/swagger.json", "/openapi.json")
+            or path.startswith("/_emulator/")
+        ), f"unexpected non-API route {method} {path}"
+
+
 def test_generic_crud_round_trip(client, spec):
     base = spec.base_path
     created = client.post(
