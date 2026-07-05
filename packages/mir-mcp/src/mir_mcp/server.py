@@ -49,6 +49,8 @@ async def _robot(method: str, path: str, *, json_body: Any = None, api: bool = T
     """Run one robot call; return the body, or an 'Error: ...' string."""
     try:
         status, body = await client.robot_request(method, path, json=json_body, api=api)
+    except client.TargetResolutionError as exc:
+        return str(exc)
     except httpx.HTTPError as exc:
         return client.describe_connection_error(exc, client.robot_base_url())
     if status >= 400:
@@ -59,6 +61,8 @@ async def _robot(method: str, path: str, *, json_body: Any = None, api: bool = T
 async def _fleet(method: str, path: str, *, json_body: Any = None) -> str | Any:
     try:
         status, body = await client.fleet_request(method, path, json=json_body)
+    except client.TargetResolutionError as exc:
+        return str(exc)
     except httpx.HTTPError as exc:
         return client.describe_connection_error(exc, client.fleet_base_url())
     if status >= 400:
@@ -81,6 +85,64 @@ async def _resolve_mission(name_or_guid: str) -> str | dict[str, Any]:
     if not matches:
         return f"Error: no mission named or with guid '{name_or_guid}'. Available: {available}"
     return f"Error: '{name_or_guid}' is ambiguous. Matches: {available}"
+
+
+async def _target_summary(base: str, resolver) -> dict[str, Any]:
+    info = await client.detect_target(base)
+    summary: dict[str, Any] = {"url": base, "kind": info["kind"]}
+    if info.get("version"):
+        summary["software_version"] = info["version"]
+    elif info["kind"] == "robot":
+        summary["software_version"] = "unknown (target does not publish one)"
+    if info["kind"] == "dispatcher":
+        summary["available_versions"] = info["versions"]
+        summary["available_fleet_versions"] = info["fleet_versions"]
+    if info["kind"] == "unknown":
+        summary["note"] = (
+            "nothing MiR-shaped answered; check the URL or start an emulator "
+            "with `uv run mir-emulator`"
+        )
+        return summary
+    try:
+        summary["resolved_base"] = await resolver()
+    except client.TargetResolutionError as exc:
+        summary["error"] = str(exc)
+    return summary
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Identify the connected MiR target",
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+async def mir_server_info() -> str:
+    """Identify what the configured endpoints actually are and which MiR
+    software version they run — call this first on a new connection.
+
+    Probes MIR_ROBOT_URL and MIR_FLEET_URL without credentials or state
+    changes and reports, per target: kind (robot, fleet, or multi-version
+    dispatcher), the detected software version, the resolved API base the
+    other tools will use, and — for a dispatcher — every served version
+    (pin one with MIR_VERSION / MIR_FLEET_VERSION). No version needs to be
+    configured up front; the tools adapt to whatever the target reports.
+    """
+    doc: dict[str, Any] = {
+        "robot_target": await _target_summary(client.robot_base_url(), client.resolved_robot_base)
+    }
+    # A separate fleet URL always gets its own summary; with a shared URL,
+    # only add one when the target actually has a fleet face.
+    if client.fleet_base_url() != client.robot_base_url() or doc["robot_target"]["kind"] in (
+        "fleet",
+        "dispatcher",
+    ):
+        doc["fleet_target"] = await _target_summary(
+            client.fleet_base_url(), client.resolved_fleet_base
+        )
+    return _dump(doc)
 
 
 # ---------------------------------------------------------------- robot tools

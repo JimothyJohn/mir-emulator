@@ -8,6 +8,14 @@ repo's emulator and against real hardware.
 
 ## Tools
 
+Discovery: `mir_server_info` — identifies what the configured URLs point at
+(robot, fleet, or the multi-version demo dispatcher) and which MiR software
+version each target reports. The other tools run the same handshake on
+their first call, so pointing `MIR_ROBOT_URL` at a dispatcher root just
+works: the newest served version is used unless `MIR_VERSION` /
+`MIR_FLEET_VERSION` pins one. No version needs to be installed or
+configured to match the target.
+
 Robot: `mir_robot_status`, `mir_set_robot_state` (ready/pause/manual),
 `mir_clear_error`, `mir_list_missions`, `mir_queue_mission` (by name or
 guid, optional wait-for-completion), `mir_mission_queue`,
@@ -26,6 +34,8 @@ name), `mir_fleet_order_status` (check/abort).
 | `MIR_USERNAME` / `MIR_PASSWORD` | `distributor` | Robot account (password pre-hash) |
 | `MIR_API_KEY` | `distributor` | Fleet `x-api-key` |
 | `MIR_SESSION` | unset | Emulator-only `X-MiR-Session` isolation id |
+| `MIR_VERSION` | newest served | Robot version to pin when the URL is a multi-version dispatcher |
+| `MIR_FLEET_VERSION` | newest served | Fleet version to pin, same case |
 
 ## Use with Claude Code
 
