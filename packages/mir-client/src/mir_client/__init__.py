@@ -20,6 +20,11 @@ from mir_client.discovery import (
 )
 from mir_client.fleet.client import AuthenticatedClient as _FleetClient
 from mir_client.robot.client import AuthenticatedClient as _RobotClient
+from mir_client.scan import (
+    DiscoveredServer,
+    scan_network,
+    scan_network_async,
+)
 
 DEFAULT_API_KEY = "distributor"  # the emulator's default; real fleets issue keys
 
@@ -122,6 +127,7 @@ __all__ = [
     "DEFAULT_API_KEY",
     "DEFAULT_PASSWORD",
     "DEFAULT_USERNAME",
+    "DiscoveredServer",
     "DiscoveryError",
     "ServerInfo",
     "client_for",
@@ -132,4 +138,6 @@ __all__ = [
     "provenance",
     "robot_client",
     "robot_token",
+    "scan_network",
+    "scan_network_async",
 ]

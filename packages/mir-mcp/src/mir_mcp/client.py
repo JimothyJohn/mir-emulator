@@ -23,9 +23,13 @@ runs, and caches the answer per base URL.
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import contextlib
 import hashlib
+import ipaddress
 import os
+import socket
 from typing import Any
 
 import httpx
@@ -33,6 +37,17 @@ import httpx
 ROBOT_API_PREFIX = "/api/v2.0.0"
 FLEET_API_PREFIX = "/api/v1"
 REQUEST_TIMEOUT_S = 15.0
+
+# Fields a real MiR /status always carries; used to tell an authentic robot
+# from a server that answers 200 to every path.
+_ROBOT_STATUS_MARKERS = (
+    "state_id",
+    "state_text",
+    "battery_percentage",
+    "robot_name",
+    "mission_queue_id",
+    "serial_number",
+)
 
 # Tests inject an in-process ASGI transport here; production uses real TCP.
 TRANSPORT: httpx.AsyncBaseTransport | None = None
@@ -151,11 +166,107 @@ async def _identify(base_url: str) -> dict[str, Any] | None:
         if has_spec_marker and isinstance(info, dict) and isinstance(info.get("version"), str):
             return {"kind": "robot", "version": info["version"]}
     hit = await _probe(base_url, f"{ROBOT_API_PREFIX}/status")
-    if hit and hit[0] in (200, 401):
-        # The API family is proven (401 = MiR auth in front of it); real
-        # robots expose no version field, so the version stays unknown.
+    if hit and hit[0] == 401:
+        # A 401 at exactly this path is a strong MiR signal (auth wall).
+        return {"kind": "robot", "version": None}
+    if (
+        hit
+        and hit[0] == 200
+        and isinstance(hit[1], dict)
+        and any(k in hit[1] for k in _ROBOT_STATUS_MARKERS)
+    ):
+        # 200 only counts with a real status body — a server that 200s every
+        # path must not read as a robot. Version stays unknown; robots don't
+        # publish one here.
         return {"kind": "robot", "version": None}
     return None
+
+
+SCAN_PORTS: tuple[int, ...] = (80, 8080)  # real robots on 80, emulator on 8080
+_SCAN_MAX_CANDIDATES = 1024
+
+
+def _local_ipv4() -> str | None:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("192.0.2.1", 9))  # TEST-NET-1: routes, never sends
+            return str(probe.getsockname()[0])
+    except OSError:
+        return None
+
+
+def _expand_hosts(spec: list[str]) -> list[str]:
+    hosts: list[str] = []
+    for item in spec:
+        if "/" in item:
+            hosts.extend(str(a) for a in ipaddress.ip_network(item, strict=False).hosts())
+        else:
+            hosts.append(item)
+    return list(dict.fromkeys(hosts))
+
+
+async def _tcp_accepts(host: str, port: int, timeout: float) -> bool:
+    try:
+        _reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout)
+    except (TimeoutError, OSError):
+        return False
+    writer.close()
+    with contextlib.suppress(Exception):
+        await writer.wait_closed()
+    return True
+
+
+async def scan_for_targets(
+    hosts: list[str] | None = None,
+    *,
+    ports: tuple[int, ...] | None = None,
+    connect_timeout: float = 0.5,
+    identify_timeout: float = 3.0,
+    concurrency: int = 128,
+) -> list[dict[str, Any]]:
+    """Sweep the network for MiR targets. Returns one dict per identified
+    robot/fleet/dispatcher: url, host, port, kind, version.
+
+    *hosts* accepts IPs, hostnames, and CIDR blocks; None scans the local
+    /24. Each candidate gets a cheap TCP connect, then the same handshake
+    the tools use — under a hard deadline so a hung host can't stall it.
+    """
+    ports = ports if ports is not None else SCAN_PORTS
+    candidates = (
+        _expand_hosts(hosts)
+        if hosts is not None
+        else (_expand_hosts([f"{ip}/24"]) if (ip := _local_ipv4()) else [])
+    )
+    if not candidates:
+        raise ValueError("no hosts to scan: not on a network, or an empty host list was given")
+    if len(candidates) > _SCAN_MAX_CANDIDATES:
+        raise ValueError(
+            f"{len(candidates)} candidate hosts exceeds the {_SCAN_MAX_CANDIDATES} cap; "
+            "pass a narrower CIDR or explicit hosts"
+        )
+    gate = asyncio.Semaphore(concurrency)
+
+    async def check(host: str, port: int) -> dict[str, Any] | None:
+        async with gate:
+            if not await _tcp_accepts(host, port, connect_timeout):
+                return None
+            url = f"http://{host}:{port}"
+            try:
+                info = await asyncio.wait_for(_identify(url), identify_timeout)
+            except (TimeoutError, httpx.HTTPError):
+                return None
+            if info is None:
+                return None
+            return {
+                "url": url,
+                "host": host,
+                "port": port,
+                "kind": info["kind"],
+                "version": info.get("version"),
+            }
+
+    results = await asyncio.gather(*(check(h, p) for h in candidates for p in ports))
+    return [r for r in results if r is not None]
 
 
 async def detect_target(base_url: str) -> dict[str, Any]:

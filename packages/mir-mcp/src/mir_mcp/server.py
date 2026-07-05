@@ -145,6 +145,48 @@ async def mir_server_info() -> str:
     return _dump(doc)
 
 
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Discover MiR robots on the network",
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+async def mir_discover_robots(hosts: list[str] | None = None) -> str:
+    """Find MiR robots, fleets, and emulators on the network by IP — use
+    this when you don't know a robot's address.
+
+    Sweeps candidate hosts on the ports MiR gear listens on (80 on real
+    robots, 8080 on the emulator), TCP-probes each, and runs the version
+    handshake on anything that answers — returning only confirmed MiR
+    targets (kind + software version + URL). *hosts* accepts IPs,
+    hostnames, and CIDR blocks (e.g. ["192.168.12.0/24"]); omit it to scan
+    this machine's local /24. All probes are unauthenticated reads. To then
+    control a found target, set MIR_ROBOT_URL / MIR_FLEET_URL to its URL.
+    """
+    try:
+        found = await client.scan_for_targets(hosts)
+    except ValueError as exc:
+        return f"Error: {exc}"
+    except OSError as exc:
+        return f"Error: network scan failed ({type(exc).__name__}: {exc})."
+    if not found:
+        where = ", ".join(hosts) if hosts else "the local /24"
+        return _dump(
+            {
+                "found": [],
+                "scanned": where,
+                "hint": (
+                    "No MiR robots or fleets answered. Check you are on the robot's "
+                    "network, or start an emulator with `uv run mir-emulator`."
+                ),
+            }
+        )
+    return _dump({"found": found, "count": len(found)})
+
+
 # ---------------------------------------------------------------- robot tools
 
 

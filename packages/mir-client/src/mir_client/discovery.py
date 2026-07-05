@@ -37,6 +37,17 @@ ROBOT_API_PREFIX = "/api/v2.0.0"
 FLEET_API_PREFIX = "/api/v1"
 DEFAULT_TIMEOUT_S = 5.0
 
+# Fields a real MiR /status always carries; used to tell an authentic robot
+# from a server that simply answers 200 to every path.
+_ROBOT_STATUS_MARKERS = (
+    "state_id",
+    "state_text",
+    "battery_percentage",
+    "robot_name",
+    "mission_queue_id",
+    "serial_number",
+)
+
 
 class DiscoveryError(RuntimeError):
     """The target could not be reached or does not speak a MiR API."""
@@ -81,9 +92,14 @@ def _probe_plan(api_key: str) -> list[tuple[str, str, dict[str, str]]]:
 def _interpret(probe: str, status: int, doc: Any, base_url: str) -> ServerInfo | None:
     """Pure classification of one probe response; None means keep probing."""
     if probe == "robot_status":
-        # 200 = open robot API, 401 = MiR auth in front of it; both prove the
-        # family. The version stays unknown — real robots don't publish it.
-        if status in (200, 401):
+        # 401 at exactly /api/v2.0.0/status is a strong MiR signal (a bare
+        # web server does not auth-wall that path). A 200 only counts if the
+        # body is actually a MiR status document — a server that answers 200
+        # to every path must not be mistaken for a robot. Version stays
+        # unknown either way: real robots don't publish one here.
+        if status == 401:
+            return ServerInfo("robot", None, base_url, ROBOT_API_PREFIX)
+        if status == 200 and isinstance(doc, dict) and any(k in doc for k in _ROBOT_STATUS_MARKERS):
             return ServerInfo("robot", None, base_url, ROBOT_API_PREFIX)
         return None
     if status != 200 or not isinstance(doc, dict):

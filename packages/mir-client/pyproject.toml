@@ -11,6 +11,9 @@ dependencies = [
     "attrs>=22.2",
 ]
 
+[project.scripts]
+mir-discover = "mir_client.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

@@ -69,6 +69,11 @@ truth rather than hand-maintained.
 
 ## Shipped
 
+- 2026-07-04 — **Network robot discovery**: `mir_client.scan_network()` +
+  `mir-discover` CLI, MCP `mir_discover_robots`, and a console localhost
+  scan — find MiR robots by IP (subnet sweep on ports 80/8080 + the
+  identification handshake) without knowing an address. Deadline-bounded
+  and adversarially tested (hung sockets, garbage bytes, non-MiR servers).
 - 2026-07-04 — **Connect-time version discovery**: every surface (SDK
   `connect()`/`detect_server()`, MCP `mir_server_info` + dispatcher-aware
   URLs, console, skill) asks the target its kind and software version

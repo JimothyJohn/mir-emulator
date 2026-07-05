@@ -17,6 +17,36 @@ status = get_status.sync(client=client)
 print(status.state_text, status.battery_percentage)
 ```
 
+## Find robots on the network — `scan_network()` / `mir-discover`
+
+Don't know the robot's IP? Sweep the network for it:
+
+```console
+$ mir-discover                     # scan the local /24 on ports 80, 8080
+Found 1 MiR target(s):
+  http://192.168.12.20  [robot] 3.8.1
+
+$ mir-discover 192.168.12.0/24     # a specific subnet
+$ mir-discover mir.local:8080      # a specific host[:port]
+$ mir-discover --json              # machine-readable
+```
+
+```python
+from mir_client import scan_network, connect
+
+for target in scan_network():                 # local /24, ports 80 + 8080
+    print(target.url, target.info.kind, target.info.version)
+
+first = scan_network(["192.168.12.0/24"])[0]  # or a CIDR / host list
+client = connect(first.url)                    # drive the one it found
+```
+
+Each candidate gets a cheap TCP connect, then the identification handshake
+below — only confirmed MiR robots/fleets/dispatchers come back, and every
+step runs under a hard deadline so a hung or noisy host can't stall the
+sweep. All probes are unauthenticated reads. `scan_network_async()` is the
+async twin.
+
 ## Version discovery — `connect()`
 
 You don't have to know (or install) the version the target runs. `connect()`

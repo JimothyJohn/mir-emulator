@@ -23,10 +23,20 @@ Work out where the robot is and whether it is real:
 
 1. **User gave a URL/host** — use it. `/api/v2.0.0/...` is a robot,
    `/api/v1/...` is a Fleet.
-2. **Something is already listening locally** — probe before starting
+2. **User has a robot but no address** — scan the network for it:
+   ```sh
+   uv run mir-discover                    # local /24, ports 80 (real) + 8080 (emulator)
+   uv run mir-discover 192.168.12.0/24    # a specific subnet
+   uv run mir-discover mir.local:8080     # a specific host[:port], --json for parsing
+   ```
+   It returns only confirmed MiR targets with their kind and software
+   version; each line's URL is ready to use. (From Python:
+   `mir_client.scan_network()`; from an MCP client: the `mir_discover_robots`
+   tool.)
+3. **Something is already listening locally** — probe before starting
    anything new: `curl -s http://127.0.0.1:8080/` (the emulator's index
    describes itself and lists versions).
-3. **Nothing running** — start an emulator from this repo:
+4. **Nothing running** — start an emulator from this repo:
    ```sh
    uv run mir-emulator &                          # newest robot on :8080
    uv run mir-emulator --fleet-version 1.5.0 &    # a Fleet with embedded robots
