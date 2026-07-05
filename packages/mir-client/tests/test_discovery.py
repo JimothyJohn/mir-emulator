@@ -93,15 +93,40 @@ def test_swagger_only_robot_reports_its_spec_version():
     assert info.version == "2.13.5.4"
 
 
-@pytest.mark.parametrize("status_code", [200, 401])
-def test_silent_robot_is_recognized_with_unknown_version(status_code):
-    # A locked-down real robot: nothing but the API answers, and /status
-    # may 401. Family is proven, version honestly unknown.
+def test_auth_walled_robot_is_recognized_with_unknown_version():
+    # A locked-down real robot: /status is behind MiR auth and 401s. A 401 at
+    # exactly this path is a strong signal; version is honestly unknown.
     async def status(_request):
-        return JSONResponse({"error_code": str(status_code)}, status_code=status_code)
+        return JSONResponse({"error_code": "401"}, status_code=401)
 
     info = detect(_bare_server([Route("/api/v2.0.0/status", status)]))
     assert info == ServerInfo("robot", None, "http://target.test", "/api/v2.0.0")
+
+
+def test_open_robot_with_a_real_status_body_is_recognized():
+    # Auth-disabled robot: 200 with an actual MiR status document.
+    async def status(_request):
+        return JSONResponse({"state_id": 3, "state_text": "Ready", "battery_percentage": 91})
+
+    info = detect(_bare_server([Route("/api/v2.0.0/status", status)]))
+    assert info == ServerInfo("robot", None, "http://target.test", "/api/v2.0.0")
+
+
+def test_server_that_200s_everything_is_not_a_robot():
+    # The decoy that breaks a naive fallback: 200 + JSON on every path,
+    # including /api/v2.0.0/status, but no MiR status fields.
+    async def anything(_request):
+        return JSONResponse({"hello": "world"})
+
+    with pytest.raises(DiscoveryError, match="no probe identified"):
+        detect(
+            _bare_server(
+                [
+                    Route("/api/v2.0.0/status", anything),
+                    Route("/{path:path}", anything),
+                ]
+            )
+        )
 
 
 def test_non_mir_server_raises_instead_of_guessing():
@@ -128,7 +153,7 @@ def test_foreign_healthz_does_not_masquerade_as_a_dispatcher():
         return JSONResponse({"status": "ok"})
 
     async def status(_request):
-        return JSONResponse({}, status_code=200)
+        return JSONResponse({"state_id": 3, "state_text": "Ready"}, status_code=200)
 
     info = detect(_bare_server([Route("/healthz", healthz), Route("/api/v2.0.0/status", status)]))
     assert info.kind == "robot"
