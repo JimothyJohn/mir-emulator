@@ -160,3 +160,23 @@ def test_paused_robot_freezes_on_the_polyline(client, clock):
     clock.tick(30)
     x2, y2, _ = position_of(client)
     assert (x1, y1) == (x2, y2)
+
+
+def test_put_action_retargets_the_waypoint_and_leaks_no_private_keys(client, clock):
+    a = make_position(client, "A", 10.0, 5.0)
+    c = make_position(client, "C", 10.0, 25.0)
+    mission = make_waypoint_mission(client, a)
+    action = client.get(f"/api/v2.0.0/missions/{mission}/actions", headers=AUTH).json()[0]["guid"]
+    updated = client.put(
+        f"/api/v2.0.0/missions/{mission}/actions/{action}",
+        json={"parameters": [{"id": "position", "value": c}]},
+        headers=AUTH,
+    )
+    assert updated.status_code == 200
+    assert not any(k.startswith("_") for k in updated.json())
+    enqueue(client, mission, duration=100)
+    clock.tick(1 + 50)  # halfway: home (5,5) -> C (10,25)
+    x, y, _ = position_of(client)
+    assert (x, y) != (pytest.approx(7.5), pytest.approx(5.0))  # not headed to A
+    # halfway along home->C (length ~20.6): past the midpoint of the segment
+    assert y == pytest.approx(15.0, abs=0.5)

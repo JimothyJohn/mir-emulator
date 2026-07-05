@@ -372,3 +372,12 @@ def test_generate_report_unreachable_target_is_an_error_string(monkeypatch, tmp_
     result = run(server.mir_generate_report(str(tmp_path / "x.html")))
     assert result.startswith("Error:")
     assert not (tmp_path / "x.html").exists()
+
+
+def test_as_list_accepts_both_declared_shapes():
+    # MiR specs declare some list endpoints with the element's object schema;
+    # a single-object answer is one entry, never silently nothing.
+    assert server._as_list([{"guid": "a"}]) == [{"guid": "a"}]
+    assert server._as_list({"guid": "a"}) == [{"guid": "a"}]
+    assert server._as_list(None) == []
+    assert server._as_list("Error: nope") == []

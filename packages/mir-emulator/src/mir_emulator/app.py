@@ -464,12 +464,21 @@ class Emulator:
                 return 404, _error_body(404, "Not found")
             patch = ctx.body if isinstance(ctx.body, dict) else {}
             updated = overlay_compatible(dict(existing), patch)
+            # The verbatim-body stash follows updates too: a PUT that changes
+            # a field the response schema types differently (parameters:
+            # array in, string out) must still reach behaviors that read it.
+            previous_request = existing.get("_request")
+            if patch:
+                updated["_request"] = {
+                    **(previous_request if isinstance(previous_request, dict) else {}),
+                    **patch,
+                }
             ctx.state.insert(key, item_id or "", updated)
             full = self._example(op.success_schema)
             if isinstance(full, dict) and full:
                 overlay_compatible(full, updated)
                 return op.success_status, full
-            return op.success_status, updated
+            return op.success_status, {k: v for k, v in updated.items() if not k.startswith("_")}
 
         if op.method in ("PUT", "PATCH"):
             # Singleton update (e.g. PUT /wifi/enabled).
