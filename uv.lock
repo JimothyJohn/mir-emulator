@@ -724,12 +724,14 @@ source = { editable = "packages/mir-mcp" }
 dependencies = [
     { name = "httpx" },
     { name = "mcp" },
+    { name = "mir-client" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "mcp", specifier = ">=1.2" },
+    { name = "mir-client", editable = "packages/mir-client" },
 ]
 
 [[package]]

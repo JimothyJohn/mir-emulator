@@ -99,9 +99,17 @@ authoritative list (versions, hashes, provenance, source PDF URLs). Currently:
   with `--username/--password` or disable with `--no-auth`.
 - **Made for hardening**: `/_emulator/faults` injects emergency stop, error,
   localization loss, critical battery, and blocked-path states (session-
-  isolated; holding faults freeze the mission simulation); `X-MiR-Latency`
-  delays any response for timeout testing; `/_emulator/diff?from=&to=` on the
-  dispatcher reports structural API changes between tracked versions.
+  isolated; holding faults freeze the mission simulation); `/_emulator/battery`
+  sets the battery level and runs charging curves toward a target; on a fleet,
+  `/_emulator/robots/{robot-id}/{faults|battery}` proxies both surfaces to an
+  embedded robot so orders can be chaos-tested in flight; `/_emulator/clock`
+  runs simulated time Nx wall speed (process-wide) so missions and charging
+  keep realistic durations and timestamps while tests wait seconds, not
+  minutes (`--time-scale` at startup); `X-MiR-Latency`
+  delays any response for timeout testing; `X-MiR-Mission-Duration` gives one
+  queue entry its own runtime (real routes are not uniform);
+  `/_emulator/diff?from=&to=` on the dispatcher reports structural API changes
+  between tracked versions.
 - **Middleware-ready**: serves its own API definition at `/swagger.json`
   (Swagger 2.0, verbatim) and `/openapi.json` (OpenAPI 3.0, converted and
   round-trip-validated) so SDK generators and contract-testing tools can point

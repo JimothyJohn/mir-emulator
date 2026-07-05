@@ -23,7 +23,7 @@ from collections import OrderedDict
 from typing import Any
 
 from jsonschema import Draft4Validator
-from jsonschema.exceptions import SchemaError, ValidationError
+from jsonschema.exceptions import SchemaError
 from starlette.applications import Starlette
 from starlette.datastructures import MutableHeaders
 from starlette.middleware import Middleware
@@ -39,9 +39,16 @@ from mir_emulator.behaviors import (
     MISSION_DURATION_S,
     OVERRIDES,
     RequestCtx,
+    active_faults,
+    battery_doc,
+    clock_doc,
     faults_doc,
     get_status,
+    reset_battery,
+    reset_time_scale,
+    set_battery,
     set_faults,
+    set_time_scale,
 )
 from mir_emulator.examples import example_from_schema, overlay_compatible
 from mir_emulator.openapi3 import to_openapi3
@@ -61,12 +68,42 @@ SESSION_HEADER = "x-mir-session"
 # Capped so a hostile header can't hold a worker hostage.
 LATENCY_HEADER = "x-mir-latency"
 MAX_LATENCY_MS = 10_000.0
+# Emulator-only mission shaping: X-MiR-Mission-Duration: <seconds> on
+# POST /mission_queue freezes that duration onto the new entry, so one
+# robot can mix long hauls and short hops (real routes are not uniform).
+DURATION_HEADER = "x-mir-mission-duration"
+MIN_MISSION_DURATION_S = 0.1
+MAX_MISSION_DURATION_S = 3600.0
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 MAX_SESSIONS = 256
+# Body validation reports every violation in one 400 (a client shouldn't
+# rediscover required fields one round trip at a time), bounded so a
+# pathological body can't inflate the response.
+MAX_VALIDATION_ERRORS = 16
 
 
 def _error_body(status: int, human: str) -> dict:
     return {"error_code": str(status), "error_human": human}
+
+
+class _DroppedConnection(Response):
+    """Sever the connection mid-response: declare a body length, send one
+    byte, then abandon the exchange. A real HTTP server (uvicorn) aborts the
+    connection, so the client observes the transport failure a rebooting
+    robot produces — never an HTTP status. In-process ASGI test clients
+    surface the abandonment as a server-side error instead."""
+
+    async def __call__(self, scope, receive, send) -> None:
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [(b"content-type", b"application/json"), (b"content-length", b"1024")],
+            }
+        )
+        await send({"type": "http.response.body", "body": b"{", "more_body": True})
+        # Returning without completing the declared body makes the server
+        # tear the connection down.
 
 
 def _respond(status: int, body: Any, media_type: str = "application/json") -> Response:
@@ -226,14 +263,20 @@ class Emulator:
             return None
         schema = _draft4_nullable(self.spec.deref(op.body_schema))
         try:
-            Draft4Validator(schema).validate(body)
-        except ValidationError as exc:
-            # exc.message can embed user input; keep it JSON-encoded and
-            # never log it (log injection surface).
-            return f"Argument error: {exc.message[:200]}"
+            errors = sorted(
+                Draft4Validator(schema).iter_errors(body),
+                key=lambda err: ([str(p) for p in err.absolute_path], err.message),
+            )
         except SchemaError:
             return None  # emulator bug in the spec, not the client's fault
-        return None
+        if not errors:
+            return None
+        # err.message can embed user input; keep it JSON-encoded and
+        # never log it (log injection surface).
+        messages = [err.message[:200] for err in errors[:MAX_VALIDATION_ERRORS]]
+        if len(errors) > MAX_VALIDATION_ERRORS:
+            messages.append(f"and {len(errors) - MAX_VALIDATION_ERRORS} more")
+        return "Argument error: " + "; ".join(messages)
 
     def handler_for(self, op: Operation):
         async def handler(request: Request) -> Response:
@@ -257,6 +300,31 @@ class Emulator:
                 400,
                 _error_body(400, "Invalid X-MiR-Session: 1-64 chars from [A-Za-z0-9._-]"),
             )
+
+        # A connection-dropping fault kills API traffic before any handling —
+        # a rebooting robot doesn't validate your request first. /_emulator/*
+        # surfaces bypass this (they have their own endpoints), so the fault
+        # stays clearable.
+        drop_state = self.state_for(session_id)
+        if any(FAULTS[n].get("drops_connections") for n in active_faults(drop_state)):
+            return _DroppedConnection()
+
+        duration_override: float | None = None
+        raw_duration = request.headers.get(DURATION_HEADER)
+        if raw_duration is not None:
+            try:
+                duration_override = float(raw_duration)
+            except ValueError:
+                duration_override = math.nan
+            if not (MIN_MISSION_DURATION_S <= duration_override <= MAX_MISSION_DURATION_S):
+                return _respond(
+                    400,
+                    _error_body(
+                        400,
+                        "Invalid X-MiR-Mission-Duration: seconds in "
+                        f"[{MIN_MISSION_DURATION_S}, {MAX_MISSION_DURATION_S}]",
+                    ),
+                )
 
         body: Any = None
         if op.method in ("POST", "PUT", "PATCH"):
@@ -285,6 +353,7 @@ class Emulator:
             mission_duration=self.mission_duration,
             seed_collection=lambda key, path: self._seed_collection(state, key, path),
             session_id=session_id,
+            duration_override=duration_override,
         )
 
         override = self._override_for(op)
@@ -318,7 +387,12 @@ class Emulator:
 
         if op.method == "GET" and not is_item and (is_array_response or has_item_sibling):
             self._seed_collection(ctx.state, key, collection_path)
-            return op.success_status, list(ctx.state.collection(key).values())
+            # underscore keys are emulator-internal (e.g. the verbatim client
+            # body stashed at create time) — never part of the API surface
+            return op.success_status, [
+                {k: v for k, v in element.items() if not k.startswith("_")}
+                for element in ctx.state.collection(key).values()
+            ]
 
         if op.method == "GET" and is_item:
             self._seed_collection(ctx.state, key, collection_path)
@@ -333,7 +407,7 @@ class Emulator:
                 if "guid" in stored:
                     full.setdefault("guid", stored["guid"])
                 return op.success_status, full
-            return op.success_status, stored
+            return op.success_status, {k: v for k, v in stored.items() if not k.startswith("_")}
 
         if op.method == "GET":
             # Singleton document (e.g. /system/info).
@@ -351,9 +425,12 @@ class Emulator:
                 # Echo body fields only where they fit the response schema —
                 # MiR's files sometimes type a field differently in the body
                 # and the response (e.g. parameters: array in, string out).
+                # A schema that declares properties (even the empty document
+                # POST /factory_reset answers with) caps the reply at exactly
+                # those; only a shapeless schema passes the body through.
                 if item:
                     overlay_compatible(item, ctx.body)
-                else:
+                elif not isinstance(success_schema.get("properties"), dict):
                     item.update(ctx.body)
             if "id" in item and isinstance(item.get("id"), int):
                 new_id: str | int = ctx.state.next_int_id()
@@ -370,7 +447,13 @@ class Emulator:
                 self._assign_ids(element, new_id)
                 stored = element
             else:
-                stored = item
+                stored = dict(item)
+            if isinstance(ctx.body, dict):
+                # Keep the client's body verbatim: response/list schemas may
+                # type fields differently (parameters: array in, string out),
+                # but behaviors (e.g. waypoint paths from move actions) need
+                # what was actually sent. Never emitted — see the GET paths.
+                stored["_request"] = dict(ctx.body)
             ctx.state.insert(key, str(item.get("guid", new_id)), stored)
             return op.success_status, item
 
@@ -381,12 +464,21 @@ class Emulator:
                 return 404, _error_body(404, "Not found")
             patch = ctx.body if isinstance(ctx.body, dict) else {}
             updated = overlay_compatible(dict(existing), patch)
+            # The verbatim-body stash follows updates too: a PUT that changes
+            # a field the response schema types differently (parameters:
+            # array in, string out) must still reach behaviors that read it.
+            previous_request = existing.get("_request")
+            if patch:
+                updated["_request"] = {
+                    **(previous_request if isinstance(previous_request, dict) else {}),
+                    **patch,
+                }
             ctx.state.insert(key, item_id or "", updated)
             full = self._example(op.success_schema)
             if isinstance(full, dict) and full:
                 overlay_compatible(full, updated)
                 return op.success_status, full
-            return op.success_status, updated
+            return op.success_status, {k: v for k, v in updated.items() if not k.startswith("_")}
 
         if op.method in ("PUT", "PATCH"):
             # Singleton update (e.g. PUT /wifi/enabled).
@@ -482,6 +574,7 @@ def create_app(
         return JSONResponse(
             {
                 "name": "mir-emulator",
+                "kind": "robot",
                 "emulated_mir_version": version,
                 "api_title": spec.title,
                 "base_path": spec.base_path,
@@ -496,9 +589,24 @@ def create_app(
                     "Send X-MiR-Latency: <ms> (cap 10000) to delay any response; "
                     "or start with --latency-ms for a baseline"
                 ),
+                "mission_duration": (
+                    "Send X-MiR-Mission-Duration: <seconds 0.1-3600> on "
+                    "POST /mission_queue to give that entry its own duration "
+                    "(default: --mission-duration)"
+                ),
                 "faults": (
                     "GET/PUT/DELETE /_emulator/faults — emulator-only fault injection "
                     f"({', '.join(sorted(FAULTS))})"
+                ),
+                "battery": (
+                    "GET/PUT/DELETE /_emulator/battery — emulator-only battery control "
+                    "(set percentage, run a charging curve via charging/charge_rate/target; "
+                    "DELETE restores the stock drain model)"
+                ),
+                "clock": (
+                    "GET/PUT/DELETE /_emulator/clock — emulator-only time scaling "
+                    '(PUT {"scale": N} runs simulated time Nx wall speed with realistic '
+                    "durations and timestamps, process-wide; DELETE restores 1.0)"
                 ),
                 "source": {
                     "primary_source": registry.primary_source(),
@@ -546,6 +654,55 @@ def create_app(
                 )
             set_faults(state, names, emulator.mission_duration)
         return _respond(200, faults_doc(state))
+
+    async def battery_endpoint(request: Request) -> Response:
+        """Emulator-only battery control (/_emulator/battery): set the level,
+        run a charging curve toward a target, or reset to the stock drain
+        model. Same auth and session semantics as the rest of the surface."""
+        if not emulator._authorized(request):
+            return _respond(401, _error_body(401, "Not authorized"))
+        session_id = request.headers.get(SESSION_HEADER, "")
+        if session_id and not SESSION_ID_RE.match(session_id):
+            return _respond(
+                400, _error_body(400, "Invalid X-MiR-Session: 1-64 chars from [A-Za-z0-9._-]")
+            )
+        state = emulator.state_for(session_id)
+        if request.method == "DELETE":
+            reset_battery(state)
+        elif request.method == "PUT":
+            raw = await request.body()
+            if len(raw) > MAX_BODY_BYTES:
+                return _respond(400, _error_body(400, "Payload too large"))
+            try:
+                body = json.loads(raw) if raw else {}
+            except ValueError:
+                return _respond(400, _error_body(400, "Invalid JSON"))
+            error = set_battery(state, body, emulator.mission_duration)
+            if error is not None:
+                return _respond(400, _error_body(400, error))
+        return _respond(200, battery_doc(state, emulator.mission_duration))
+
+    async def clock_endpoint(request: Request) -> Response:
+        """Emulator-only time scaling (/_emulator/clock): simulated time runs
+        Nx wall speed while mission windows, battery curves and timestamps
+        keep their realistic simulated lengths. Process-wide — one clock for
+        every session — so no X-MiR-Session handling here."""
+        if not emulator._authorized(request):
+            return _respond(401, _error_body(401, "Not authorized"))
+        if request.method == "DELETE":
+            reset_time_scale()
+        elif request.method == "PUT":
+            raw = await request.body()
+            if len(raw) > MAX_BODY_BYTES:
+                return _respond(400, _error_body(400, "Payload too large"))
+            try:
+                body = json.loads(raw) if raw else {}
+            except ValueError:
+                return _respond(400, _error_body(400, "Invalid JSON"))
+            error = set_time_scale(body)
+            if error is not None:
+                return _respond(400, _error_body(400, error))
+        return _respond(200, clock_doc())
 
     async def status_websocket(websocket: WebSocket) -> None:
         """Emulator-only status push (/_emulator/ws/status): the /status
@@ -645,6 +802,8 @@ def create_app(
             Route("/swagger.json", swagger_json),
             Route("/openapi.json", openapi_json),
             Route("/_emulator/faults", faults_endpoint, methods=["GET", "PUT", "DELETE"]),
+            Route("/_emulator/battery", battery_endpoint, methods=["GET", "PUT", "DELETE"]),
+            Route("/_emulator/clock", clock_endpoint, methods=["GET", "PUT", "DELETE"]),
             Route("/_emulator/recorder", recorder_endpoint, methods=["GET", "PUT", "DELETE"]),
             WebSocketRoute("/_emulator/ws/status", status_websocket),
             *routes,

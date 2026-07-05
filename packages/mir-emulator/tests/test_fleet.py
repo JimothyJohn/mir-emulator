@@ -125,14 +125,24 @@ def test_serial_order_lands_in_the_robot_mission_queue(clock, app, fleet):
     assert created.status_code == 201
     assert created.json()["id"]
 
-    # Robot truth: exactly one of the two robots now holds the mission.
-    queues = [
-        robot_client(app, i).get("/api/v2.0.0/mission_queue", headers=ROBOT_AUTH).json()
+    # Robot truth: exactly one of the two robots now holds the mission. The
+    # list document is the spec's slim {id, state, url}; the full entry (with
+    # mission_id) lives at the item endpoint.
+    holders = [
+        (i, entry)
         for i in range(2)
+        for entry in robot_client(app, i)
+        .get("/api/v2.0.0/mission_queue", headers=ROBOT_AUTH)
+        .json()
     ]
-    entries = [entry for queue in queues for entry in queue]
-    assert len(entries) == 1
-    assert entries[0]["mission_id"] == mission
+    assert len(holders) == 1
+    robot_index, entry = holders[0]
+    item = (
+        robot_client(app, robot_index)
+        .get(f"/api/v2.0.0/mission_queue/{entry['id']}", headers=ROBOT_AUTH)
+        .json()
+    )
+    assert item["mission_id"] == mission
 
 
 def test_order_lifecycle_follows_the_robot_simulation(clock, fleet):
@@ -302,6 +312,7 @@ def test_every_fleet_version_boots_and_routes_its_own_operations():
         doc = client.get("/openapi.json").json()
         assert doc["openapi"].startswith("3")
         index = client.get("/").json()
+        assert index["kind"] == "fleet"
         assert index["emulated_fleet_version"] == version
         assert index["official_docs"].startswith("https://supportportal")
         spec = app.state.emulator.spec
@@ -519,3 +530,41 @@ def test_every_fleet_version_routes_its_extra_apis():
         for op in app.state.all_operations:
             if op.method == "GET" and "{" not in op.path:
                 assert client.get(op.path, headers=KEY).status_code != 404, f"{version} {op.path}"
+
+
+def test_fleet_route_surface_is_exactly_the_specs_plus_reserved_paths():
+    """Every served API route is an operation of the integration, top-module,
+    or compatibility spec; emulator extras stay on reserved paths outside the
+    official API surface."""
+    import re
+
+    from mir_emulator import registry
+    from mir_emulator.spec import load_spec
+    from starlette.routing import Route
+
+    for version in registry.fleet_supported_versions():
+        app = create_fleet_app(version)
+        served = set()
+        for route in app.routes:
+            if isinstance(route, Route):
+                for method in (route.methods or set()) - {"HEAD", "OPTIONS"}:
+                    served.add((method, re.sub(r"{(\w+):\w+}", r"{\1}", route.path)))
+
+        expected = set()
+        doc_paths = {"/", "/openapi.json", "/openapi_v1.json", "/swagger.json"}
+        v, path = registry.fleet_spec_path(version)
+        specs = [load_spec(path, v)]
+        for record in registry.fleet_extra_specs(v):
+            specs.append(load_spec(record["path"], v))
+            doc_paths.add("/" + record["file"].rsplit("/", 1)[-1])
+        for spec in specs:
+            expected |= {(op.method, spec.base_path + op.path) for op in spec.operations.values()}
+
+        api_served = {
+            r for r in served if not r[1].startswith("/_emulator/") and r[1] not in doc_paths
+        }
+        assert api_served == expected, f"fleet {version}"
+        for _method, extra_path in served - api_served:
+            assert extra_path in doc_paths or extra_path.startswith("/_emulator/"), (
+                f"fleet {version}: unexpected non-API route {extra_path}"
+            )

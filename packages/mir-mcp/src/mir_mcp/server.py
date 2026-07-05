@@ -41,6 +41,15 @@ def _dump(payload: Any) -> str:
     return json.dumps(payload, indent=1, sort_keys=True)
 
 
+def _as_list(value: Any) -> list:
+    """MiR specs declare some list endpoints with the element's object schema,
+    and servers differ on which shape they answer with — accept both (same
+    defense as mir_client.report._as_list)."""
+    if isinstance(value, list):
+        return value
+    return [value] if isinstance(value, dict) else []
+
+
 def _trim_status(doc: dict[str, Any]) -> dict[str, Any]:
     return {k: doc[k] for k in STATUS_FIELDS if k in doc}
 
@@ -49,6 +58,8 @@ async def _robot(method: str, path: str, *, json_body: Any = None, api: bool = T
     """Run one robot call; return the body, or an 'Error: ...' string."""
     try:
         status, body = await client.robot_request(method, path, json=json_body, api=api)
+    except client.TargetResolutionError as exc:
+        return str(exc)
     except httpx.HTTPError as exc:
         return client.describe_connection_error(exc, client.robot_base_url())
     if status >= 400:
@@ -59,6 +70,8 @@ async def _robot(method: str, path: str, *, json_body: Any = None, api: bool = T
 async def _fleet(method: str, path: str, *, json_body: Any = None) -> str | Any:
     try:
         status, body = await client.fleet_request(method, path, json=json_body)
+    except client.TargetResolutionError as exc:
+        return str(exc)
     except httpx.HTTPError as exc:
         return client.describe_connection_error(exc, client.fleet_base_url())
     if status >= 400:
@@ -71,7 +84,7 @@ async def _resolve_mission(name_or_guid: str) -> str | dict[str, Any]:
     missions = await _robot("GET", "/missions")
     if isinstance(missions, str):
         return missions
-    entries = missions if isinstance(missions, list) else []
+    entries = _as_list(missions)
     exact = [m for m in entries if m.get("guid") == name_or_guid]
     named = [m for m in entries if str(m.get("name", "")).lower() == name_or_guid.lower()]
     matches = exact or named
@@ -81,6 +94,106 @@ async def _resolve_mission(name_or_guid: str) -> str | dict[str, Any]:
     if not matches:
         return f"Error: no mission named or with guid '{name_or_guid}'. Available: {available}"
     return f"Error: '{name_or_guid}' is ambiguous. Matches: {available}"
+
+
+async def _target_summary(base: str, resolver) -> dict[str, Any]:
+    info = await client.detect_target(base)
+    summary: dict[str, Any] = {"url": base, "kind": info["kind"]}
+    if info.get("version"):
+        summary["software_version"] = info["version"]
+    elif info["kind"] == "robot":
+        summary["software_version"] = "unknown (target does not publish one)"
+    if info["kind"] == "dispatcher":
+        summary["available_versions"] = info["versions"]
+        summary["available_fleet_versions"] = info["fleet_versions"]
+    if info["kind"] == "unknown":
+        summary["note"] = (
+            "nothing MiR-shaped answered; check the URL or start an emulator "
+            "with `uv run mir-emulator`"
+        )
+        return summary
+    try:
+        summary["resolved_base"] = await resolver()
+    except client.TargetResolutionError as exc:
+        summary["error"] = str(exc)
+    return summary
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Identify the connected MiR target",
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+async def mir_server_info() -> str:
+    """Identify what the configured endpoints actually are and which MiR
+    software version they run — call this first on a new connection.
+
+    Probes MIR_ROBOT_URL and MIR_FLEET_URL without credentials or state
+    changes and reports, per target: kind (robot, fleet, or multi-version
+    dispatcher), the detected software version, the resolved API base the
+    other tools will use, and — for a dispatcher — every served version
+    (pin one with MIR_VERSION / MIR_FLEET_VERSION). No version needs to be
+    configured up front; the tools adapt to whatever the target reports.
+    """
+    doc: dict[str, Any] = {
+        "robot_target": await _target_summary(client.robot_base_url(), client.resolved_robot_base)
+    }
+    # A separate fleet URL always gets its own summary; with a shared URL,
+    # only add one when the target actually has a fleet face.
+    if client.fleet_base_url() != client.robot_base_url() or doc["robot_target"]["kind"] in (
+        "fleet",
+        "dispatcher",
+    ):
+        doc["fleet_target"] = await _target_summary(
+            client.fleet_base_url(), client.resolved_fleet_base
+        )
+    return _dump(doc)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Discover MiR robots on the network",
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+async def mir_discover_robots(hosts: list[str] | None = None) -> str:
+    """Find MiR robots, fleets, and emulators on the network by IP — use
+    this when you don't know a robot's address.
+
+    Sweeps candidate hosts on the ports MiR gear listens on (80 on real
+    robots, 8080 on the emulator), TCP-probes each, and runs the version
+    handshake on anything that answers — returning only confirmed MiR
+    targets (kind + software version + URL). *hosts* accepts IPs,
+    hostnames, and CIDR blocks (e.g. ["192.168.12.0/24"]); omit it to scan
+    this machine's local /24. All probes are unauthenticated reads. To then
+    control a found target, set MIR_ROBOT_URL / MIR_FLEET_URL to its URL.
+    """
+    try:
+        found = await client.scan_for_targets(hosts)
+    except ValueError as exc:
+        return f"Error: {exc}"
+    except OSError as exc:
+        return f"Error: network scan failed ({type(exc).__name__}: {exc})."
+    if not found:
+        where = ", ".join(hosts) if hosts else "the local /24"
+        return _dump(
+            {
+                "found": [],
+                "scanned": where,
+                "hint": (
+                    "No MiR robots or fleets answered. Check you are on the robot's "
+                    "network, or start an emulator with `uv run mir-emulator`."
+                ),
+            }
+        )
+    return _dump({"found": found, "count": len(found)})
 
 
 # ---------------------------------------------------------------- robot tools
@@ -169,7 +282,7 @@ async def mir_list_missions() -> str:
     body = await _robot("GET", "/missions")
     if isinstance(body, str):
         return body
-    entries = body if isinstance(body, list) else []
+    entries = _as_list(body)
     return _dump([{"guid": m.get("guid"), "name": m.get("name")} for m in entries])
 
 
@@ -298,7 +411,14 @@ async def mir_write_register(register_id: int, value: float) -> str:
 )
 async def mir_manage_faults(
     faults: list[
-        Literal["emergency_stop", "error", "localization_lost", "battery_critical", "blocked_path"]
+        Literal[
+            "emergency_stop",
+            "error",
+            "localization_lost",
+            "battery_critical",
+            "blocked_path",
+            "mission_failure",
+        ]
     ]
     | None = None,
 ) -> str:
@@ -306,10 +426,14 @@ async def mir_manage_faults(
     misbehaving robot, or clear them all.
 
     Pass fault names to make them active (replaces the current set);
-    pass an empty list or nothing to clear every fault. emergency_stop and
-    blocked_path freeze mission execution until cleared; error and
-    localization_lost also clear via mir_clear_error. A real robot returns
-    404 here — this surface does not exist on hardware.
+    pass an empty list or nothing to clear every fault. emergency_stop,
+    error, and localization_lost freeze mission execution until cleared;
+    blocked_path raises an active planner error while the robot keeps
+    executing; mission_failure aborts the queue. error, localization_lost,
+    and mission_failure also clear via mir_clear_error; emergency_stop,
+    blocked_path, and battery_critical model a physical cause and clear
+    only here. A real robot returns 404 — this surface does not exist on
+    hardware.
     """
     if faults:
         body = await _robot("PUT", "/_emulator/faults", json_body={"faults": faults}, api=False)
@@ -405,6 +529,71 @@ async def mir_fleet_order_status(serial_order_id: str, abort: bool = False) -> s
         return _dump({"aborted": serial_order_id})
     body = await _fleet("GET", f"/serial-order/{serial_order_id}")
     return body if isinstance(body, str) else _dump(body)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        title="Generate an HTML status report",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+async def mir_generate_report(
+    output_path: str,
+    target: Literal["robot", "fleet"] = "robot",
+    session_id: str | None = None,
+) -> str:
+    """Generate a self-contained HTML dashboard for the configured robot or
+    fleet: current-status indicators, the daily trend, and a descriptive
+    timeline of actions.
+
+    Reads documented API endpoints only (robot: /status, /mission_queue,
+    /log/error_reports, /statistics/distance; fleet: /robots, /order), so
+    it is safe against real hardware — the only write is the local HTML
+    file at output_path. Returns a JSON summary; open the file to view."""
+    import os
+    from pathlib import Path
+
+    from mir_client.report import collect_report_async, render_report
+
+    try:
+        base = await (
+            client.resolved_robot_base() if target == "robot" else client.resolved_fleet_base()
+        )
+    except client.TargetResolutionError as exc:
+        return str(exc)
+    kwargs: dict[str, Any] = {"transport": client.TRANSPORT} if client.TRANSPORT else {}
+    try:
+        data = await collect_report_async(
+            base,
+            username=os.environ.get("MIR_USERNAME", "distributor"),
+            password=os.environ.get("MIR_PASSWORD", "distributor"),
+            api_key=os.environ.get("MIR_API_KEY", "distributor"),
+            session_id=session_id or os.environ.get("MIR_SESSION") or None,
+            **kwargs,
+        )
+    except Exception as exc:  # unreachable host, auth, kind gate — all actionable
+        return (
+            f"Error: report collection from {base} failed: {exc}. Check the URL is a "
+            "robot or fleet (mir_server_info) and credentials (MIR_USERNAME/"
+            "MIR_PASSWORD or MIR_API_KEY)."
+        )
+    Path(output_path).write_text(render_report(data))
+    return _dump(
+        {
+            "path": output_path,
+            "kind": data["kind"],
+            "version": data.get("version"),
+            "robots": [
+                {"name": r["name"], "battery": r["battery"], "state": r["state"]}
+                for r in data["robots"]
+            ],
+            "timeline_entries": len(data["timeline"]),
+            "trend_days": len(data["trend"]),
+        }
+    )
 
 
 def main() -> int:

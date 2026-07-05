@@ -60,6 +60,7 @@ def test_catalog_lists_every_fault(robot):
         "battery_critical",
         "blocked_path",
         "mission_failure",
+        "connection_drop",
     }
 
 
@@ -136,6 +137,39 @@ def test_blocked_path_reports_planner_error_while_executing(clock, robot):
     doc = status(robot)
     assert doc["state_text"] == "Executing", "robot keeps trying while the path is blocked"
     assert any(e["module"] == "Planner" for e in doc["errors"])
+
+
+def test_blocked_path_is_not_a_holding_fault(clock, robot):
+    # Deliberate design (see scenarios/novo_nordisk_crowded_route.py): a real
+    # MiR replans around an obstruction, so blocked_path must NOT freeze the
+    # mission simulation the way an e-stop does.
+    mission = robot.get("/api/v2.0.0/missions", headers=AUTH).json()[0]["guid"]
+    robot.post("/api/v2.0.0/mission_queue", headers=AUTH, json={"mission_id": mission})
+    clock.tick(2.0)
+    set_faults(robot, ["blocked_path"])
+    clock.tick(9.5)  # past the 1s lag + 10s duration
+    queue = robot.get("/api/v2.0.0/mission_queue", headers=AUTH).json()
+    assert queue[0]["state"] == "Done", "the mission completes despite the blocked path"
+    assert any(e["module"] == "Planner" for e in status(robot)["errors"])
+
+
+def test_cause_faults_survive_clear_error_and_say_so(robot):
+    # blocked_path and battery_critical model a physical cause; an error
+    # reset cannot remove it, and the error document must not promise
+    # otherwise: non_resettable is true, and only /_emulator/faults clears.
+    set_faults(robot, ["blocked_path", "battery_critical"])
+    for error in status(robot)["errors"]:
+        assert error["non_resettable"] is True, error
+
+    robot.put("/api/v2.0.0/status", headers=AUTH, json={"clear_error": True})
+    active = robot.get("/_emulator/faults", headers=AUTH).json()["active"]
+    assert set(active) == {"blocked_path", "battery_critical"}
+    modules = {e["module"] for e in status(robot)["errors"]}
+    assert modules == {"Planner", "Battery"}, "the errors come right back"
+
+    robot.delete("/_emulator/faults", headers=AUTH)
+    assert robot.get("/_emulator/faults", headers=AUTH).json()["active"] == []
+    assert status(robot)["battery_percentage"] > 1.5
 
 
 def test_unknown_and_malformed_fault_requests_are_400(robot):

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MiR Emulator — one-robot shift at 60x</title>
+<meta name="description" content="A full 8-hour warehouse shift driven live against one emulated MiR250 at --time-scale 60: realistic mission durations and timestamps, eight simulated hours in under nine wall minutes.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%2300bfff'/><rect x='18' y='34' width='64' height='32' rx='6' fill='white'/><circle cx='34' cy='50' r='7' fill='%2300bfff'/><circle cx='66' cy='50' r='7' fill='%2300bfff'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* MiR brand system — same tokens as docs/index.html: cyan #00bfff accent,
+   blue #1a76bc/#105aa8, ink #0c0931, pale cyan tints, .4rem radii,
+   card hover glow, light 300 headings. */
+:root {
+  --brand: #00bfff;
+  --blue: #1a76bc;
+  --blue-deep: #105aa8;
+  --ink: #0c0931;
+  --ink-dim: #565b74;
+  --ink-faint: #8a8fa5;
+  --tint: #effafe;
+  --tint-2: #cbeefa;
+  --line: #e4e9f0;
+  --code-bg: #f6f9fc;
+  --green: #1d9e61;
+  --amber: #c77700;
+  --red: #cf3228;
+  --focus: #72c7e7;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "Open Sans", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  /* chart series — validated categorical order, do not cycle */
+  --k-pickup: #00bfff;
+  --k-deliver: #1a76bc;
+  --k-linefeed: #1d9e61;
+  --k-travel: #c77700;
+  --k-park: #5b74b8;
+  --battery: #8a3ea8;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body { background: #fff; color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.6; min-height: 100vh; }
+a { color: var(--blue); text-decoration: none; }
+a:hover { color: var(--blue-deep); text-decoration: underline; }
+::selection { background: var(--brand); color: #fff; }
+code { font-family: var(--mono); font-size: .92em; background: var(--tint); border: 1px solid var(--tint-2); border-radius: 4px; padding: 0 4px; color: var(--blue-deep); }
+button { font-family: var(--sans); }
+:is(button):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px 80px; }
+
+/* ---------- header ---------- */
+header { border-bottom: 1px solid var(--line); background: #fff; position: sticky; top: 0; z-index: 20; }
+.brandbar { height: 4px; background: var(--brand); }
+.masthead { max-width: 1180px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.mark { width: 42px; height: 42px; border-radius: 10px; flex: none; background: var(--brand); display: grid; place-items: center; }
+.mark svg { display: block; }
+h1 { font-size: 26px; font-weight: 300; line-height: 1.2; color: var(--ink); }
+h1 span { color: var(--brand); }
+.sub { font-size: 12.5px; color: var(--ink-dim); }
+.head-right { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.led-box { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; background: #fff; font-size: 12px; color: var(--ink-dim); }
+.led { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); flex: none; }
+.viewbtn { cursor: pointer; font-family: var(--mono); font-size: 11px; font-weight: 600; background: #fff; color: var(--ink-dim); border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px; transition: color .15s, border-color .15s, background .15s; }
+.viewbtn:hover { color: var(--blue-deep); border-color: var(--brand); }
+.viewbtn[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+/* ---------- intro strip ---------- */
+.intro { margin-top: 22px; padding: 14px 20px; border: 1px solid var(--tint-2); border-left: 4px solid var(--brand); border-radius: .4rem; background: var(--tint); display: flex; gap: 20px; flex-wrap: wrap; align-items: baseline; }
+.intro b { font-size: 14px; font-weight: 600; }
+.intro p { color: var(--ink-dim); font-size: 13.5px; max-width: 80ch; }
+.intro code { background: #fff; }
+
+/* ---------- KPI tiles ---------- */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-top: 18px; }
+.tile { background: #fff; border: 1px solid var(--line); border-radius: .4rem; padding: 12px 16px; box-shadow: 0 1px 3px rgba(12,9,49,.06); transition: box-shadow .3s ease; }
+.tile:hover { box-shadow: 0 0 15px var(--tint-2); }
+.tile .v { font-size: 24px; font-weight: 700; font-family: var(--mono); }
+.tile .v small { font-size: 13px; font-weight: 500; color: var(--ink-dim); }
+.tile .l { font-size: 10.5px; color: var(--ink-faint); letter-spacing: .1em; text-transform: uppercase; margin-top: 2px; }
+
+/* ---------- legend ---------- */
+.legend { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--ink-dim); margin: 16px 2px 10px; }
+.legend .chip { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.sw.hatch { background: repeating-linear-gradient(45deg, var(--k-travel), var(--k-travel) 2px, transparent 2px, transparent 5px); border: 1px solid var(--k-travel); }
+.sw.line { height: 3px; border-radius: 2px; }
+
+/* ---------- board ---------- */
+.board { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; margin-top: 8px; }
+.panel { background: #fff; border: 1px solid var(--line); border-radius: .4rem; overflow: hidden; box-shadow: 0 1px 3px rgba(12,9,49,.06); transition: box-shadow .3s ease; }
+.panel:hover { box-shadow: 0 0 15px var(--tint-2); }
+.panel-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: #fff; font-size: 15px; font-weight: 600; color: var(--ink); }
+.panel-head::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--brand); flex: none; }
+.panel-head .tag { margin-left: auto; color: var(--ink-faint); font-size: 11px; font-family: var(--mono); font-weight: 400; }
+.panel-body { padding: 16px; }
+#chartPanel { flex: 1 1 640px; min-width: 0; }
+#chart svg { display: block; width: 100%; height: auto; }
+#logPanel { flex: 0 1 320px; }
+#log { max-height: 470px; overflow-y: auto; }
+.call { display: flex; gap: 8px; padding: 5px 6px; border-radius: 6px; cursor: default; font-size: 12.5px; line-height: 1.45; }
+.call:hover { background: var(--tint); }
+.call .t { color: var(--ink-faint); font-family: var(--mono); font-size: 11.5px; flex: 0 0 44px; padding-top: 1px; }
+.call .ic { flex: 0 0 16px; text-align: center; }
+.call .tx { color: var(--ink-dim); }
+.call.charge .tx { color: var(--ink); font-weight: 600; }
+
+/* ---------- table view ---------- */
+#tablePanel { display: none; flex: 1 1 640px; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th { text-align: left; color: var(--ink-faint); font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; border-bottom: 1px solid var(--line); padding: 6px 12px 6px 0; }
+td { border-bottom: 1px solid var(--line); padding: 6px 12px 6px 0; font-variant-numeric: tabular-nums; color: var(--ink-dim); }
+td:first-child { font-family: var(--mono); }
+td .sw { margin-right: 7px; vertical-align: -1px; }
+
+/* ---------- tooltip ---------- */
+#tooltip { position: fixed; pointer-events: none; z-index: 30; display: none; background: #fff; color: var(--ink); border: 1px solid var(--line); border-radius: .4rem; padding: 8px 11px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 18px rgba(12,9,49,.14); max-width: 280px; }
+#tooltip .h { font-weight: 600; }
+#tooltip .d { color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+
+footer.docfoot { color: var(--ink-faint); font-size: 12px; margin-top: 20px; line-height: 1.7; }
+text { font-family: var(--sans); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brandbar"></div>
+  <div class="masthead">
+    <div class="mark">
+      <svg width="26" height="26" viewBox="0 0 100 100"><rect x="8" y="30" width="84" height="40" rx="8" fill="#fff"/><circle cx="30" cy="50" r="9" fill="#00bfff"/><circle cx="70" cy="50" r="9" fill="#00bfff"/></svg>
+    </div>
+    <div>
+      <h1>One-robot shift <span>at 60x</span></h1>
+      <div class="sub" id="subline">MiR250 · Warehouse Floor 1 · full shift, replayed live</div>
+    </div>
+    <div class="head-right">
+      <div class="led-box"><span class="led"></span><span id="ledText">driven against a live emulator</span></div>
+      <button class="viewbtn" id="viewBtn" aria-pressed="false">Table</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="intro">
+    <b>Same minutes, fewer minutes.</b>
+    <p id="introText">Every mission ran with a realistic duration and every timestamp below is the robot's own
+    <code>mission_queue</code> record — but the emulator's clock ran at
+    <code>--time-scale 60</code>, so the whole shift fit in a coffee break of wall time.</p>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="board">
+    <div class="panel" id="chartPanel">
+      <div class="panel-head">Shift timeline <span class="tag" id="chartTag"></span></div>
+      <div class="panel-body"><div id="chart"></div></div>
+    </div>
+    <div class="panel" id="tablePanel">
+      <div class="panel-head">Every mission, as the robot reported it <span class="tag">GET /mission_queue/{id}</span></div>
+      <div class="panel-body"><div id="tableWrap"></div></div>
+    </div>
+    <aside class="panel" id="logPanel">
+      <div class="panel-head">Floor log <span class="tag" id="logTag"></span></div>
+      <div class="panel-body"><div id="log"></div></div>
+    </aside>
+  </div>
+
+  <footer class="docfoot" id="foot"></footer>
+</div>
+<div id="tooltip" role="tooltip"></div>
+
+<script>
+const DATA = {"meta":{"start":"2026-07-05T15:21:00","len_min":486.2,"sim_hours":8.1,"scale":60,"wall_min":8.1,"robot":"MiR_Emulated","model":"MiR250","charge_below":40},"jobs":[{"id":1,"name":"Pick up cart at CartPickup-CART01","kind":"pickup","s":0.02,"f":6.02,"state":"Done"},{"id":2,"name":"Deliver cart to DropOff-ZoneA","kind":"deliver","s":6.77,"f":15.77,"state":"Done"},{"id":3,"name":"Supply LineFeed-Assembly","kind":"linefeed","s":16.97,"f":23.97,"state":"Done"},{"id":4,"name":"Dock at ChargingStation-1","kind":"travel","s":24.2,"f":29.2,"state":"Done"},{"id":5,"name":"Pick up cart at CartPickup-CART01","kind":"pickup","s":54.28,"f":60.28,"state":"Done"},{"id":6,"name":"Deliver cart to DropOff-ZoneB","kind":"deliver","s":61.02,"f":69.02,"state":"Done"},{"id":7,"name":"Park at Staging-1","kind":"park","s":70.22,"f":74.22,"state":"Done"},{"id":8,"name":"Dock at ChargingStation-1","kind":"travel","s":74.43,"f":79.43,"state":"Done"},{"id":9,"name":"Pick up cart at CartPickup-CART01","kind":"pickup","s":104.13,"f":110.13,"state":"Done"},{"id":10,"name":"Deliver cart to DropOff-ZoneA","kind":"deliver","s":110.87,"f":119.87,"state":"Done"},{"id":11,"name":"Supply LineFeed-Assembly","kind":"linefeed","s":121.1,"f":128.1,"state":"Done"},{"id":12,"name":"Dock at ChargingStation-1","kind":"travel","s":128.33,"f":133.33,"state":"Done"},{"id":13,"name":"Pick up cart at CartPickup-CART01","kind":"pickup","s":158.4,"f":164.4,"state":"Done"},{"id":14,"name":"Deliver cart to DropOff-ZoneB","kind":"deliver","s":165.12,"f":173.12,"state":"Done"},{"id":15,"name":"Park at Staging-1","kind":"park","s":174.3,"f":178.3,"state":"Done"},{"id":16,"name":"Dock at ChargingStation-1","kind":"travel","s":178.45,"f":183.45,"state":"Done"},{"id":17,"name":"Pick up cart at CartPickup-CART01","kind":"pickup","s":208.08,"f":214.08,"state":"Done"},{"id":18,"name":"Deliver cart to DropOff-ZoneA","kind":"deliver","s":214.8,"f":223.8,"state":"Done"},{"id":19,"name":"Supply LineFeed-Assembly","kind":"linefeed","s":225.08,"f":232.08,"state":"Done"},{"id":20,"name":"Dock at ChargingStation-1","kind":"travel","s":232.35,"f":237.35,"state":"Done"},{"id":21,"name":"Pick up cart at CartPickup-CART01","kind":"pickup","s":262.07,"f":268.07,"state":"Done"},{"id":22,"name":"Deliver cart to DropOff-ZoneB","kind":"deliver","s":268.78,"f":276.78,"state":"Done"},{"id":23,"name":"Park at Staging-1","kind":"park","s":277.95,"f":281.95,"state":"Done"},{"id":24,"name":"Dock at ChargingStation-1","kind":"travel","s":282.12,"f":287.12,"state":"Done"},{"id":25,"name":"Pick up cart at CartPickup-CART01","kind":"pickup","s":311.73,"f":317.73,"state":"Done"},{"id":26,"name":"Deliver cart to DropOff-ZoneA","kind":"deliver","s":318.45,"f":327.45,"state":"Done"},{"id":27,"name":"Supply LineFeed-Assembly","kind":"linefeed","s":328.68,"f":335.68,"state":"Done"},{"id":28,"name":"Dock at ChargingStation-1","kind":"travel","s":335.95,"f":340.95,"state":"Done"},{"id":29,"name":"Pick up cart at CartPickup-CART01","kind":"pickup","s":366.1,"f":372.1,"state":"Done"},{"id":30,"name":"Deliver cart to DropOff-ZoneB","kind":"deliver","s":372.82,"f":380.82,"state":"Done"},{"id":31,"name":"Park at Staging-1","kind":"park","s":382.0,"f":386.0,"state":"Done"},{"id":32,"name":"Dock at ChargingStation-1","kind":"travel","s":386.15,"f":391.15,"state":"Done"},{"id":33,"name":"Pick up cart at CartPickup-CART01","kind":"pickup","s":415.88,"f":421.88,"state":"Done"},{"id":34,"name":"Deliver cart to DropOff-ZoneA","kind":"deliver","s":422.65,"f":431.65,"state":"Done"},{"id":35,"name":"Supply LineFeed-Assembly","kind":"linefeed","s":432.88,"f":439.88,"state":"Done"},{"id":36,"name":"Dock at ChargingStation-1","kind":"travel","s":440.15,"f":445.15,"state":"Done"},{"id":37,"name":"Pick up cart at CartPickup-CART01","kind":"pickup","s":470.33,"f":476.33,"state":"Done"},{"id":38,"name":"Deliver cart to DropOff-ZoneB","kind":"deliver","s":477.07,"f":485.07,"state":"Done"}],"charges":[{"s":29.35,"f":52.93,"from":20.0,"to":90.0},{"s":79.62,"f":102.8,"from":21.0,"to":90.0},{"s":133.48,"f":157.07,"from":20.0,"to":90.0},{"s":183.6,"f":206.75,"from":21.0,"to":90.0},{"s":237.53,"f":260.72,"from":20.0,"to":89.5},{"s":287.27,"f":310.4,"from":20.5,"to":89.9},{"s":341.1,"f":364.75,"from":20.0,"to":90.0},{"s":391.33,"f":414.55,"from":21.0,"to":90.0},{"s":445.32,"f":468.98,"from":20.0,"to":90.0}],"battery":[[0.0,92.5],[0.52,91.0],[1.03,89.5],[1.55,87.9],[2.07,86.3],[2.58,84.8],[3.12,83.2],[3.63,81.7],[4.15,80.1],[4.67,78.6],[5.18,77.0],[5.7,75.5],[6.22,74.5],[6.75,74.5],[7.27,73.0],[7.78,71.4],[8.3,69.9],[8.82,68.3],[9.33,66.8],[9.85,65.2],[10.37,63.7],[10.88,62.1],[11.4,60.6],[11.92,59.0],[12.43,57.5],[12.95,56.0],[13.47,54.4],[13.98,52.9],[14.5,51.3],[15.0,49.8],[15.53,48.2],[16.03,47.5],[16.97,47.5],[17.47,46.0],[17.98,44.5],[18.5,42.9],[19.02,41.4],[19.53,39.8],[20.05,38.3],[20.57,36.7],[21.07,35.2],[21.58,33.7],[22.1,32.1],[22.62,30.6],[23.15,29.0],[23.65,27.5],[24.17,26.5],[24.18,26.5],[24.7,25.0],[25.22,23.4],[25.73,21.9],[26.25,20.3],[26.77,20.0],[27.28,20.0],[27.8,20.0],[28.32,20.0],[28.83,20.0],[29.33,20.0],[29.35,20.0],[29.85,21.5],[30.37,23.1],[30.88,24.6],[31.4,26.1],[31.92,27.7],[32.43,29.2],[32.93,30.8],[33.45,32.3],[33.97,33.9],[34.47,35.4],[35.0,36.9],[35.5,38.5],[36.0,40.0],[36.52,41.5],[37.03,43.1],[37.55,44.6],[38.07,46.1],[38.57,47.7],[39.08,49.2],[39.6,50.8],[40.12,52.3],[40.62,53.8],[41.13,55.4],[41.65,56.9],[42.17,58.5],[42.68,60.0],[43.2,61.5],[43.72,63.1],[44.22,64.6],[44.73,66.2],[45.25,67.7],[45.77,69.2],[46.28,70.8],[46.78,72.3],[47.28,73.8],[47.8,75.4],[48.32,76.9],[48.83,78.5],[49.35,80.0],[49.87,81.5],[50.37,83.1],[50.88,84.6],[51.4,86.1],[51.9,87.7],[52.42,89.2],[52.93,90.0],[54.27,90.0],[54.78,88.5],[55.3,87.0],[55.82,85.4],[56.32,83.9],[56.83,82.3],[57.37,80.8],[57.88,79.2],[58.4,77.6],[58.92,76.1],[59.45,74.5],[59.97,73.0],[60.47,72.0],[61.0,72.0],[61.52,70.5],[62.03,69.0],[62.55,67.4],[63.07,65.8],[63.58,64.3],[64.1,62.7],[64.62,61.2],[65.13,59.6],[65.65,58.1],[66.17,56.5],[66.7,55.0],[67.22,53.4],[67.73,51.8],[68.25,50.3],[68.77,48.7],[69.28,48.0],[70.22,48.0],[70.75,46.4],[71.28,44.8],[71.8,43.3],[72.32,41.7],[72.83,40.2],[73.37,38.6],[73.88,37.0],[74.4,36.0],[74.42,36.0],[74.93,34.5],[75.45,32.9],[75.97,31.4],[76.48,29.9],[77.0,28.3],[77.53,26.7],[78.05,25.2],[78.57,23.6],[79.08,22.0],[79.6,21.0],[79.62,21.0],[80.13,22.6],[80.67,24.1],[81.17,25.7],[81.68,27.2],[82.2,28.8],[82.72,30.3],[83.23,31.9],[83.75,33.4],[84.27,35.0],[84.78,36.5],[85.3,38.0],[85.8,39.6],[86.32,41.1],[86.83,42.6],[87.35,44.2],[87.87,45.7],[88.38,47.3],[88.88,48.8],[89.42,50.4],[89.92,51.9],[90.43,53.5],[90.97,55.0],[91.48,56.6],[91.98,58.1],[92.5,59.6],[93.02,61.2],[93.53,62.7],[94.05,64.3],[94.57,65.8],[95.08,67.4],[95.6,68.9],[96.12,70.5],[96.63,72.0],[97.13,73.6],[97.65,75.1],[98.17,76.6],[98.67,78.2],[99.18,79.7],[99.7,81.2],[100.22,82.8],[100.72,84.3],[101.25,85.9],[101.77,87.5],[102.28,89.0],[102.78,90.0],[104.13,90.0],[104.63,88.5],[105.15,87.0],[105.67,85.4],[106.18,83.8],[106.7,82.3],[107.22,80.8],[107.73,79.2],[108.27,77.6],[108.78,76.1],[109.3,74.5],[109.82,73.0],[110.33,72.0],[110.87,72.0],[111.38,70.5],[111.88,69.0],[112.4,67.4],[112.92,65.9],[113.43,64.3],[113.95,62.8],[114.47,61.2],[114.98,59.6],[115.5,58.1],[116.02,56.6],[116.53,55.0],[117.05,53.5],[117.57,51.9],[118.08,50.4],[118.6,48.8],[119.12,47.3],[119.63,45.7],[120.15,45.0],[121.08,45.0],[121.6,43.5],[122.1,42.0],[122.63,40.4],[123.13,38.9],[123.67,37.3],[124.18,35.8],[124.7,34.2],[125.22,32.6],[125.73,31.1],[126.25,29.6],[126.77,28.0],[127.28,26.4],[127.8,24.9],[128.3,24.0],[128.32,24.0],[128.83,22.5],[129.35,21.0],[129.87,20.0],[130.38,20.0],[130.9,20.0],[131.42,20.0],[131.93,20.0],[132.45,20.0],[132.97,20.0],[133.48,20.0],[133.5,20.0],[134.02,21.6],[134.53,23.1],[135.03,24.6],[135.55,26.2],[136.07,27.7],[136.58,29.2],[137.08,30.8],[137.6,32.3],[138.12,33.9],[138.62,35.4],[139.13,36.9],[139.65,38.4],[140.15,40.0],[140.67,41.5],[141.18,43.1],[141.68,44.6],[142.2,46.1],[142.72,47.6],[143.22,49.2],[143.73,50.7],[144.25,52.3],[144.77,53.8],[145.28,55.4],[145.78,56.9],[146.3,58.4],[146.82,59.9],[147.32,61.5],[147.83,63.0],[148.35,64.5],[148.87,66.1],[149.37,67.6],[149.88,69.2],[150.4,70.7],[150.92,72.2],[151.43,73.8],[151.93,75.3],[152.45,76.9],[152.97,78.4],[153.47,79.9],[153.98,81.5],[154.5,83.0],[155.02,84.6],[155.53,86.1],[156.05,87.7],[156.55,89.2],[157.07,90.0],[158.38,90.0],[158.9,88.5],[159.42,86.9],[159.93,85.4],[160.45,83.8],[160.97,82.3],[161.48,80.7],[162.0,79.2],[162.52,77.7],[163.03,76.1],[163.55,74.5],[164.07,73.0],[164.58,72.0],[165.1,72.0],[165.62,70.5],[166.13,69.0],[166.65,67.4],[167.17,65.8],[167.68,64.3],[168.2,62.7],[168.72,61.2],[169.23,59.6],[169.75,58.1],[170.27,56.5],[170.78,55.0],[171.3,53.5],[171.82,51.9],[172.33,50.4],[172.85,48.8],[173.37,48.0],[174.28,48.0],[174.8,46.5],[175.32,44.9],[175.83,43.4],[176.35,41.8],[176.87,40.3],[177.38,38.7],[177.9,37.2],[178.42,36.0],[178.43,36.0],[178.95,34.5],[179.47,33.0],[179.98,31.4],[180.5,29.9],[181.02,28.3],[181.53,26.8],[182.03,25.2],[182.57,23.7],[183.08,22.1],[183.6,21.0],[183.6,21.0],[184.12,22.6],[184.63,24.1],[185.13,25.6],[185.65,27.2],[186.17,28.7],[186.68,30.2],[187.2,31.8],[187.72,33.3],[188.22,34.9],[188.73,36.4],[189.25,38.0],[189.77,39.5],[190.28,41.0],[190.8,42.6],[191.32,44.1],[191.83,45.7],[192.33,47.2],[192.85,48.8],[193.37,50.3],[193.9,51.9],[194.4,53.4],[194.92,55.0],[195.43,56.5],[195.95,58.0],[196.47,59.6],[196.98,61.1],[197.48,62.6],[198.0,64.2],[198.52,65.7],[199.03,67.3],[199.55,68.8],[200.07,70.4],[200.58,72.0],[201.1,73.5],[201.6,75.0],[202.13,76.6],[202.63,78.1],[203.15,79.6],[203.67,81.2],[204.18,82.7],[204.7,84.3],[205.22,85.8],[205.72,87.3],[206.23,88.9],[206.73,90.0],[208.08,90.0],[208.58,88.5],[209.1,87.0],[209.63,85.4],[210.13,83.8],[210.65,82.3],[211.17,80.8],[211.68,79.2],[212.2,77.7],[212.72,76.1],[213.22,74.6],[213.73,73.0],[214.25,72.0],[214.78,72.0],[215.32,70.5],[215.82,68.9],[216.35,67.4],[216.87,65.8],[217.38,64.2],[217.9,62.7],[218.42,61.1],[218.93,59.6],[219.45,58.0],[219.98,56.5],[220.5,54.9],[221.02,53.3],[221.53,51.8],[222.05,50.2],[222.57,48.7],[223.08,47.1],[223.62,45.6],[224.13,45.0],[225.07,45.0],[225.58,43.5],[226.1,42.0],[226.62,40.4],[227.13,38.8],[227.67,37.3],[228.18,35.7],[228.7,34.1],[229.22,32.6],[229.73,31.0],[230.27,29.5],[230.77,27.9],[231.3,26.4],[231.82,24.8],[232.32,24.0],[232.33,24.0],[232.87,22.5],[233.38,20.9],[233.9,20.0],[234.42,20.0],[234.93,20.0],[235.45,20.0],[235.97,20.0],[236.48,20.0],[237.02,20.0],[237.53,20.0],[237.55,20.0],[238.07,21.6],[238.58,23.1],[239.08,24.6],[239.6,26.2],[240.12,27.7],[240.63,29.2],[241.15,30.8],[241.67,32.4],[242.18,33.9],[242.7,35.5],[243.2,37.0],[243.72,38.5],[244.23,40.0],[244.73,41.6],[245.27,43.1],[245.77,44.7],[246.28,46.2],[246.8,47.8],[247.32,49.3],[247.85,50.9],[248.37,52.4],[248.88,54.0],[249.4,55.5],[249.9,57.1],[250.42,58.6],[250.93,60.2],[251.45,61.7],[251.95,63.2],[252.48,64.8],[252.98,66.3],[253.5,67.9],[254.02,69.4],[254.53,71.0],[255.05,72.5],[255.57,74.1],[256.07,75.6],[256.58,77.1],[257.1,78.7],[257.62,80.2],[258.13,81.8],[258.65,83.3],[259.17,84.8],[259.68,86.4],[260.2,88.0],[260.72,89.5],[262.05,89.5],[262.57,88.0],[263.08,86.5],[263.6,84.9],[264.12,83.4],[264.63,81.8],[265.15,80.2],[265.67,78.7],[266.18,77.1],[266.7,75.6],[267.22,74.0],[267.73,72.5],[268.25,71.5],[268.77,71.5],[269.28,70.0],[269.8,68.5],[270.32,66.9],[270.83,65.4],[271.35,63.9],[271.87,62.3],[272.38,60.7],[272.9,59.2],[273.42,57.6],[273.92,56.1],[274.43,54.6],[274.95,53.0],[275.47,51.5],[275.98,49.9],[276.5,48.4],[277.02,47.5],[277.95,47.5],[278.47,46.0],[278.98,44.5],[279.5,42.9],[280.0,41.4],[280.53,39.8],[281.05,38.3],[281.57,36.7],[282.08,35.5],[282.1,35.5],[282.62,34.0],[283.13,32.5],[283.65,30.9],[284.17,29.4],[284.68,27.8],[285.18,26.3],[285.7,24.7],[286.23,23.2],[286.75,21.6],[287.25,20.5],[287.27,20.5],[287.78,22.1],[288.3,23.6],[288.82,25.2],[289.33,26.7],[289.85,28.2],[290.37,29.8],[290.88,31.3],[291.4,32.9],[291.9,34.4],[292.42,35.9],[292.93,37.5],[293.45,39.1],[293.97,40.6],[294.48,42.1],[295.0,43.7],[295.5,45.2],[296.02,46.8],[296.53,48.3],[297.05,49.9],[297.57,51.4],[298.07,52.9],[298.58,54.5],[299.1,56.0],[299.62,57.6],[300.13,59.1],[300.65,60.6],[301.17,62.2],[301.67,63.7],[302.18,65.3],[302.7,66.8],[303.22,68.4],[303.73,69.9],[304.23,71.4],[304.75,73.0],[305.27,74.5],[305.78,76.1],[306.3,77.6],[306.82,79.2],[307.32,80.7],[307.83,82.2],[308.35,83.8],[308.87,85.3],[309.38,86.8],[309.88,88.4],[310.4,89.9],[311.73,89.9],[312.23,88.4],[312.75,86.9],[313.27,85.3],[313.78,83.8],[314.3,82.2],[314.82,80.7],[315.33,79.2],[315.85,77.6],[316.37,76.0],[316.88,74.5],[317.4,72.9],[317.92,71.9],[318.43,71.9],[318.97,70.4],[319.47,68.9],[320.0,67.3],[320.5,65.8],[321.02,64.2],[321.53,62.7],[322.05,61.1],[322.57,59.6],[323.08,58.0],[323.6,56.5],[324.12,54.9],[324.63,53.4],[325.15,51.8],[325.67,50.3],[326.2,48.7],[326.72,47.1],[327.23,45.6],[327.75,44.9],[328.68,44.9],[329.2,43.4],[329.72,41.9],[330.23,40.3],[330.75,38.7],[331.27,37.2],[331.78,35.6],[332.3,34.1],[332.82,32.5],[333.33,31.0],[333.85,29.4],[334.37,27.9],[334.88,26.4],[335.4,24.8],[335.92,23.9],[335.93,23.9],[336.45,22.4],[336.98,20.8],[337.5,20.0],[338.02,20.0],[338.52,20.0],[339.03,20.0],[339.55,20.0],[340.07,20.0],[340.58,20.0],[341.1,20.0],[341.12,20.0],[341.63,21.5],[342.15,23.1],[342.67,24.6],[343.17,26.2],[343.68,27.7],[344.18,29.2],[344.7,30.8],[345.22,32.3],[345.72,33.8],[346.23,35.4],[346.75,36.9],[347.27,38.5],[347.78,40.0],[348.3,41.5],[348.8,43.1],[349.32,44.6],[349.83,46.1],[350.35,47.7],[350.85,49.2],[351.37,50.8],[351.88,52.3],[352.4,53.9],[352.92,55.4],[353.43,57.0],[353.95,58.5],[354.45,60.0],[354.97,61.6],[355.48,63.1],[356.0,64.7],[356.52,66.2],[357.03,67.8],[357.55,69.3],[358.07,70.8],[358.58,72.4],[359.1,73.9],[359.6,75.5],[360.12,77.0],[360.63,78.5],[361.15,80.1],[361.67,81.6],[362.18,83.2],[362.68,84.7],[363.2,86.3],[363.72,87.8],[364.23,89.4],[364.75,90.0],[366.08,90.0],[366.6,88.5],[367.12,86.9],[367.63,85.4],[368.15,83.8],[368.67,82.3],[369.18,80.7],[369.7,79.2],[370.22,77.7],[370.73,76.1],[371.25,74.5],[371.77,73.0],[372.28,72.0],[372.82,72.0],[373.33,70.5],[373.85,69.0],[374.35,67.4],[374.87,65.9],[375.38,64.3],[375.9,62.8],[376.42,61.2],[376.93,59.7],[377.45,58.1],[377.97,56.6],[378.48,55.0],[379.0,53.5],[379.52,52.0],[380.02,50.4],[380.53,48.9],[381.05,48.0],[381.98,48.0],[382.5,46.5],[383.03,44.9],[383.53,43.4],[384.07,41.8],[384.58,40.3],[385.1,38.7],[385.62,37.2],[386.13,36.0],[386.15,36.0],[386.67,34.5],[387.18,32.9],[387.7,31.4],[388.22,29.8],[388.73,28.3],[389.27,26.7],[389.78,25.1],[390.3,23.6],[390.82,22.1],[391.33,21.0],[391.35,21.0],[391.87,22.6],[392.38,24.1],[392.9,25.7],[393.42,27.2],[393.93,28.8],[394.45,30.3],[394.95,31.8],[395.47,33.4],[395.98,34.9],[396.5,36.5],[397.02,38.0],[397.52,39.5],[398.03,41.1],[398.55,42.6],[399.07,44.2],[399.58,45.7],[400.1,47.3],[400.62,48.8],[401.15,50.4],[401.65,51.9],[402.17,53.5],[402.68,55.0],[403.2,56.6],[403.72,58.1],[404.23,59.7],[404.75,61.2],[405.27,62.8],[405.78,64.3],[406.3,65.9],[406.8,67.4],[407.33,68.9],[407.83,70.5],[408.35,72.0],[408.87,73.6],[409.38,75.1],[409.9,76.7],[410.42,78.2],[410.93,79.7],[411.45,81.3],[411.97,82.8],[412.47,84.4],[413.0,85.9],[413.52,87.5],[414.03,89.1],[414.55,90.0],[415.88,90.0],[416.4,88.5],[416.92,86.9],[417.43,85.4],[417.95,83.8],[418.47,82.3],[419.0,80.7],[419.52,79.1],[420.03,77.6],[420.55,76.0],[421.07,74.5],[421.58,72.9],[422.1,72.0],[422.63,72.0],[423.15,70.5],[423.67,68.9],[424.18,67.4],[424.7,65.8],[425.23,64.2],[425.75,62.7],[426.27,61.1],[426.77,59.6],[427.28,58.1],[427.82,56.5],[428.33,54.9],[428.83,53.4],[429.37,51.9],[429.88,50.3],[430.4,48.8],[430.92,47.2],[431.43,45.6],[431.95,45.0],[432.88,45.0],[433.4,43.5],[433.92,42.0],[434.42,40.4],[434.95,38.9],[435.47,37.3],[435.98,35.8],[436.5,34.2],[437.02,32.6],[437.53,31.1],[438.05,29.5],[438.57,28.0],[439.08,26.4],[439.6,24.9],[440.12,24.0],[440.13,24.0],[440.65,22.5],[441.17,20.9],[441.68,20.0],[442.2,20.0],[442.72,20.0],[443.23,20.0],[443.75,20.0],[444.27,20.0],[444.78,20.0],[445.3,20.0],[445.32,20.0],[445.82,21.5],[446.33,23.1],[446.85,24.6],[447.37,26.2],[447.88,27.7],[448.4,29.3],[448.92,30.8],[449.43,32.4],[449.95,33.9],[450.47,35.5],[450.98,37.0],[451.5,38.6],[452.02,40.1],[452.53,41.7],[453.07,43.2],[453.58,44.8],[454.1,46.3],[454.62,47.9],[455.12,49.4],[455.63,51.0],[456.15,52.5],[456.67,54.0],[457.18,55.6],[457.7,57.2],[458.22,58.7],[458.73,60.2],[459.25,61.8],[459.77,63.3],[460.27,64.9],[460.78,66.4],[461.3,67.9],[461.82,69.5],[462.33,71.0],[462.83,72.6],[463.35,74.1],[463.87,75.6],[464.38,77.2],[464.88,78.7],[465.4,80.2],[465.92,81.8],[466.42,83.3],[466.93,84.8],[467.45,86.4],[467.97,87.9],[468.47,89.5],[468.98,90.0],[470.33,90.0],[470.85,88.5],[471.37,86.9],[471.87,85.4],[472.38,83.9],[472.9,82.3],[473.42,80.8],[473.93,79.2],[474.45,77.7],[474.97,76.1],[475.48,74.6],[476.0,73.0],[476.52,72.0],[477.05,72.0],[477.57,70.5],[478.08,69.0],[478.6,67.4],[479.12,65.9],[479.63,64.3],[480.15,62.8],[480.67,61.2],[481.18,59.6],[481.7,58.1],[482.22,56.5],[482.73,55.0],[483.25,53.5],[483.77,51.9],[484.28,50.4],[484.8,48.8],[485.32,48.0]],"log":[{"t":0.0,"kind":"shift","text":"Shift start \u2014 MiR_Emulated on the floor"},{"t":6.02,"kind":"done","text":"Pick up cart at CartPickup-CART01 \u2014 battery 74%"},{"t":15.77,"kind":"done","text":"Deliver cart to DropOff-ZoneA \u2014 battery 48%"},{"t":23.97,"kind":"done","text":"Supply LineFeed-Assembly \u2014 battery 26%"},{"t":29.35,"kind":"charge-start","text":"Docked at ChargingStation-1 at 20% \u2014 charging"},{"t":52.93,"kind":"charge-done","text":"Charged to 90% \u2014 released"},{"t":60.28,"kind":"done","text":"Pick up cart at CartPickup-CART01 \u2014 battery 72%"},{"t":69.02,"kind":"done","text":"Deliver cart to DropOff-ZoneB \u2014 battery 49%"},{"t":74.22,"kind":"done","text":"Park at Staging-1 \u2014 battery 36%"},{"t":79.62,"kind":"charge-start","text":"Docked at ChargingStation-1 at 21% \u2014 charging"},{"t":102.8,"kind":"charge-done","text":"Charged to 90% \u2014 released"},{"t":110.13,"kind":"done","text":"Pick up cart at CartPickup-CART01 \u2014 battery 72%"},{"t":119.87,"kind":"done","text":"Deliver cart to DropOff-ZoneA \u2014 battery 46%"},{"t":128.1,"kind":"done","text":"Supply LineFeed-Assembly \u2014 battery 24%"},{"t":133.48,"kind":"charge-start","text":"Docked at ChargingStation-1 at 20% \u2014 charging"},{"t":157.07,"kind":"charge-done","text":"Charged to 90% \u2014 released"},{"t":164.4,"kind":"done","text":"Pick up cart at CartPickup-CART01 \u2014 battery 72%"},{"t":173.12,"kind":"done","text":"Deliver cart to DropOff-ZoneB \u2014 battery 48%"},{"t":178.3,"kind":"done","text":"Park at Staging-1 \u2014 battery 36%"},{"t":183.6,"kind":"charge-start","text":"Docked at ChargingStation-1 at 21% \u2014 charging"},{"t":206.75,"kind":"charge-done","text":"Charged to 90% \u2014 released"},{"t":214.08,"kind":"done","text":"Pick up cart at CartPickup-CART01 \u2014 battery 72%"},{"t":223.8,"kind":"done","text":"Deliver cart to DropOff-ZoneA \u2014 battery 46%"},{"t":232.08,"kind":"done","text":"Supply LineFeed-Assembly \u2014 battery 24%"},{"t":237.53,"kind":"charge-start","text":"Docked at ChargingStation-1 at 20% \u2014 charging"},{"t":260.72,"kind":"charge-done","text":"Charged to 90% \u2014 released"},{"t":268.07,"kind":"done","text":"Pick up cart at CartPickup-CART01 \u2014 battery 72%"},{"t":276.78,"kind":"done","text":"Deliver cart to DropOff-ZoneB \u2014 battery 48%"},{"t":281.95,"kind":"done","text":"Park at Staging-1 \u2014 battery 36%"},{"t":287.27,"kind":"charge-start","text":"Docked at ChargingStation-1 at 20% \u2014 charging"},{"t":310.4,"kind":"charge-done","text":"Charged to 90% \u2014 released"},{"t":317.73,"kind":"done","text":"Pick up cart at CartPickup-CART01 \u2014 battery 72%"},{"t":327.45,"kind":"done","text":"Deliver cart to DropOff-ZoneA \u2014 battery 46%"},{"t":335.68,"kind":"done","text":"Supply LineFeed-Assembly \u2014 battery 24%"},{"t":341.1,"kind":"charge-start","text":"Docked at ChargingStation-1 at 20% \u2014 charging"},{"t":364.75,"kind":"charge-done","text":"Charged to 90% \u2014 released"},{"t":372.1,"kind":"done","text":"Pick up cart at CartPickup-CART01 \u2014 battery 72%"},{"t":380.82,"kind":"done","text":"Deliver cart to DropOff-ZoneB \u2014 battery 48%"},{"t":386.0,"kind":"done","text":"Park at Staging-1 \u2014 battery 36%"},{"t":391.33,"kind":"charge-start","text":"Docked at ChargingStation-1 at 21% \u2014 charging"},{"t":414.55,"kind":"charge-done","text":"Charged to 90% \u2014 released"},{"t":421.88,"kind":"done","text":"Pick up cart at CartPickup-CART01 \u2014 battery 72%"},{"t":431.65,"kind":"done","text":"Deliver cart to DropOff-ZoneA \u2014 battery 46%"},{"t":439.88,"kind":"done","text":"Supply LineFeed-Assembly \u2014 battery 24%"},{"t":445.32,"kind":"charge-start","text":"Docked at ChargingStation-1 at 20% \u2014 charging"},{"t":468.98,"kind":"charge-done","text":"Charged to 90% \u2014 released"},{"t":476.33,"kind":"done","text":"Pick up cart at CartPickup-CART01 \u2014 battery 72%"},{"t":485.07,"kind":"done","text":"Deliver cart to DropOff-ZoneB \u2014 battery 48%"},{"t":486.23,"kind":"shift","text":"Shift complete \u2014 38 missions"}]};
+
+const KINDS = [
+  ["pickup",   "cart pickup",    "--k-pickup"],
+  ["deliver",  "cart delivery",  "--k-deliver"],
+  ["linefeed", "line feed",      "--k-linefeed"],
+  ["travel",   "to charger",     "--k-travel"],
+  ["park",     "park / staging", "--k-park"],
+];
+const KIND_VAR = Object.fromEntries(KINDS.map(k => [k[0], k[2]]));
+const KIND_LABEL = Object.fromEntries(KINDS.map(k => [k[0], k[1]]));
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+const M = DATA.meta;
+const LEN = M.len_min;                       // shift length in minutes
+const t0 = new Date(M.start.replace(" ", "T")); // sim shift start
+function clock(min) {
+  const d = new Date(t0.getTime() + min * 60000);
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
+const dur = min => Math.round(min) + " min";
+
+/* ---- masthead + intro ---- */
+document.getElementById("subline").textContent =
+  `${M.robot} (${M.model}) · Warehouse Floor 1 · ${clock(0)}–${clock(LEN)}, ${M.sim_hours} simulated hours`;
+document.getElementById("chartTag").textContent = `${clock(0)}–${clock(LEN)} sim`;
+document.getElementById("logTag").textContent = `${M.scale}x wall speed`;
+document.getElementById("ledText").textContent = `live run · ${M.wall_min} min of wall clock`;
+
+/* ---- KPI tiles ---- */
+const workJobs = DATA.jobs.filter(j => j.kind !== "travel");
+const deliveries = DATA.jobs.filter(j => j.kind === "deliver").length;
+const minBatt = Math.min(...DATA.battery.map(p => p[1]));
+const chargeMin = DATA.charges.reduce((a, c) => a + (c.f - c.s), 0);
+document.getElementById("tiles").innerHTML = [
+  [DATA.jobs.length, "missions completed"],
+  [deliveries, "cart deliveries"],
+  [DATA.charges.length, "charge stops"],
+  [`${Math.round(minBatt)}<small>%</small>`, "lowest battery"],
+  [`${M.sim_hours}<small>h → ${M.wall_min}min</small>`, "sim time → wall time"],
+].map(([v, l]) => `<div class="tile"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+
+/* ---- legend ---- */
+document.getElementById("legend").innerHTML =
+  KINDS.map(([, label, cvar]) =>
+    `<span class="chip"><span class="sw" style="background:var(${cvar})"></span>${label}</span>`).join("") +
+  `<span class="chip"><span class="sw hatch"></span>charging</span>` +
+  `<span class="chip"><span class="sw line" style="background:var(--battery)"></span>battery %</span>`;
+
+/* ---- tooltip ---- */
+const tip = document.getElementById("tooltip");
+function showTip(html, ev) {
+  tip.innerHTML = html; tip.style.display = "block";
+  const pad = 14, w = tip.offsetWidth;
+  let x = ev.clientX + pad;
+  if (x + w > window.innerWidth - 8) x = ev.clientX - w - pad;
+  tip.style.left = x + "px";
+  tip.style.top = Math.min(ev.clientY + pad, window.innerHeight - tip.offsetHeight - 8) + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+function attachTip(node, html) {
+  node.addEventListener("mousemove", ev => showTip(html, ev));
+  node.addEventListener("mouseleave", hideTip);
+}
+
+/* ---- chart: one mission lane + full battery chart, shared time axis ---- */
+const chart = document.getElementById("chart");
+const ML = 46, MR = 16, MT = 26;
+const LANE_H = 40, GAP = 26, BATT_H = 210, MB = 22;
+
+function render() {
+  const W = Math.max(560, chart.clientWidth);
+  const plotW = W - ML - MR;
+  const laneTop = MT, battTop = laneTop + LANE_H + GAP;
+  const H = battTop + BATT_H + MB;
+  const x = min => ML + (min / LEN) * plotW;
+  const yb = pct => battTop + BATT_H - (pct / 100) * BATT_H;
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("width", W); svg.setAttribute("height", H);
+  const el = (n, at, parent) => {
+    const e = document.createElementNS(NS, n);
+    for (const k in at) e.setAttribute(k, at[k]);
+    (parent || svg).appendChild(e); return e;
+  };
+
+  // charging hatch (45deg, same angle everywhere)
+  const defs = el("defs", {});
+  const p = el("pattern", { id: "hatchCharge", width: 5, height: 5,
+    patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, defs);
+  el("rect", { width: 5, height: 5, fill: css("--k-travel"), opacity: 0.12 }, p);
+  el("line", { x1: 0, y1: 0, x2: 0, y2: 5, stroke: css("--k-travel"), "stroke-width": 2 }, p);
+
+  // hour grid + labels (shared by both charts)
+  const firstTick = Math.ceil(t0.getMinutes() / 60) === 0 ? 0 : 60 - t0.getMinutes();
+  for (let m = firstTick; m <= LEN; m += 60) {
+    const gx = x(m);
+    el("line", { x1: gx, y1: MT - 6, x2: gx, y2: H - MB + 4, stroke: css("--line"), "stroke-width": 1 });
+    el("text", { x: gx, y: MT - 12, "text-anchor": "middle", "font-size": 10.5,
+      fill: css("--ink-faint"), "font-variant-numeric": "tabular-nums" }).textContent = clock(m);
+  }
+
+  // ---- mission lane ----
+  el("text", { x: ML - 8, y: laneTop + LANE_H / 2 + 4, "text-anchor": "end",
+    "font-size": 11, "font-weight": 600, fill: css("--ink-dim") }).textContent = M.model;
+  el("line", { x1: ML, y1: laneTop + LANE_H + 1, x2: W - MR, y2: laneTop + LANE_H + 1,
+    stroke: css("--line"), "stroke-width": 1 });
+
+  // charging spans (hatch), under the mission segments
+  DATA.charges.forEach(c => {
+    const rect = el("rect", { x: x(c.s) + 1, y: laneTop + 3, width: Math.max(2, x(c.f) - x(c.s) - 2),
+      height: LANE_H - 6, rx: 4, fill: "url(#hatchCharge)", stroke: css("--k-travel"), "stroke-width": 1 });
+    attachTip(rect, `<div class="h">&#128268; Charging</div><div class="d">${c.from}% &rarr; ${c.to}%<br>${clock(c.s)}&ndash;${clock(c.f)} (${dur(c.f - c.s)})</div>`);
+  });
+
+  // mission segments (2px surface gap between adjacent fills)
+  DATA.jobs.forEach(j => {
+    const seg = el("rect", { x: x(j.s) + 1, y: laneTop + 1, width: Math.max(2, x(j.f) - x(j.s) - 2),
+      height: LANE_H - 2, rx: 4, fill: css(KIND_VAR[j.kind]), opacity: j.state === "Done" ? 1 : 0.45 });
+    seg.addEventListener("mouseenter", () => seg.setAttribute("stroke", css("--ink")));
+    seg.addEventListener("mouseleave", () => seg.removeAttribute("stroke"));
+    attachTip(seg, `<div class="h">${j.name}</div><div class="d">#${j.id} &middot; ${KIND_LABEL[j.kind]} &middot; ${j.state}<br>${clock(j.s)} &rarr; ${clock(j.f)} (${dur(j.f - j.s)})</div>`);
+  });
+
+  // ---- battery chart ----
+  el("text", { x: ML - 8, y: battTop - 8, "text-anchor": "end", "font-size": 11,
+    "font-weight": 600, fill: css("--ink-dim") }).textContent = "";
+  [0, 50, 100].forEach(pct => {
+    el("line", { x1: ML, y1: yb(pct), x2: W - MR, y2: yb(pct), stroke: css("--line"), "stroke-width": 1 });
+    el("text", { x: ML - 8, y: yb(pct) + 3.5, "text-anchor": "end", "font-size": 10,
+      fill: css("--ink-faint"), "font-variant-numeric": "tabular-nums" }).textContent = pct + "%";
+  });
+  // charge-trigger threshold
+  el("line", { x1: ML, y1: yb(DATA.meta.charge_below), x2: W - MR, y2: yb(DATA.meta.charge_below),
+    stroke: css("--ink-faint"), "stroke-width": 1, "stroke-dasharray": "3 4" });
+  el("text", { x: ML + 6, y: yb(DATA.meta.charge_below) - 5, "text-anchor": "start", "font-size": 10,
+    fill: css("--ink-faint") }).textContent = `opportunity-charge below ${DATA.meta.charge_below}%`;
+
+  const pts = DATA.battery;
+  el("path", { d: pts.map((pt, i) => (i ? "L" : "M") + x(pt[0]).toFixed(1) + " " + yb(pt[1]).toFixed(1)).join(""),
+    fill: "none", stroke: css("--battery"), "stroke-width": 2, "stroke-linejoin": "round" });
+
+  const hitRow = el("rect", { x: ML, y: battTop - 4, width: plotW, height: BATT_H + 8, fill: "transparent" });
+  hitRow.addEventListener("mousemove", ev => {
+    const r = svg.getBoundingClientRect();
+    const t = ((ev.clientX - r.left) * (W / r.width) - ML) / plotW * LEN;
+    let best = pts[0];
+    for (const pt of pts) if (Math.abs(pt[0] - t) < Math.abs(best[0] - t)) best = pt;
+    if (best) showTip(`<div class="h">Battery</div><div class="d">${best[1].toFixed(1)}% at ${clock(best[0])}</div>`, ev);
+  });
+  hitRow.addEventListener("mouseleave", hideTip);
+
+  // ---- crosshair (shared) ----
+  const cross = el("line", { y1: MT - 6, y2: H - MB + 4, stroke: css("--ink-faint"),
+    "stroke-width": 1, visibility: "hidden", "pointer-events": "none" });
+  const crossLbl = el("text", { y: MT - 12, "text-anchor": "middle", "font-size": 10.5,
+    "font-weight": 600, fill: css("--ink"), visibility: "hidden", "pointer-events": "none" });
+  svg.addEventListener("mousemove", ev => {
+    const r = svg.getBoundingClientRect();
+    const px = (ev.clientX - r.left) * (W / r.width);
+    if (px < ML || px > W - MR) { cross.setAttribute("visibility", "hidden"); crossLbl.setAttribute("visibility", "hidden"); return; }
+    cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("visibility", "visible");
+    crossLbl.setAttribute("x", px); crossLbl.setAttribute("visibility", "visible");
+    crossLbl.textContent = clock((px - ML) / plotW * LEN);
+  });
+  svg.addEventListener("mouseleave", () => { cross.setAttribute("visibility", "hidden"); crossLbl.setAttribute("visibility", "hidden"); });
+  svg.__setCross = min => {
+    const px = x(min);
+    cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("visibility", "visible");
+    crossLbl.setAttribute("x", px); crossLbl.setAttribute("visibility", "visible");
+    crossLbl.textContent = clock(min);
+  };
+  svg.__clearCross = () => { cross.setAttribute("visibility", "hidden"); crossLbl.setAttribute("visibility", "hidden"); };
+
+  chart.replaceChildren(svg);
+  return svg;
+}
+let svgEl = render();
+addEventListener("resize", () => { svgEl = render(); });
+
+/* ---- floor log ---- */
+const ICON = { shift: "&#9654;", done: "&#10003;", "charge-start": "&#128268;",
+  "charge-done": "&#128267;", low: "&#9888;" };
+const logEl = document.getElementById("log");
+logEl.innerHTML = DATA.log.map(e =>
+  `<div class="call ${e.kind.startsWith("charge") ? "charge" : ""}" data-t="${e.t}">
+     <span class="t">${clock(e.t)}</span><span class="ic">${ICON[e.kind] || "&middot;"}</span>
+     <span class="tx">${e.text}</span></div>`).join("");
+logEl.addEventListener("mouseover", ev => {
+  const row = ev.target.closest(".call");
+  if (row && svgEl.__setCross) svgEl.__setCross(parseFloat(row.dataset.t));
+});
+logEl.addEventListener("mouseout", () => svgEl.__clearCross && svgEl.__clearCross());
+
+/* ---- table view ---- */
+document.getElementById("tableWrap").innerHTML =
+  `<table><thead><tr><th>#</th><th>Mission</th><th>Started</th><th>Finished</th><th>Duration</th><th>State</th></tr></thead><tbody>` +
+  DATA.jobs.map(j =>
+    `<tr><td>${j.id}</td>
+     <td><span class="sw" style="background:var(${KIND_VAR[j.kind]})"></span>${j.name}</td>
+     <td>${clock(j.s)}</td><td>${clock(j.f)}</td><td>${dur(j.f - j.s)}</td><td>${j.state}</td></tr>`).join("") +
+  `</tbody></table>`;
+
+const viewBtn = document.getElementById("viewBtn");
+viewBtn.addEventListener("click", () => {
+  const showTable = viewBtn.getAttribute("aria-pressed") !== "true";
+  viewBtn.setAttribute("aria-pressed", showTable);
+  document.getElementById("chartPanel").style.display = showTable ? "none" : "";
+  document.getElementById("tablePanel").style.display = showTable ? "block" : "none";
+});
+
+/* ---- footer ---- */
+document.getElementById("foot").innerHTML =
+  `Driven live against one <a href="https://github.com/JimothyJohn/mir-emulator">mir-emulator</a> MiR250 started with
+   <code>--time-scale ${M.scale}</code>: ${M.sim_hours} simulated hours in ${M.wall_min} minutes of wall clock.
+   ${DATA.jobs.length} missions with realistic per-mission runtimes via <code>X-MiR-Mission-Duration</code>;
+   timestamps read back from the robot's own <code>mission_queue</code>;
+   opportunity charging below ${M.charge_below}% via <code>/_emulator/battery</code>;
+   the clock scaled at runtime via <code>PUT /_emulator/clock</code>.`;
+</script>
+</body>
+</html>

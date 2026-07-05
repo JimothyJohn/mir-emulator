@@ -5,6 +5,42 @@ Everything here is verified against `packages/mir-emulator/src/mir_emulator/`
 official MiR REST API; paths under `/_emulator/*` and `X-MiR-*` headers are
 emulator-only test surfaces that do not exist on real hardware.
 
+## Spec quirks every consumer must survive
+
+Two inconsistencies in MiR's own API files, verified against real spec
+documents — code defensively:
+
+- **List endpoints declared with the element's object schema.** Servers
+  differ on which shape they answer with (a list, or a single object).
+  Treat an object-shaped answer as a one-element list, never as "nothing":
+  see `mir_client.report._as_list` and `mir_mcp.server._as_list`.
+- **Fields typed differently in request and response.** e.g. a mission
+  action's `parameters` is an array in the request body but a string in
+  the response schema, and `POST /positions` responses omit
+  `pos_x`/`pos_y`. Don't expect to read back what you wrote; the emulator
+  keeps the verbatim client body internally (a private `_request` key on
+  stored elements, never emitted) so behaviors like waypoint paths still
+  work.
+
+## Version discovery (connect-time handshake)
+
+Path versions never change (`/api/v2.0.0` robot, `/api/v1` fleet); the
+*software* version decides which endpoints and fields exist. Learn it from
+the target instead of configuring it — probe in order, first hit wins:
+
+| Probe | Identifies | Version field |
+|---|---|---|
+| `GET /healthz` | multi-version dispatcher (`"kind": "dispatcher"`) | `versions[]`, `latest`, `fleet_versions[]`, `fleet_latest` |
+| `GET /` (JSON) | emulator robot or fleet (`"kind"`) | `emulated_mir_version` / `emulated_fleet_version` |
+| `GET /api/v1/system/version` (`x-api-key`) | any MiR Fleet, real included | `version` |
+| `GET /swagger.json` | robot serving its spec | `info.version` |
+| `GET /api/v2.0.0/status` → 200/401 | robot that won't say | none — unknown |
+
+Against a dispatcher, prefix every call with `/<version>` (robot) or
+`/fleet/<version>` (fleet); `latest` aliases the newest. Implementations of
+this handshake: `mir_client.discovery` (SDK), `mir_mcp.client.detect_target`
+(MCP), `connectTo()` in `docs/index.html` (console).
+
 ## Robot API — `/api/v2.0.0`
 
 Auth header: `Authorization: Basic BASE64(<user>:<sha256-hex(password)>)`.
@@ -36,8 +72,15 @@ Merges exactly the writable fields; a real robot ignores the rest.
 - `GET /missions` — mission definitions seeded from the spec's examples.
   Match user-facing names to `guid`.
 - `GET /missions/{guid}` — one definition (404 if unknown).
+- `POST /missions {"name": ..., "group_id": ...}` — create a definition;
+  `group_id` is required (400 without it). On a real robot it must be an
+  existing mission-group guid (`GET /mission_groups` lists them); the
+  emulator accepts any string.
 - `POST /mission_queue {"mission_id": "<guid>"}` — enqueue; unknown
   mission → 400. Returns the queue entry with monotonic integer `id`.
+  Emulator-only: an `X-MiR-Mission-Duration: <seconds 0.1–3600>` header
+  freezes that duration onto the new entry (mixed long-haul/short-hop
+  workloads on one robot); battery drain and odometry scale with it.
 - `GET /mission_queue` — all entries with live `state`:
   Pending → Executing → Done on a simulated clock
   (`--mission-duration` seconds each, default 10). Aborted entries stay
@@ -51,7 +94,9 @@ Merges exactly the writable fields; a real robot ignores the rest.
   (POST also accepted). Out-of-range id → 404/400 per spec.
 
 ### Misc
-- `GET /metrics` — OpenMetrics text (battery, uptime, mission counters).
+- `GET /metrics` — OpenMetrics text: battery gauge, uptime and
+  distance-moved counters, and `mir_robot_missions_completed_total` /
+  `mir_robot_missions_aborted_total`.
 - `GET /swagger.json` (Swagger 2.0, verbatim) / `GET /openapi.json`
   (OpenAPI 3 conversion) — the machine-readable contract for this version.
 
@@ -85,24 +130,81 @@ state never disagree.
   serial-order phases).
 - `GET /system/version` — fleet software version.
 - `GET /openapi.json` — MiR's official Fleet OpenAPI 3 document, verbatim.
+- **`GET|PUT|DELETE /_emulator/robots/{robot-id}/faults` and `.../battery`**
+  (emulator-only) — chaos proxy to an embedded robot's fault-injection and
+  battery surfaces, since fleet robots have no port of their own. Fleet
+  auth (`x-api-key`), robot-surface bodies and errors pass through
+  verbatim, sessions forward. This is how you e-stop or drain a fleet
+  robot mid-order.
 
 ## Emulator-only surfaces (never on real hardware)
 
 - **`GET|PUT|DELETE /_emulator/faults`** — inject/read/clear faults for the
   current session. Names: `emergency_stop`, `error`, `localization_lost`,
-  `battery_critical`, `blocked_path`. Holding faults (emergency stop,
-  blocked path) freeze the mission simulation and release in place;
-  resettable ones clear via the documented `PUT /status
-  {"clear_error": true}`. `PUT` body: `{"faults": ["emergency_stop"]}`.
+  `battery_critical`, `blocked_path`, `mission_failure`. Holding faults
+  (emergency stop, error, localization lost) freeze the mission simulation
+  and release in place. `blocked_path` does NOT hold: it raises an active
+  Planner error while the robot keeps executing (real MiRs replan around
+  obstructions). `mission_failure` aborts the running and queued missions.
+  `error`, `localization_lost`, and `mission_failure` clear via the
+  documented `PUT /status {"clear_error": true}`; `emergency_stop`,
+  `blocked_path`, and `battery_critical` model a physical cause and clear
+  only by removing it — `PUT`/`DELETE` on this endpoint. `PUT` body:
+  `{"faults": ["emergency_stop"]}`.
+- **`GET|PUT|DELETE /_emulator/battery`** — battery control for the current
+  session. `PUT` body, any subset: `{"percentage": 0-100, "charging":
+  true|false, "charge_rate": <percent per simulated second, default 0.5>,
+  "target": 0-100 (default 100)}`. While `charging`, the level climbs on
+  the sim clock and caps at `target` (a target below the current level
+  never discharges); drain still applies per executing second; pause,
+  manual control, and holding faults freeze the curve along with the rest
+  of the simulation. The `battery_critical` fault overrides everything.
+  `DELETE` restores the stock drain-only model. `GET` reports the live
+  percentage exactly as `/status` does. Without this surface battery only
+  ever drains — "charge to N%" is observable on the emulator only through
+  it.
+- **`GET|PUT|DELETE /_emulator/clock`** — time scaling, *process-wide* (all
+  sessions and embedded fleet robots share the one clock). `PUT` body:
+  `{"scale": <simulated seconds per wall second, 0.001–3600>}`. Prefer this
+  over short `--mission-duration` / hot `charge_rate` when timestamps should
+  stay believable: a 120 s mission still reports `started`/`finished` 120
+  simulated seconds apart, but at scale 60 it *runs* in 2 wall seconds;
+  battery curves scale identically. Changing scale never rewinds simulated
+  time (mission history stays consistent), so `DELETE` (back to 1.0) keeps
+  whatever offset accumulated. Startup baseline: `--time-scale N`.
 - **`X-MiR-Session: <id>`** header (1–64 chars `[A-Za-z0-9._-]`) — fully
   isolated state per session id, robots *and* fleet. Invalid format → 400.
+  Sessions are LRU-capped at 256 per emulator process: the 257th distinct
+  id silently evicts the oldest, which "factory resets" that robot with no
+  error. Size fleet-scale simulations (or long soak tests with churning
+  ids) accordingly.
 - **`X-MiR-Latency: <ms>`** header (cap 10000) — delays that one response;
   for client timeout testing.
+- **`X-MiR-Mission-Duration: <seconds>`** header (0.1–3600) — on
+  `POST /mission_queue`, gives exactly that entry its own duration instead
+  of the global `--mission-duration`. Validated (400 out of range) on any
+  request; only enqueues consume it.
 - **`GET /_emulator/diff?from=<v>&to=<v>`** — structural API changes
   between two tracked versions (dispatcher only; cross-family refused).
 - **`/_emulator/ws/status`** — WebSocket push of `/status` documents.
 - **`GET|PUT|DELETE /_emulator/recorder`** — scenario recorder.
 - **`GET /`** — index: what's being emulated, versions, and how to auth.
+
+## Reporting
+
+- **`mir-report <base-url> -o report.html`** — self-contained HTML
+  dashboard from documented endpoints only (robot: `/status`,
+  `/mission_queue`, `/log/error_reports`, `/statistics/distance`; fleet:
+  `/robots`, `/order`): current-status indicator cards, the daily trend,
+  and a descriptive timeline of actions. Auto-detects robot vs fleet;
+  `--session <id>` reports on an isolated emulator session. Python:
+  `mir_client.report`; MCP: `mir_generate_report`.
+- **`GET /log/error_reports`** (official) — on the emulator, every fault
+  activation appends a spec-shaped report (module, description, time),
+  session-isolated, surviving the fault being cleared.
+- **`GET /statistics/distance`** (official) — on the emulator, per-day
+  driven distance derived from the mission timeline (missions spanning
+  midnight split across both days).
 
 ## CLI quick reference
 

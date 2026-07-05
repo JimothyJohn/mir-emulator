@@ -17,6 +17,8 @@ drains, and PUT /status {"state_id": 4} pauses the simulation clock
 
 from __future__ import annotations
 
+import itertools
+import math
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -45,6 +47,8 @@ BATTERY_START = 92.5
 BATTERY_DRAIN_PER_S = 0.05  # percent per executing second
 BATTERY_FLOOR = 20.0
 BATTERY_SECONDS_PER_PERCENT = 375  # scales battery_time_remaining
+CHARGE_RATE_DEFAULT = 0.5  # percent per simulated second while charging
+CHARGE_TARGET_DEFAULT = 100.0
 LOOP_LENGTH_M = 40.0  # the simulated robot patrols a 40 m loop
 POSITION_HOME_X = 5.0
 POSITION_HOME_Y = 5.0
@@ -95,6 +99,10 @@ class RequestCtx:
     # fleet emulator forwards it on embedded robot calls so session isolation
     # composes across emulators.
     session_id: str = ""
+    # Validated X-MiR-Mission-Duration header (seconds), or None. Only
+    # POST /mission_queue consumes it: the new entry freezes this as its own
+    # duration, so one robot can carry a mix of long hauls and short hops.
+    duration_override: float | None = None
 
 
 # --- fault injection ---------------------------------------------------------
@@ -144,6 +152,10 @@ FAULTS: dict[str, dict[str, Any]] = {
             "non_resettable": False,
         },
     },
+    # battery_critical and blocked_path model a physical cause (a drained
+    # battery, an obstruction): an error reset cannot remove the cause, so
+    # clear_error leaves them active and their errors say non_resettable —
+    # they clear only via /_emulator/faults (the "cause removed" action).
     "battery_critical": {
         "description": "Battery forced to 1.5%; state unchanged.",
         "battery": 1.5,
@@ -151,7 +163,7 @@ FAULTS: dict[str, dict[str, Any]] = {
             "code": 10014,
             "description": "Battery level critical (emulated fault)",
             "module": "Battery",
-            "non_resettable": False,
+            "non_resettable": True,
         },
     },
     "blocked_path": {
@@ -160,7 +172,7 @@ FAULTS: dict[str, dict[str, Any]] = {
             "code": 10015,
             "description": "Path is blocked (emulated fault)",
             "module": "Planner",
-            "non_resettable": False,
+            "non_resettable": True,
         },
     },
     "mission_failure": {
@@ -174,6 +186,22 @@ FAULTS: dict[str, dict[str, Any]] = {
             "description": "Mission failed (emulated fault)",
             "module": "MissionController",
             "non_resettable": False,
+        },
+    },
+    # A rebooting (or network-partitioned) robot doesn't answer with an HTTP
+    # status — the connection dies. While active, every API request is
+    # severed mid-response (a transport error client-side); the /_emulator/*
+    # surfaces stay reachable so the fault can be cleared. Needs a real
+    # server (uvicorn): in-process ASGI test clients surface the abort as an
+    # exception instead of a closed socket.
+    "connection_drop": {
+        "description": "Connections sever mid-response, like a rebooting robot; API unreachable.",
+        "drops_connections": True,
+        "error": {
+            "code": 10017,
+            "description": "Connection dropped (emulated fault)",
+            "module": "Comms",
+            "non_resettable": True,
         },
     },
 }
@@ -205,14 +233,43 @@ def _abort_queue(state: StateStore, mission_duration: float) -> None:
             entry.setdefault("_aborted_at", now)
 
 
+ERROR_REPORT_KEY = "/log/error_reports"
+
+
+def _log_error_report(state: StateStore, description: str, module: str) -> None:
+    """Append a spec-shaped entry to the /log/error_reports collection —
+    exactly what a real robot accumulates when a fault fires. Uses the
+    generic CRUD storage key, so GET/DELETE on the official endpoint keep
+    their semantics over these entries."""
+    existing = state.collection(ERROR_REPORT_KEY)
+    next_id = max((int(k) for k in existing if k.isdigit()), default=0) + 1
+    state.insert(
+        ERROR_REPORT_KEY,
+        str(next_id),
+        {
+            "id": next_id,
+            "time": _iso(_sim_clock_for(state)),
+            "description": description,
+            "module": module,
+            "generating": False,
+            "ready": True,
+            "download_url": f"/v2.0.0/log/error_reports/{next_id}/download",
+        },
+    )
+
+
 def set_faults(
     state: StateStore, names: list[str], mission_duration: float = MISSION_DURATION_S
 ) -> None:
     """Replace the active fault set; holding faults freeze the sim clock;
-    aborting faults kill the mission queue at the current sim instant."""
+    aborting faults kill the mission queue at the current sim instant.
+    Every newly activated fault leaves an error report in the official log."""
     previous = set(active_faults(state))
     state.merge_singleton("/faults", {"active": [n for n in names if n in FAULTS]})
     newly_active = set(active_faults(state)) - previous
+    for name in (n for n in names if n in newly_active):
+        error = FAULTS[name]["error"]
+        _log_error_report(state, error["description"], error["module"])
     if any(FAULTS[n].get("aborts_queue") for n in newly_active):
         _abort_queue(state, mission_duration)
     holds = any(FAULTS[n].get("holds") for n in active_faults(state))
@@ -286,8 +343,11 @@ def _resume_sim(ctx: RequestCtx) -> None:
 
 def _windows(items: list[tuple[str, dict]], duration: float) -> list[tuple[dict, float, float]]:
     """(entry, start, finish) per queued mission — FIFO, one robot at a time.
-    An aborted entry's window collapses at its abort instant (a pending one
-    never runs at all), freeing the robot for whatever follows."""
+    Each entry runs for its own frozen duration (stored at enqueue time, so
+    an X-MiR-Mission-Duration override sticks to exactly that entry); the
+    parameter is the fallback for entries that predate the field. An aborted
+    entry's window collapses at its abort instant (a pending one never runs
+    at all), freeing the robot for whatever follows."""
     out: list[tuple[dict, float, float]] = []
     cursor: float | None = None
     for _id, entry in items:
@@ -295,7 +355,7 @@ def _windows(items: list[tuple[str, dict]], duration: float) -> list[tuple[dict,
         start = queued + MISSION_PENDING_LAG_S
         if cursor is not None:
             start = max(start, cursor)
-        finish = start + duration
+        finish = start + float(entry.get("_duration_s", duration))
         aborted_at = entry.get("_aborted_at")
         if aborted_at is not None:
             start = min(start, float(aborted_at))
@@ -348,9 +408,316 @@ def _public_entry(entry: dict, start: float, finish: float, clock: float) -> dic
     return public
 
 
+def _executed_seconds_for(state: StateStore, mission_duration: float) -> float:
+    """Total mission-executing seconds so far (for callers without a ctx)."""
+    clock = _sim_clock_for(state)
+    items = sorted(
+        state.collection("/mission_queue").items(),
+        key=lambda kv: int(kv[0]) if kv[0].isdigit() else 0,
+    )
+    return sum(
+        max(0.0, min(clock, finish) - start)
+        for _e, start, finish in _windows(items, mission_duration)
+    )
+
+
 def _executed_seconds(ctx: RequestCtx) -> float:
-    clock = _sim_clock(ctx)
-    return sum(max(0.0, min(clock, finish) - start) for _e, start, finish in _timeline(ctx))
+    return _executed_seconds_for(ctx.state, ctx.mission_duration)
+
+
+# --- battery model -------------------------------------------------------
+# Default: BATTERY_START minus BATTERY_DRAIN_PER_S per executing second.
+# /_emulator/battery re-anchors the model (set a level, run a charging
+# curve); everything stays derived-at-read-time from the sim clock, so a
+# paused or held robot neither drains nor charges and frozen-clock tests
+# hold. The battery_critical fault still wins over all of this in /status.
+
+BATTERY_FIELDS = ("percentage", "charging", "charge_rate", "target")
+_BATTERY_USAGE = (
+    'Body must set one or more of {"percentage": 0-100, "charging": true|false, '
+    '"charge_rate": percent per simulated second, "target": 0-100}'
+)
+_BATTERY_DEFAULTS: dict[str, Any] = {
+    "anchor_pct": None,
+    "anchor_executed_s": 0.0,
+    "charging": False,
+    "charge_anchor_clock": None,
+    "charge_rate": CHARGE_RATE_DEFAULT,
+    "target_pct": CHARGE_TARGET_DEFAULT,
+}
+
+
+def _battery_state(state: StateStore) -> dict:
+    return state.singleton("/battery", dict(_BATTERY_DEFAULTS))
+
+
+def _battery_level(state: StateStore, clock: float, executed_s: float) -> float:
+    battery = _battery_state(state)
+    anchor = battery.get("anchor_pct")
+    base = BATTERY_START if anchor is None else float(anchor)
+    anchored_s = float(battery.get("anchor_executed_s", 0.0))
+    drained = BATTERY_DRAIN_PER_S * max(0.0, executed_s - anchored_s)
+    level = max(min(BATTERY_FLOOR, base), base - drained)
+    if battery.get("charging") and battery.get("charge_anchor_clock") is not None:
+        rate = float(battery.get("charge_rate", CHARGE_RATE_DEFAULT))
+        gain = rate * max(0.0, clock - float(battery["charge_anchor_clock"]))
+        # The curve tops out at the target; a level already above it stays
+        # put — a charger never discharges the robot.
+        cap = max(float(battery.get("target_pct", CHARGE_TARGET_DEFAULT)), base)
+        level = min(level + gain, cap)
+    return max(0.0, min(100.0, level))
+
+
+def set_battery(
+    state: StateStore, body: Any, mission_duration: float = MISSION_DURATION_S
+) -> str | None:
+    """Apply a PUT /_emulator/battery body; returns an error string or None.
+    Every successful PUT re-anchors the model at the current (or given)
+    level, so drain and charge resume from what /status just reported."""
+    if not isinstance(body, dict) or not body:
+        return _BATTERY_USAGE
+    unknown = sorted(set(body) - set(BATTERY_FIELDS))
+    if unknown:
+        return f"Unknown fields {unknown}; allowed: {sorted(BATTERY_FIELDS)}"
+
+    def _number(value: Any) -> bool:
+        return isinstance(value, int | float) and not isinstance(value, bool)
+
+    percentage = body.get("percentage")
+    if percentage is not None and not (_number(percentage) and 0 <= percentage <= 100):
+        return "percentage must be a number in [0, 100]"
+    if "charging" in body and not isinstance(body["charging"], bool):
+        return "charging must be true or false"
+    rate = body.get("charge_rate")
+    if rate is not None and not (_number(rate) and 0 < rate <= 100):
+        return "charge_rate must be a number in (0, 100] percent per simulated second"
+    target = body.get("target")
+    if target is not None and not (_number(target) and 0 <= target <= 100):
+        return "target must be a number in [0, 100]"
+
+    clock = _sim_clock_for(state)
+    executed = _executed_seconds_for(state, mission_duration)
+    current = _battery_state(state)
+    level = float(percentage) if percentage is not None else _battery_level(state, clock, executed)
+    charging = bool(body.get("charging", current.get("charging", False)))
+    state.merge_singleton(
+        "/battery",
+        {
+            "anchor_pct": level,
+            "anchor_executed_s": executed,
+            "charging": charging,
+            "charge_anchor_clock": clock if charging else None,
+            "charge_rate": float(
+                rate if rate is not None else current.get("charge_rate", CHARGE_RATE_DEFAULT)
+            ),
+            "target_pct": float(
+                target if target is not None else current.get("target_pct", CHARGE_TARGET_DEFAULT)
+            ),
+        },
+    )
+    return None
+
+
+def reset_battery(state: StateStore) -> None:
+    """Back to the stock drain-only model, as if the surface was never used."""
+    state.merge_singleton("/battery", dict(_BATTERY_DEFAULTS))
+
+
+def battery_doc(state: StateStore, mission_duration: float = MISSION_DURATION_S) -> dict:
+    clock = _sim_clock_for(state)
+    level = _battery_level(state, clock, _executed_seconds_for(state, mission_duration))
+    for name in active_faults(state):
+        if "battery" in FAULTS[name]:
+            level = FAULTS[name]["battery"]  # faults win, exactly as /status reports
+    battery = _battery_state(state)
+    return {
+        "percentage": round(level, 2),
+        "charging": bool(battery.get("charging", False)),
+        "charge_rate": float(battery.get("charge_rate", CHARGE_RATE_DEFAULT)),
+        "target": float(battery.get("target_pct", CHARGE_TARGET_DEFAULT)),
+        "drain_per_s": BATTERY_DRAIN_PER_S,
+        "usage": _BATTERY_USAGE,
+    }
+
+
+# --- time scaling --------------------------------------------------------------
+# Speeding up a test by shortening durations (--mission-duration 3, hot
+# charge_rate) makes the emitted timestamps lie: a "two minute" mission shows
+# a three-second window. Scaling the clock instead keeps every simulated
+# duration — mission windows, battery curves, `ordered/started/finished` —
+# realistic while the wall wait shrinks. Process-wide (one clock, every
+# session and embedded fleet robot); anchored at the current simulated
+# instant on every change, because rewinding would flip Done missions back
+# to Executing.
+TIME_SCALE_MIN = 0.001  # slow motion is allowed; zero and negatives are not
+TIME_SCALE_MAX = 3600.0  # an hour of simulation per wall second is plenty
+_TIME_SCALE_USAGE = (
+    f'Body must be {{"scale": <simulated seconds per wall second, '
+    f"{TIME_SCALE_MIN}-{TIME_SCALE_MAX}>}}"
+)
+_time_scale: float = 1.0
+
+
+def set_time_scale(body: Any) -> str | None:
+    """Apply a PUT /_emulator/clock body; returns an error string or None."""
+    if not isinstance(body, dict):
+        return _TIME_SCALE_USAGE
+    scale = body.get("scale")
+    if isinstance(scale, bool) or not isinstance(scale, int | float):
+        return _TIME_SCALE_USAGE
+    if not math.isfinite(scale) or not (TIME_SCALE_MIN <= scale <= TIME_SCALE_MAX):
+        return _TIME_SCALE_USAGE
+
+    global _now, _time_scale
+    anchor_sim = _now()
+    anchor_wall = _wall_clock()
+
+    def scaled_clock() -> float:
+        return anchor_sim + (_wall_clock() - anchor_wall) * scale
+
+    _now = scaled_clock
+    _time_scale = float(scale)
+    return None
+
+
+def reset_time_scale() -> None:
+    """Back to real time (scale 1.0). Simulated time keeps whatever offset it
+    accumulated — continuity over wall-clock agreement."""
+    set_time_scale({"scale": 1.0})
+
+
+def clock_doc() -> dict:
+    return {
+        "scale": _time_scale,
+        "sim_time": _iso(_now()),
+        "wall_time": _iso(_wall_clock()),
+        "usage": (
+            'PUT {"scale": N} runs simulated time at N seconds per wall second, '
+            "process-wide (all sessions, all embedded robots); DELETE restores "
+            "1.0. Changing scale never rewinds simulated time."
+        ),
+    }
+
+
+def _declared_only(ctx: RequestCtx, doc: dict) -> dict:
+    """*doc* restricted to the fields the op's success schema declares.
+
+    The official files answer some operations with slimmer documents than the
+    emulator's internal entries carry (POST /mission_queue and the GET list
+    return GetMission_queues {id, state, url}; GET /registers/{id} returns
+    GetRegister without the list shape's url) — never emit more than the spec
+    states. A schema without declared properties leaves *doc* untouched."""
+    schema = ctx.spec.deref(ctx.op.success_schema)
+    if schema.get("type") == "array":
+        schema = schema.get("items") or {}
+    props = schema.get("properties")
+    if not isinstance(props, dict) or not props:
+        return doc
+    return {key: value for key, value in doc.items() if key in props}
+
+
+def _mission_waypoints(ctx: RequestCtx, mission_id: Any) -> list[dict]:
+    """The mission's move-action waypoints, in priority order.
+
+    Real MiR missions are lists of actions; a move action's parameters
+    carry {"id": "position", "value": <position-guid>}. Actions live in the
+    generic /missions/{mission_id}/actions collection, positions in
+    /positions — only references that resolve to a stored position with
+    coordinates count (seeded placeholders don't)."""
+    if not mission_id:
+        return []
+    actions = ctx.state.collection(f"/missions/{{mission_id}}/actions?mission_id={mission_id}")
+    positions: dict[str, dict] = {}
+    for stored in ctx.state.collection("/positions").values():
+        if not stored.get("guid"):
+            continue
+        # coordinates live on the client's stored request (the list schema
+        # carries only guid/map/name/type_id)
+        request = stored.get("_request")
+        if not isinstance(request, dict):
+            request = {}
+        positions[str(stored["guid"])] = {**stored, **request}
+    waypoints: list[dict] = []
+    for action in sorted(actions.values(), key=lambda a: float(a.get("priority") or 0)):
+        # the response schema types parameters as a string (a real MiR spec
+        # quirk), so the client's actual array lives on the stored request
+        request = action.get("_request")
+        if not isinstance(request, dict):
+            request = {}
+        parameters = request.get("parameters")
+        if not isinstance(parameters, list):
+            parameters = action.get("parameters")
+        for parameter in parameters if isinstance(parameters, list) else []:
+            if not (isinstance(parameter, dict) and parameter.get("id") == "position"):
+                continue
+            target = positions.get(str(parameter.get("value")))
+            if isinstance(target, dict) and "pos_x" in target and "pos_y" in target:
+                waypoints.append(target)
+    return waypoints
+
+
+def _along_polyline(
+    points: list[tuple[float, float]], fraction: float
+) -> tuple[float, float, float]:
+    """(x, y, heading°) at *fraction* of the polyline's total length."""
+    lengths = [math.dist(p0, p1) for p0, p1 in itertools.pairwise(points)]
+    total = sum(lengths)
+    if total <= 0:
+        x, y = points[-1]
+        return x, y, 0.0
+    target = max(0.0, min(1.0, fraction)) * total
+    covered = 0.0
+    for (p0, p1), segment in zip(itertools.pairwise(points), lengths, strict=True):
+        (x0, y0), (x1, y1) = p0, p1
+        if segment and target <= covered + segment:
+            t = (target - covered) / segment
+            heading = math.degrees(math.atan2(y1 - y0, x1 - x0))
+            return x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, heading
+        covered += segment
+    x, y = points[-1]
+    return x, y, 0.0
+
+
+def _waypoint_pose(
+    ctx: RequestCtx, timeline: list[tuple[dict, float, float]], clock: float
+) -> dict | None:
+    """Pose from mission waypoints, or None when the patrol model applies.
+
+    Executing a waypoint mission interpolates along anchor → waypoints,
+    where the anchor is the last finished waypoint mission's final waypoint
+    (consecutive missions chain) or the relocalized/home position. Idle
+    after a waypoint mission rests at its final waypoint."""
+    overlay = ctx.state.singleton("/status", {})
+    user_pos = overlay.get("position")
+    if not isinstance(user_pos, dict):
+        user_pos = {}
+    anchor = (
+        float(user_pos.get("x", POSITION_HOME_X)),
+        float(user_pos.get("y", POSITION_HOME_Y)),
+    )
+    rest: dict | None = None
+    for entry, start, finish in timeline:
+        if finish <= clock:
+            waypoints = _mission_waypoints(ctx, entry.get("mission_id"))
+            if waypoints:
+                rest = waypoints[-1]
+        elif start <= clock:  # and clock < finish, given the branch above
+            waypoints = _mission_waypoints(ctx, entry.get("mission_id"))
+            if not waypoints:
+                return None  # executing a plain mission: patrol model
+            if rest is not None:
+                anchor = (float(rest["pos_x"]), float(rest["pos_y"]))
+            points = [anchor] + [(float(w["pos_x"]), float(w["pos_y"])) for w in waypoints]
+            fraction = (clock - start) / (finish - start) if finish > start else 1.0
+            x, y, heading = _along_polyline(points, fraction)
+            return {"x": round(x, 2), "y": round(y, 2), "orientation": round(heading, 1)}
+    if rest is not None:
+        return {
+            "x": round(float(rest["pos_x"]), 2),
+            "y": round(float(rest["pos_y"]), 2),
+            "orientation": float(rest.get("orientation", 0.0)),
+        }
+    return None
 
 
 def _mission_snapshot(ctx: RequestCtx) -> dict:
@@ -358,7 +725,7 @@ def _mission_snapshot(ctx: RequestCtx) -> dict:
     clock = _sim_clock(ctx)
     timeline = _timeline(ctx)
     executed_s = _executed_seconds(ctx)
-    battery = max(BATTERY_FLOOR, BATTERY_START - BATTERY_DRAIN_PER_S * executed_s)
+    battery = _battery_level(ctx.state, clock, executed_s)
     distance = MISSION_SPEED_M_S * executed_s
     paused = _is_paused(ctx)
 
@@ -367,6 +734,7 @@ def _mission_snapshot(ctx: RequestCtx) -> dict:
         "battery_time_remaining": int(battery * BATTERY_SECONDS_PER_PERCENT),
         "moved": round(1204.5 + distance, 2),
         "_distance_m": distance,
+        "_waypoint_pose": _waypoint_pose(ctx, timeline, clock),
     }
 
     hold_id = 11 if _sim(ctx).get("hold") == "manual" else 4
@@ -405,6 +773,7 @@ def _status_doc(ctx: RequestCtx) -> dict:
 
     snapshot = _mission_snapshot(ctx)
     distance = snapshot.pop("_distance_m")
+    waypoint_pose = snapshot.pop("_waypoint_pose")
     for key, value in snapshot.items():
         if key in doc:
             doc[key] = value
@@ -412,7 +781,13 @@ def _status_doc(ctx: RequestCtx) -> dict:
         clock = _sim_clock(ctx)
         boot = ctx.state.singleton("/boot", {"at": clock - UPTIME_START_S})
         doc["uptime"] = int(clock - boot["at"])
-    if isinstance(doc.get("position"), dict):
+    if isinstance(doc.get("position"), dict) and waypoint_pose is not None:
+        # Mission move-actions define the path: the pose rides the waypoint
+        # polyline (or rests at the last mission's final waypoint).
+        position = dict(doc["position"])
+        position.update(waypoint_pose)
+        doc["position"] = position
+    elif isinstance(doc.get("position"), dict):
         position = dict(doc["position"])
         # Patrol a straight out-and-back segment of the loop. A position set
         # via PUT /status relocalizes the robot: it becomes the loop's home
@@ -557,19 +932,27 @@ async def post_mission_queue(ctx: RequestCtx) -> tuple[int, Any]:
     queue_id = ctx.state.next_int_id()
     entry["id"] = queue_id
     entry["_queued_at"] = _sim_clock(ctx)
+    entry["_duration_s"] = (
+        ctx.duration_override if ctx.duration_override is not None else ctx.mission_duration
+    )
     ctx.state.insert("/mission_queue", str(queue_id), entry)
     ctx.state.merge_singleton("/status", {"mission_queue_id": queue_id})
     clock = _sim_clock(ctx)
     for stored, start, finish in _timeline(ctx):
         if stored is entry:
-            return ctx.op.success_status, _public_entry(stored, start, finish, clock)
-    return ctx.op.success_status, _public_entry(entry, clock + 1, clock + 2, clock)
+            return ctx.op.success_status, _declared_only(
+                ctx, _public_entry(stored, start, finish, clock)
+            )
+    return ctx.op.success_status, _declared_only(
+        ctx, _public_entry(entry, clock + 1, clock + 2, clock)
+    )
 
 
 async def get_mission_queue(ctx: RequestCtx) -> tuple[int, Any]:
     clock = _sim_clock(ctx)
     return ctx.op.success_status, [
-        _public_entry(entry, start, finish, clock) for entry, start, finish in _timeline(ctx)
+        _declared_only(ctx, _public_entry(entry, start, finish, clock))
+        for entry, start, finish in _timeline(ctx)
     ]
 
 
@@ -588,7 +971,7 @@ async def get_mission_queue_item(ctx: RequestCtx) -> tuple[int, Any]:
         # declared schema, then overlay the live lifecycle fields.
         full = example_from_schema(ctx.spec.deref(ctx.op.success_schema))
         if not isinstance(full, dict) or not full:
-            return ctx.op.success_status, public
+            return ctx.op.success_status, _declared_only(ctx, public)
         overlay_compatible(full, public)
         for key in ("started", "finished"):
             if key in public:
@@ -648,7 +1031,9 @@ def _register_doc(ctx: RequestCtx, register_id: int) -> dict:
 
 
 async def get_registers(ctx: RequestCtx) -> tuple[int, Any]:
-    return ctx.op.success_status, [_register_doc(ctx, i) for i in range(1, REGISTER_COUNT + 1)]
+    return ctx.op.success_status, [
+        _declared_only(ctx, _register_doc(ctx, i)) for i in range(1, REGISTER_COUNT + 1)
+    ]
 
 
 def _register_id(ctx: RequestCtx) -> int | None:
@@ -663,7 +1048,7 @@ async def get_register(ctx: RequestCtx) -> tuple[int, Any]:
     register_id = _register_id(ctx)
     if register_id is None:
         return 404, {"error_code": "404", "error_human": "register not found"}
-    return ctx.op.success_status, _register_doc(ctx, register_id)
+    return ctx.op.success_status, _declared_only(ctx, _register_doc(ctx, register_id))
 
 
 async def put_register(ctx: RequestCtx) -> tuple[int, Any]:
@@ -685,13 +1070,18 @@ async def put_register(ctx: RequestCtx) -> tuple[int, Any]:
     if patch:
         current = ctx.state.singleton("/registers", {}).get(str(register_id), {})
         ctx.state.merge_singleton("/registers", {str(register_id): {**current, **patch}})
-    return ctx.op.success_status, _register_doc(ctx, register_id)
+    return ctx.op.success_status, _declared_only(ctx, _register_doc(ctx, register_id))
 
 
 async def get_metrics(ctx: RequestCtx) -> tuple[int, Any, str]:
     snapshot = _mission_snapshot(ctx)
     clock = _sim_clock(ctx)
     boot = ctx.state.singleton("/boot", {"at": clock - UPTIME_START_S})
+    timeline = _timeline(ctx)
+    completed = sum(
+        1 for entry, _s, finish in timeline if entry.get("_aborted_at") is None and clock >= finish
+    )
+    aborted = sum(1 for entry, _s, _f in timeline if entry.get("_aborted_at") is not None)
     text = (
         "# TYPE mir_robot_battery_percent gauge\n"
         f"mir_robot_battery_percent {snapshot['battery_percentage']}\n"
@@ -699,9 +1089,40 @@ async def get_metrics(ctx: RequestCtx) -> tuple[int, Any, str]:
         f"mir_robot_uptime_seconds_total {int(clock - boot['at'])}\n"
         "# TYPE mir_robot_distance_moved_meters counter\n"
         f"mir_robot_distance_moved_meters_total {snapshot['moved']}\n"
+        "# TYPE mir_robot_missions_completed counter\n"
+        f"mir_robot_missions_completed_total {completed}\n"
+        "# TYPE mir_robot_missions_aborted counter\n"
+        f"mir_robot_missions_aborted_total {aborted}\n"
         "# EOF\n"
     )
     return ctx.op.success_status, text, "text/plain; version=0.0.4"
+
+
+async def get_statistics_distance(ctx: RequestCtx) -> tuple[int, Any]:
+    """Per-day driven distance, derived from the mission timeline: executed
+    seconds bucketed by sim day x the simulated travel speed. The current
+    day is always present (a dashboard's "today" starts at 0), and a mission
+    spanning midnight splits between both days — real robots report daily
+    statistics, not per-mission ones."""
+    clock = _sim_clock(ctx)
+    day_s = 86400.0
+
+    def day_of(ts: float) -> float:
+        return ts - (ts % day_s)
+
+    buckets: dict[float, float] = {day_of(clock): 0.0}
+    for _entry, start, finish in _timeline(ctx):
+        end = min(finish, clock)
+        cursor = start
+        while cursor < end:
+            day_end = day_of(cursor) + day_s
+            span_end = min(end, day_end)
+            buckets[day_of(cursor)] = buckets.get(day_of(cursor), 0.0) + (span_end - cursor)
+            cursor = span_end
+    return ctx.op.success_status, [
+        {"date": _iso(day), "distance": round(seconds * MISSION_SPEED_M_S, 2)}
+        for day, seconds in sorted(buckets.items())
+    ]
 
 
 OVERRIDES: dict[tuple[str, str], Any] = {
@@ -718,4 +1139,5 @@ OVERRIDES: dict[tuple[str, str], Any] = {
     ("PUT", "/registers/{id}"): put_register,
     ("POST", "/registers/{id}"): put_register,
     ("GET", "/metrics"): get_metrics,
+    ("GET", "/statistics/distance"): get_statistics_distance,
 }

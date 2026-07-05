@@ -23,16 +23,54 @@ Work out where the robot is and whether it is real:
 
 1. **User gave a URL/host** — use it. `/api/v2.0.0/...` is a robot,
    `/api/v1/...` is a Fleet.
-2. **Something is already listening locally** — probe before starting
+2. **User has a robot but no address** — scan the network for it:
+   ```sh
+   uv run mir-discover                    # local /24, ports 80 (real) + 8080 (emulator)
+   uv run mir-discover 192.168.12.0/24    # a specific subnet
+   uv run mir-discover mir.local:8080     # a specific host[:port], --json for parsing
+   ```
+   It returns only confirmed MiR targets with their kind and software
+   version; each line's URL is ready to use. (From Python:
+   `mir_client.scan_network()`; from an MCP client: the `mir_discover_robots`
+   tool.)
+3. **Something is already listening locally** — probe before starting
    anything new: `curl -s http://127.0.0.1:8080/` (the emulator's index
    describes itself and lists versions).
-3. **Nothing running** — start an emulator from this repo:
+4. **Nothing running** — start an emulator from this repo:
    ```sh
    uv run mir-emulator &                          # newest robot on :8080
    uv run mir-emulator --fleet-version 1.5.0 &    # a Fleet with embedded robots
    ```
    Useful flags: `--mir-version 2.14.7`, `--port`, `--no-auth`,
-   `--mission-duration 3` (seconds per mission — keep it short for tests).
+   `--time-scale 60` (simulated time runs 60x wall speed — missions and
+   charging keep realistic durations and timestamps but finish in seconds;
+   runtime control via `PUT /_emulator/clock {"scale": N}`, prefer this
+   over the older shortcuts below when timestamps matter),
+   `--mission-duration 3` (seconds per mission — an `X-MiR-Mission-Duration`
+   header on `POST /mission_queue` overrides it per entry).
+
+**Then ask the target what it is — never assume a version.** The path
+prefixes are constant (`/api/v2.0.0` robot, `/api/v1` fleet) across all MiR
+software versions, so "version" means the software version, and the target
+reports it. Probe in this order, first hit wins:
+
+```sh
+curl -s $BASE/healthz                 # {"kind":"dispatcher","versions":[...]} → multi-version
+                                      #   demo: pick a mount, $BASE/<v> or $BASE/fleet/<v>
+curl -s $BASE/                        # emulator index: "kind" + emulated_mir_version /
+                                      #   emulated_fleet_version
+curl -s -H "x-api-key: $KEY" $BASE/api/v1/system/version   # a Fleet (works on real ones)
+curl -s $BASE/swagger.json            # robot serving its spec → .info.version
+curl -s -o /dev/null -w '%{http_code}' $BASE/api/v2.0.0/status  # 200/401 → robot,
+                                      #   version unknown; treat as newest and say so
+```
+
+All probes are unauthenticated reads — safe against real hardware. From
+Python, `mir_client.connect(base_url)` / `detect_server(base_url)` run this
+same handshake and return a ready client; the MCP server's
+`mir_server_info` tool does it too. When versions differ structurally,
+`GET /_emulator/diff?from=<v>&to=<v>` (dispatcher) shows exactly what
+changed between two tracked versions.
 
 **Real vs emulated matters.** A MiR is a 100+ kg vehicle: against real
 hardware, confirm before any state-changing call (PUT/POST/DELETE), never
@@ -71,11 +109,13 @@ Common intents, robot API (prefix every path with `/api/v2.0.0`):
 | "clear the error" | `PUT /status {"clear_error": true}` |
 | "rename it" / "move it to x,y" | `PUT /status {"name": ...}` / `{"position": {"x":, "y":, "orientation":}}` |
 | "what missions exist" | `GET /missions` |
+| "create a mission" | `POST /missions {"name": ..., "group_id": ...}` — `group_id` is required; real robots want a guid from `GET /mission_groups`, the emulator takes any string |
 | "run/queue mission X" | find its guid in `GET /missions` (match by `name`), then `POST /mission_queue {"mission_id": "<guid>"}` |
 | "what's queued / is it done" | `GET /mission_queue` (or `/mission_queue/{id}`) — `state` walks Pending → Executing → Done |
 | "cancel everything" | `DELETE /mission_queue` |
 | "cancel job N" | `DELETE /mission_queue/{id}` |
 | "read/set PLC register N" | `GET /registers/{n}` / `PUT /registers/{n} {"value": ...}` |
+| "set the battery / simulate charging" (emulator only) | `PUT /_emulator/battery {"percentage": 80, "charging": true, "target": 95}` — no `/api` prefix; on a real robot charging happens via its charge mission, poll `GET /status` |
 
 Fleet API (prefix `/api/v1`): `GET /robots`, `GET|PATCH /robots/{id}`,
 `POST /serial-order` (body below), `GET|DELETE /serial-order/{id}`,
@@ -88,8 +128,20 @@ Fleet API (prefix `/api/v1`): `GET /robots`, `GET|PATCH /robots/{id}`,
 ```
 
 Full endpoint details, response fields, and emulator-only test surfaces
-(fault injection, session isolation, latency shaping, version diff):
-read [references/endpoints.md](references/endpoints.md).
+(fault injection, battery control, session isolation, latency shaping,
+version diff): read [references/endpoints.md](references/endpoints.md).
+
+**"Give me a report / dashboard / how did the day go"** — don't hand-roll
+it; generate the standing dashboard (current-status indicators, daily
+trend, descriptive action timeline) from official endpoints only:
+
+```sh
+uv run mir-report http://127.0.0.1:8080 -o report.html   # robot or fleet, auto-detected
+```
+
+Python: `mir_client.report.write_report(url, path)`; MCP: the
+`mir_generate_report` tool. Read-only API traffic, so it is safe against
+real hardware; works on any tracked software version.
 
 ## Step 4: Execute and report
 
@@ -102,11 +154,19 @@ read [references/endpoints.md](references/endpoints.md).
   If a named mission doesn't exist, list what does and ask.
 - Waiting for a mission: poll `GET /mission_queue/{id}` until `state` is
   `Done` (or `Aborted`); on the emulator each mission takes
-  `--mission-duration` seconds (default 10).
+  `--mission-duration` seconds (default 10) — divided by the `/_emulator/clock`
+  scale, if one is set.
 
 ## Multi-robot / test isolation (emulator only)
 
 Send `X-MiR-Session: <name>` (1–64 chars of `[A-Za-z0-9._-]`) on every
 request to get a private robot/fleet instance per session id — parallel
 tests never see each other's state. Keep the header consistent across a
-scenario or the state "disappears".
+scenario or the state "disappears". Sessions are LRU-capped at 256 per
+process; past that the oldest silently resets — don't churn ids in big
+simulations.
+
+On a fleet, embedded robots have no port of their own: reach their fault
+and battery surfaces through the chaos proxy,
+`PUT /_emulator/robots/{robot-id}/faults` / `.../battery` (fleet
+`x-api-key` auth, robot body/errors verbatim).
