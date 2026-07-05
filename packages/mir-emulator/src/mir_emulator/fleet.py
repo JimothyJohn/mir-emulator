@@ -153,6 +153,9 @@ class FleetEmulator(Emulator):
             ("GET", "/api/v1/robots/{id}"): self._get_robot,
             ("PATCH", "/api/v1/robots/{id}"): self._patch_robot,
             ("POST", "/api/v1/serial-order"): self._post_serial_order,
+            ("DELETE", "/api/v1/serial-order/fallback/{serialOrderId}"): self._delete_fallback,
+            ("POST", "/api/v1/system/evacuation"): self._post_evacuation,
+            ("DELETE", "/api/v1/system/evacuation"): self._delete_evacuation,
             ("GET", "/api/v1/serial-order/{id}"): self._get_serial_order,
             ("DELETE", "/api/v1/serial-order/{id}"): self._delete_serial_order,
             ("GET", "/api/v1/order"): self._get_orders,
@@ -239,6 +242,22 @@ class FleetEmulator(Emulator):
         n = int(ctx.state.singleton("/fleet_rr", {"n": 0}).get("n", 0))
         ctx.state.merge_singleton("/fleet_rr", {"n": n + 1})
         return self.robots[n % len(self.robots)]
+
+    async def _pick_robot(self, ctx: RequestCtx, priority: str) -> EmbeddedRobot:
+        """High-priority orders preempt the rotation: they take the robot
+        with the shortest live queue right now. Low/Medium stay on the fair
+        round-robin (load-blind, like the default dispatch)."""
+        if priority != "High":
+            return self._next_robot(ctx)
+        best, best_load = self.robots[0], None
+        for robot in self.robots:
+            code, queue = await self._robot_call(robot, "GET", "/mission_queue", ctx.session_id)
+            load = 0
+            if code == 200 and isinstance(queue, list):
+                load = sum(1 for e in queue if e.get("state") in ("Pending", "Executing"))
+            if best_load is None or load < best_load:
+                best, best_load = robot, load
+        return best
 
     # ---- robots --------------------------------------------------------------
 
@@ -336,30 +355,45 @@ class FleetEmulator(Emulator):
     # ---- serial orders → robot mission queues --------------------------------
 
     async def _post_serial_order(self, ctx: RequestCtx) -> tuple[int, Any]:
+        if ctx.state.singleton("/evacuation", {"active": False}).get("active"):
+            return 400, _error_body(
+                400,
+                "Evacuation active — new serial orders are rejected until "
+                "DELETE /api/v1/system/evacuation",
+            )
         body = ctx.body if isinstance(ctx.body, dict) else {}
         order = body.get("serial-order") or {}
         phases = order.get("phases") or []
         if not phases:
             return 400, _error_body(400, "serial-order.phases must not be empty")
+        # the spec's serial-order-priority enum is enforced by body validation
+        priority = order.get("priority") or "Medium"
         serial_id = str(order.get("id") or ctx.state.next_guid())
         if ctx.state.get("/serial_orders", serial_id) is not None:
             return 409, _error_body(409, "Duplicate serial order id")
         wanted = order.get("robot-id")
-        robot = self._robot_by_id(wanted) if wanted else self._next_robot(ctx)
+        robot = self._robot_by_id(wanted) if wanted else await self._pick_robot(ctx, priority)
         if robot is None:
             return 400, _error_body(400, "Unknown robot-id")
 
         # Validate every phase against the robot BEFORE enqueueing anything —
-        # a rejected order must be atomic, never a partial dispatch.
+        # a rejected order must be atomic, never a partial dispatch. The
+        # fallback mission (phase.fallback-mission-id, official schema) must
+        # exist too: a fallback that can't dispatch is a config error now,
+        # not an incident later.
         for phase in phases:
-            mission_id = phase.get("mission-id")
-            code, _mission = await self._robot_call(
-                robot, "GET", f"/missions/{mission_id}", ctx.session_id
-            )
-            if code != 200:
-                return 400, _error_body(
-                    400, "Robot rejected a phase: mission-id does not match an existing mission"
+            for field in ("mission-id", "fallback-mission-id"):
+                mission_id = phase.get(field)
+                if field == "fallback-mission-id" and mission_id is None:
+                    continue
+                code, _mission = await self._robot_call(
+                    robot, "GET", f"/missions/{mission_id}", ctx.session_id
                 )
+                if code != 200:
+                    return 400, _error_body(
+                        400,
+                        f"Robot rejected a phase: {field} does not match an existing mission",
+                    )
 
         order_ids: list[str] = []
         stored_phases: list[dict] = []
@@ -386,7 +420,8 @@ class FleetEmulator(Emulator):
                     "mission-name": await self._mission_name(robot, mission_id, ctx.session_id),
                     "queue-id": reply.get("id") if isinstance(reply, dict) else None,
                     "robot-id": robot.robot_id,
-                    "priority": order.get("priority") or "Medium",
+                    "priority": priority,
+                    "fallback-mission-id": phase.get("fallback-mission-id"),
                     "created": _iso_now(),
                 },
             )
@@ -398,7 +433,7 @@ class FleetEmulator(Emulator):
             serial_id,
             {
                 "id": serial_id,
-                "priority": order.get("priority") or "Medium",
+                "priority": priority,
                 "robot-id": robot.robot_id,
                 "phases": stored_phases,
                 "orders": order_ids,
@@ -438,30 +473,121 @@ class FleetEmulator(Emulator):
             order = ctx.state.get("/orders", order_id)
             if not order:
                 continue
-            if robot is not None and order.get("queue-id") is not None:
+            # Finished missions stay finished; abort the rest on the robot by
+            # removing the queue entries (primary and any dispatched
+            # fallback), like a real fleet cancel does.
+            for key in ("queue-id", "fallback-queue-id"):
+                if robot is None or order.get(key) is None:
+                    continue
                 code, entry = await self._robot_call(
-                    robot, "GET", f"/mission_queue/{order['queue-id']}", ctx.session_id
+                    robot, "GET", f"/mission_queue/{order[key]}", ctx.session_id
                 )
-                # Finished missions stay finished; abort the rest on the robot
-                # by removing the queue entry, like a real fleet cancel does.
                 if code == 200 and isinstance(entry, dict) and entry.get("state") != "Done":
                     await self._robot_call(
-                        robot, "DELETE", f"/mission_queue/{order['queue-id']}", ctx.session_id
+                        robot, "DELETE", f"/mission_queue/{order[key]}", ctx.session_id
                     )
                     ctx.state.update("/orders", order_id, {"aborted": True})
         return ctx.op.success_status, None if ctx.op.success_status == 204 else {}
 
+    async def _delete_fallback(self, ctx: RequestCtx) -> tuple[int, Any]:
+        """DELETE /serial-order/fallback/{serialOrderId} — abort a running
+        fallback mission (official semantics: 202 {id}); 400 when the order
+        has no live fallback to abort."""
+        serial_id = str(ctx.path_params.get("serialOrderId"))
+        rec = ctx.state.get("/serial_orders", serial_id)
+        if rec is None:
+            return 404, _error_body(404, "Not found")
+        robot = self._robot_by_id(rec.get("robot-id"))
+        aborted_any = False
+        for order_id in rec.get("orders", []):
+            order = ctx.state.get("/orders", order_id)
+            if not order or order.get("fallback-queue-id") is None or order.get("aborted"):
+                continue
+            entry = await self._queue_entry(ctx, order, "fallback-queue-id")
+            if robot is not None and entry is not None and entry.get("state") != "Done":
+                await self._robot_call(
+                    robot,
+                    "DELETE",
+                    f"/mission_queue/{order['fallback-queue-id']}",
+                    ctx.session_id,
+                )
+                ctx.state.update("/orders", order_id, {"aborted": True})
+                aborted_any = True
+        if not aborted_any:
+            return 400, _error_body(400, "No running fallback mission on this serial order")
+        return 202, {"id": serial_id}
+
+    # ---- evacuation ------------------------------------------------------------
+
+    async def _post_evacuation(self, ctx: RequestCtx) -> tuple[int, Any]:
+        """POST /system/evacuation — every robot's queue aborts and new
+        serial orders are rejected until the evacuation is terminated."""
+        ctx.state.merge_singleton("/evacuation", {"active": True})
+        # Mark open orders aborted BEFORE clearing the robot queues — a
+        # cleared queue deletes its entries, which would leave the order
+        # read-model unable to see what happened to them.
+        for order_id, order in list(ctx.state.collection("/orders").items()):
+            entry = await self._queue_entry(ctx, order, "queue-id")
+            fallback = await self._queue_entry(ctx, order, "fallback-queue-id")
+            live = fallback or entry
+            if live is None or live.get("state") != "Done":
+                ctx.state.update("/orders", order_id, {"aborted": True})
+        for robot in self.robots:
+            await self._robot_call(robot, "DELETE", "/mission_queue", ctx.session_id)
+        return 201, None
+
+    async def _delete_evacuation(self, ctx: RequestCtx) -> tuple[int, Any]:
+        ctx.state.merge_singleton("/evacuation", {"active": False})
+        return 200, None
+
     # ---- the order read-model, derived live from robot state -----------------
+
+    async def _queue_entry(self, ctx: RequestCtx, rec: dict, key: str) -> dict | None:
+        robot = self._robot_by_id(rec.get("robot-id"))
+        if robot is None or rec.get(key) is None:
+            return None
+        code, payload = await self._robot_call(
+            robot, "GET", f"/mission_queue/{rec[key]}", ctx.session_id
+        )
+        return payload if code == 200 and isinstance(payload, dict) else None
+
+    async def _reconcile_fallback(self, ctx: RequestCtx, rec: dict, entry: dict | None) -> dict:
+        """A real fleet's dispatch loop reacts to an aborted primary by
+        launching the phase's fallback mission on the same robot; this
+        emulator is read-derived, so the reaction happens on the first read
+        that observes the abort. Evacuations suppress it — nothing new
+        drives during an evacuation."""
+        if (
+            entry is None
+            or entry.get("state") != "Aborted"
+            or rec.get("aborted")
+            or not rec.get("fallback-mission-id")
+            or rec.get("fallback-queue-id") is not None
+            or ctx.state.singleton("/evacuation", {"active": False}).get("active")
+        ):
+            return rec
+        robot = self._robot_by_id(rec.get("robot-id"))
+        if robot is None:
+            return rec
+        code, reply = await self._robot_call(
+            robot,
+            "POST",
+            "/mission_queue",
+            ctx.session_id,
+            {"mission_id": rec["fallback-mission-id"]},
+        )
+        if code < 400 and isinstance(reply, dict) and reply.get("id") is not None:
+            ctx.state.update("/orders", rec["order-id"], {"fallback-queue-id": reply["id"]})
+            rec = ctx.state.get("/orders", rec["order-id"]) or rec
+        return rec
 
     async def _order_view(self, ctx: RequestCtx, rec: dict) -> dict:
         robot = self._robot_by_id(rec.get("robot-id"))
-        entry: dict | None = None
-        if robot is not None and rec.get("queue-id") is not None:
-            code, payload = await self._robot_call(
-                robot, "GET", f"/mission_queue/{rec['queue-id']}", ctx.session_id
-            )
-            if code == 200 and isinstance(payload, dict):
-                entry = payload
+        entry = await self._queue_entry(ctx, rec, "queue-id")
+        rec = await self._reconcile_fallback(ctx, rec, entry)
+        if rec.get("fallback-queue-id") is not None:
+            # the fallback continues the same order's lifecycle
+            entry = await self._queue_entry(ctx, rec, "fallback-queue-id") or entry
         if rec.get("aborted"):
             status = "Aborted"
         elif entry is not None:
