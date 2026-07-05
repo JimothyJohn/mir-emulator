@@ -262,7 +262,7 @@ def test_route_surface_is_exactly_the_spec_plus_reserved_emulator_paths(client, 
     served = set()
     for route in client.app.routes:
         if isinstance(route, Route):
-            for method in route.methods - {"HEAD", "OPTIONS"}:
+            for method in (route.methods or set()) - {"HEAD", "OPTIONS"}:
                 served.add((method, re.sub(r"{(\w+):\w+}", r"{\1}", route.path)))
         elif isinstance(route, WebSocketRoute):
             served.add(("WS", route.path))
