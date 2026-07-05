@@ -153,6 +153,30 @@ def test_unknown_mission_id_cannot_be_enqueued(client, spec):
     assert "Argument error" in response.json()["error_human"]
 
 
+def test_validation_reports_all_missing_required_fields(client, spec):
+    """One 400 names every missing required property, not just the first.
+
+    A client posting an incomplete body (e.g. POST /maps with only a name)
+    should learn the full shape of the problem in one round trip instead of
+    re-discovering required fields one 400 at a time.
+    """
+    checked = 0
+    for op in spec.operations.values():
+        if op.method != "POST" or op.body_schema is None:
+            continue
+        required = spec.deref(op.body_schema).get("required", [])
+        if len(required) < 2:
+            continue
+        url = spec.base_path + _fill_path(op, op.path)
+        response = client.post(url, json={}, headers=dict(AUTH_HEADER))
+        assert response.status_code == 400, f"{op.method} {op.path}: {response.status_code}"
+        human = response.json()["error_human"]
+        omitted = [name for name in required if f"'{name}'" not in human]
+        assert not omitted, f"{op.method} {op.path}: error omits {omitted}: {human}"
+        checked += 1
+    assert checked, "no POST operation with >=2 required body fields exercised"
+
+
 def test_generic_crud_round_trip(client, spec):
     base = spec.base_path
     created = client.post(

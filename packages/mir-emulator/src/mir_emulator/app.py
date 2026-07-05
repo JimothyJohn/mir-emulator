@@ -23,7 +23,7 @@ from collections import OrderedDict
 from typing import Any
 
 from jsonschema import Draft4Validator
-from jsonschema.exceptions import SchemaError, ValidationError
+from jsonschema.exceptions import SchemaError
 from starlette.applications import Starlette
 from starlette.datastructures import MutableHeaders
 from starlette.middleware import Middleware
@@ -72,6 +72,10 @@ MIN_MISSION_DURATION_S = 0.1
 MAX_MISSION_DURATION_S = 3600.0
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 MAX_SESSIONS = 256
+# Body validation reports every violation in one 400 (a client shouldn't
+# rediscover required fields one round trip at a time), bounded so a
+# pathological body can't inflate the response.
+MAX_VALIDATION_ERRORS = 16
 
 
 def _error_body(status: int, human: str) -> dict:
@@ -235,14 +239,20 @@ class Emulator:
             return None
         schema = _draft4_nullable(self.spec.deref(op.body_schema))
         try:
-            Draft4Validator(schema).validate(body)
-        except ValidationError as exc:
-            # exc.message can embed user input; keep it JSON-encoded and
-            # never log it (log injection surface).
-            return f"Argument error: {exc.message[:200]}"
+            errors = sorted(
+                Draft4Validator(schema).iter_errors(body),
+                key=lambda err: ([str(p) for p in err.absolute_path], err.message),
+            )
         except SchemaError:
             return None  # emulator bug in the spec, not the client's fault
-        return None
+        if not errors:
+            return None
+        # err.message can embed user input; keep it JSON-encoded and
+        # never log it (log injection surface).
+        messages = [err.message[:200] for err in errors[:MAX_VALIDATION_ERRORS]]
+        if len(errors) > MAX_VALIDATION_ERRORS:
+            messages.append(f"and {len(errors) - MAX_VALIDATION_ERRORS} more")
+        return "Argument error: " + "; ".join(messages)
 
     def handler_for(self, op: Operation):
         async def handler(request: Request) -> Response:
