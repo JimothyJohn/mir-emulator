@@ -39,8 +39,11 @@ from mir_emulator.behaviors import (
     MISSION_DURATION_S,
     OVERRIDES,
     RequestCtx,
+    battery_doc,
     faults_doc,
     get_status,
+    reset_battery,
+    set_battery,
     set_faults,
 )
 from mir_emulator.examples import example_from_schema, overlay_compatible
@@ -501,6 +504,11 @@ def create_app(
                     "GET/PUT/DELETE /_emulator/faults — emulator-only fault injection "
                     f"({', '.join(sorted(FAULTS))})"
                 ),
+                "battery": (
+                    "GET/PUT/DELETE /_emulator/battery — emulator-only battery control "
+                    "(set percentage, run a charging curve via charging/charge_rate/target; "
+                    "DELETE restores the stock drain model)"
+                ),
                 "source": {
                     "primary_source": registry.primary_source(),
                     "provenance": entry["provenance"],
@@ -547,6 +555,33 @@ def create_app(
                 )
             set_faults(state, names, emulator.mission_duration)
         return _respond(200, faults_doc(state))
+
+    async def battery_endpoint(request: Request) -> Response:
+        """Emulator-only battery control (/_emulator/battery): set the level,
+        run a charging curve toward a target, or reset to the stock drain
+        model. Same auth and session semantics as the rest of the surface."""
+        if not emulator._authorized(request):
+            return _respond(401, _error_body(401, "Not authorized"))
+        session_id = request.headers.get(SESSION_HEADER, "")
+        if session_id and not SESSION_ID_RE.match(session_id):
+            return _respond(
+                400, _error_body(400, "Invalid X-MiR-Session: 1-64 chars from [A-Za-z0-9._-]")
+            )
+        state = emulator.state_for(session_id)
+        if request.method == "DELETE":
+            reset_battery(state)
+        elif request.method == "PUT":
+            raw = await request.body()
+            if len(raw) > MAX_BODY_BYTES:
+                return _respond(400, _error_body(400, "Payload too large"))
+            try:
+                body = json.loads(raw) if raw else {}
+            except ValueError:
+                return _respond(400, _error_body(400, "Invalid JSON"))
+            error = set_battery(state, body, emulator.mission_duration)
+            if error is not None:
+                return _respond(400, _error_body(400, error))
+        return _respond(200, battery_doc(state, emulator.mission_duration))
 
     async def status_websocket(websocket: WebSocket) -> None:
         """Emulator-only status push (/_emulator/ws/status): the /status
@@ -646,6 +681,7 @@ def create_app(
             Route("/swagger.json", swagger_json),
             Route("/openapi.json", openapi_json),
             Route("/_emulator/faults", faults_endpoint, methods=["GET", "PUT", "DELETE"]),
+            Route("/_emulator/battery", battery_endpoint, methods=["GET", "PUT", "DELETE"]),
             Route("/_emulator/recorder", recorder_endpoint, methods=["GET", "PUT", "DELETE"]),
             WebSocketRoute("/_emulator/ws/status", status_websocket),
             *routes,

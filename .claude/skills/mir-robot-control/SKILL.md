@@ -104,11 +104,13 @@ Common intents, robot API (prefix every path with `/api/v2.0.0`):
 | "clear the error" | `PUT /status {"clear_error": true}` |
 | "rename it" / "move it to x,y" | `PUT /status {"name": ...}` / `{"position": {"x":, "y":, "orientation":}}` |
 | "what missions exist" | `GET /missions` |
+| "create a mission" | `POST /missions {"name": ..., "group_id": ...}` — `group_id` is required; real robots want a guid from `GET /mission_groups`, the emulator takes any string |
 | "run/queue mission X" | find its guid in `GET /missions` (match by `name`), then `POST /mission_queue {"mission_id": "<guid>"}` |
 | "what's queued / is it done" | `GET /mission_queue` (or `/mission_queue/{id}`) — `state` walks Pending → Executing → Done |
 | "cancel everything" | `DELETE /mission_queue` |
 | "cancel job N" | `DELETE /mission_queue/{id}` |
 | "read/set PLC register N" | `GET /registers/{n}` / `PUT /registers/{n} {"value": ...}` |
+| "set the battery / simulate charging" (emulator only) | `PUT /_emulator/battery {"percentage": 80, "charging": true, "target": 95}` — no `/api` prefix; on a real robot charging happens via its charge mission, poll `GET /status` |
 
 Fleet API (prefix `/api/v1`): `GET /robots`, `GET|PATCH /robots/{id}`,
 `POST /serial-order` (body below), `GET|DELETE /serial-order/{id}`,
@@ -121,8 +123,8 @@ Fleet API (prefix `/api/v1`): `GET /robots`, `GET|PATCH /robots/{id}`,
 ```
 
 Full endpoint details, response fields, and emulator-only test surfaces
-(fault injection, session isolation, latency shaping, version diff):
-read [references/endpoints.md](references/endpoints.md).
+(fault injection, battery control, session isolation, latency shaping,
+version diff): read [references/endpoints.md](references/endpoints.md).
 
 ## Step 4: Execute and report
 

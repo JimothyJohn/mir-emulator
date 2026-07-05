@@ -302,6 +302,16 @@ def test_created_mission_can_be_enqueued(clock, client):
     assert entry["mission_id"] == created.json()["guid"]
 
 
+def test_create_mission_without_group_id_is_rejected_with_the_missing_field(clock, client):
+    # Real robots require group_id on PostMissions; the 400 must name it so
+    # a client knows what to add rather than guessing at the body schema.
+    r = client.post("/api/v2.0.0/missions", json={"name": "no group"}, headers=AUTH)
+    assert r.status_code == 400
+    assert "group_id" in r.json()["error_human"]
+    names = [m["name"] for m in client.get("/api/v2.0.0/missions", headers=AUTH).json()]
+    assert "no group" not in names, "a rejected mission must not be created"
+
+
 # --- queue entry lifecycle metadata ------------------------------------------
 
 

@@ -55,6 +55,10 @@ Merges exactly the writable fields; a real robot ignores the rest.
 - `GET /missions` — mission definitions seeded from the spec's examples.
   Match user-facing names to `guid`.
 - `GET /missions/{guid}` — one definition (404 if unknown).
+- `POST /missions {"name": ..., "group_id": ...}` — create a definition;
+  `group_id` is required (400 without it). On a real robot it must be an
+  existing mission-group guid (`GET /mission_groups` lists them); the
+  emulator accepts any string.
 - `POST /mission_queue {"mission_id": "<guid>"}` — enqueue; unknown
   mission → 400. Returns the queue entry with monotonic integer `id`.
 - `GET /mission_queue` — all entries with live `state`:
@@ -113,6 +117,18 @@ state never disagree.
   blocked path) freeze the mission simulation and release in place;
   resettable ones clear via the documented `PUT /status
   {"clear_error": true}`. `PUT` body: `{"faults": ["emergency_stop"]}`.
+- **`GET|PUT|DELETE /_emulator/battery`** — battery control for the current
+  session. `PUT` body, any subset: `{"percentage": 0-100, "charging":
+  true|false, "charge_rate": <percent per simulated second, default 0.5>,
+  "target": 0-100 (default 100)}`. While `charging`, the level climbs on
+  the sim clock and caps at `target` (a target below the current level
+  never discharges); drain still applies per executing second; pause,
+  manual control, and holding faults freeze the curve along with the rest
+  of the simulation. The `battery_critical` fault overrides everything.
+  `DELETE` restores the stock drain-only model. `GET` reports the live
+  percentage exactly as `/status` does. Without this surface battery only
+  ever drains — "charge to N%" is observable on the emulator only through
+  it.
 - **`X-MiR-Session: <id>`** header (1–64 chars `[A-Za-z0-9._-]`) — fully
   isolated state per session id, robots *and* fleet. Invalid format → 400.
 - **`X-MiR-Latency: <ms>`** header (cap 10000) — delays that one response;
