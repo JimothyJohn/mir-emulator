@@ -71,29 +71,36 @@ jobs:
       - name: Sync (locked)
         run: uv sync --locked --all-packages
 
-      - name: Boot the robot and fleet emulators
-        run: |
-          uv run mir-emulator --port 8080 &
-          uv run mir-emulator --fleet-version 1.5.0 --port 9090 &
-          for i in $(seq 1 30); do
-            curl -sf http://127.0.0.1:8080/ >/dev/null &&
-            curl -sf http://127.0.0.1:9090/ >/dev/null && exit 0
-            sleep 1
-          done
-          echo "emulators failed to boot" >&2; exit 1
-
-      - name: Run every scenario
+      - name: Run every scenario against fresh emulators
+        # Each scenario's acceptance bar is "passes unmodified against a
+        # fresh emulator" — so each one gets freshly booted robot + fleet
+        # processes (a long-lived pair would leak battery/queue/fault state
+        # between scripts), booted exactly as scenarios/README.md says:
+        # --mission-duration 2 (WCS stall detectors are tuned to it).
         env:
           MIR_URL: http://127.0.0.1:8080
           MIR_FLEET_URL: http://127.0.0.1:9090
         run: |
+          boot() {
+            uv run mir-emulator --port 8080 --mission-duration 2 & ROBOT_PID=$!
+            uv run mir-emulator --fleet-version 1.5.0 --port 9090 --mission-duration 2 & FLEET_PID=$!
+            for i in $(seq 1 30); do
+              curl -sf http://127.0.0.1:8080/ >/dev/null 2>&1 &&
+              curl -sf http://127.0.0.1:9090/ >/dev/null 2>&1 && return 0
+              sleep 1
+            done
+            echo "emulators failed to boot" >&2; return 1
+          }
           status=0
           for scenario in scenarios/*.py; do
             echo "::group::${scenario}"
+            boot || exit 1
             if ! uv run "${scenario}"; then
               echo "::error file=${scenario}::scenario failed"
               status=1
             fi
+            kill "${ROBOT_PID}" "${FLEET_PID}" 2>/dev/null || true
+            wait "${ROBOT_PID}" "${FLEET_PID}" 2>/dev/null || true
             echo "::endgroup::"
           done
           exit "${status}"
