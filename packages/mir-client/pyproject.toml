@@ -13,6 +13,7 @@ dependencies = [
 
 [project.scripts]
 mir-discover = "mir_client.cli:main"
+mir-report = "mir_client.report:main"
 
 [build-system]
 requires = ["hatchling"]
