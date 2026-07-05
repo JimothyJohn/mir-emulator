@@ -69,6 +69,10 @@ truth rather than hand-maintained.
 
 ## Shipped
 
+- 2026-07-04 — **Connect-time version discovery**: every surface (SDK
+  `connect()`/`detect_server()`, MCP `mir_server_info` + dispatcher-aware
+  URLs, console, skill) asks the target its kind and software version
+  instead of requiring a matching install.
 - 2026-07-04 — **Scenario record/replay**: `/_emulator/recorder` +
   `--replay`, byte-identical replays including timestamps.
 - 2026-07-04 — **Generated Python SDK**: `packages/mir-client`, drift-gated

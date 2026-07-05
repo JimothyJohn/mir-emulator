@@ -34,6 +34,29 @@ Work out where the robot is and whether it is real:
    Useful flags: `--mir-version 2.14.7`, `--port`, `--no-auth`,
    `--mission-duration 3` (seconds per mission — keep it short for tests).
 
+**Then ask the target what it is — never assume a version.** The path
+prefixes are constant (`/api/v2.0.0` robot, `/api/v1` fleet) across all MiR
+software versions, so "version" means the software version, and the target
+reports it. Probe in this order, first hit wins:
+
+```sh
+curl -s $BASE/healthz                 # {"kind":"dispatcher","versions":[...]} → multi-version
+                                      #   demo: pick a mount, $BASE/<v> or $BASE/fleet/<v>
+curl -s $BASE/                        # emulator index: "kind" + emulated_mir_version /
+                                      #   emulated_fleet_version
+curl -s -H "x-api-key: $KEY" $BASE/api/v1/system/version   # a Fleet (works on real ones)
+curl -s $BASE/swagger.json            # robot serving its spec → .info.version
+curl -s -o /dev/null -w '%{http_code}' $BASE/api/v2.0.0/status  # 200/401 → robot,
+                                      #   version unknown; treat as newest and say so
+```
+
+All probes are unauthenticated reads — safe against real hardware. From
+Python, `mir_client.connect(base_url)` / `detect_server(base_url)` run this
+same handshake and return a ready client; the MCP server's
+`mir_server_info` tool does it too. When versions differ structurally,
+`GET /_emulator/diff?from=<v>&to=<v>` (dispatcher) shows exactly what
+changed between two tracked versions.
+
 **Real vs emulated matters.** A MiR is a 100+ kg vehicle: against real
 hardware, confirm before any state-changing call (PUT/POST/DELETE), never
 inject faults or clear the mission queue unprompted, and say what you are
