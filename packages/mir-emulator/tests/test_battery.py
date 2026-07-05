@@ -55,9 +55,12 @@ def queue_mission(robot, headers=AUTH):
 
 
 def test_battery_surface_requires_auth(robot):
-    assert robot.get("/_emulator/battery").status_code == 401
-    assert robot.put("/_emulator/battery", json={"percentage": 50}).status_code == 401
-    assert robot.delete("/_emulator/battery").status_code == 401
+    responses = [
+        robot.get("/_emulator/battery"),
+        robot.put("/_emulator/battery", json={"percentage": 50}),
+        robot.delete("/_emulator/battery"),
+    ]
+    assert [r.status_code for r in responses] == [401, 401, 401]
 
 
 def test_untouched_surface_reports_the_stock_model(clock, robot):

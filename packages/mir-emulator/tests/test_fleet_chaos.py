@@ -46,8 +46,11 @@ def robot_detail(fleet, rid):
 
 def test_proxy_requires_fleet_auth(fleet):
     rid = robot_ids(fleet)[0]
-    assert fleet.get(f"/_emulator/robots/{rid}/faults").status_code == 401
-    assert fleet.put(f"/_emulator/robots/{rid}/battery", json={"percentage": 50}).status_code == 401
+    responses = [
+        fleet.get(f"/_emulator/robots/{rid}/faults"),
+        fleet.put(f"/_emulator/robots/{rid}/battery", json={"percentage": 50}),
+    ]
+    assert [r.status_code for r in responses] == [401, 401]
 
 
 def test_unknown_robot_and_surface_are_404(fleet):
