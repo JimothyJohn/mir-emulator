@@ -97,6 +97,10 @@ class RequestCtx:
     # fleet emulator forwards it on embedded robot calls so session isolation
     # composes across emulators.
     session_id: str = ""
+    # Validated X-MiR-Mission-Duration header (seconds), or None. Only
+    # POST /mission_queue consumes it: the new entry freezes this as its own
+    # duration, so one robot can carry a mix of long hauls and short hops.
+    duration_override: float | None = None
 
 
 # --- fault injection ---------------------------------------------------------
@@ -292,8 +296,11 @@ def _resume_sim(ctx: RequestCtx) -> None:
 
 def _windows(items: list[tuple[str, dict]], duration: float) -> list[tuple[dict, float, float]]:
     """(entry, start, finish) per queued mission — FIFO, one robot at a time.
-    An aborted entry's window collapses at its abort instant (a pending one
-    never runs at all), freeing the robot for whatever follows."""
+    Each entry runs for its own frozen duration (stored at enqueue time, so
+    an X-MiR-Mission-Duration override sticks to exactly that entry); the
+    parameter is the fallback for entries that predate the field. An aborted
+    entry's window collapses at its abort instant (a pending one never runs
+    at all), freeing the robot for whatever follows."""
     out: list[tuple[dict, float, float]] = []
     cursor: float | None = None
     for _id, entry in items:
@@ -301,7 +308,7 @@ def _windows(items: list[tuple[str, dict]], duration: float) -> list[tuple[dict,
         start = queued + MISSION_PENDING_LAG_S
         if cursor is not None:
             start = max(start, cursor)
-        finish = start + duration
+        finish = start + float(entry.get("_duration_s", duration))
         aborted_at = entry.get("_aborted_at")
         if aborted_at is not None:
             start = min(start, float(aborted_at))
@@ -690,6 +697,9 @@ async def post_mission_queue(ctx: RequestCtx) -> tuple[int, Any]:
     queue_id = ctx.state.next_int_id()
     entry["id"] = queue_id
     entry["_queued_at"] = _sim_clock(ctx)
+    entry["_duration_s"] = (
+        ctx.duration_override if ctx.duration_override is not None else ctx.mission_duration
+    )
     ctx.state.insert("/mission_queue", str(queue_id), entry)
     ctx.state.merge_singleton("/status", {"mission_queue_id": queue_id})
     clock = _sim_clock(ctx)
@@ -825,6 +835,11 @@ async def get_metrics(ctx: RequestCtx) -> tuple[int, Any, str]:
     snapshot = _mission_snapshot(ctx)
     clock = _sim_clock(ctx)
     boot = ctx.state.singleton("/boot", {"at": clock - UPTIME_START_S})
+    timeline = _timeline(ctx)
+    completed = sum(
+        1 for entry, _s, finish in timeline if entry.get("_aborted_at") is None and clock >= finish
+    )
+    aborted = sum(1 for entry, _s, _f in timeline if entry.get("_aborted_at") is not None)
     text = (
         "# TYPE mir_robot_battery_percent gauge\n"
         f"mir_robot_battery_percent {snapshot['battery_percentage']}\n"
@@ -832,6 +847,10 @@ async def get_metrics(ctx: RequestCtx) -> tuple[int, Any, str]:
         f"mir_robot_uptime_seconds_total {int(clock - boot['at'])}\n"
         "# TYPE mir_robot_distance_moved_meters counter\n"
         f"mir_robot_distance_moved_meters_total {snapshot['moved']}\n"
+        "# TYPE mir_robot_missions_completed counter\n"
+        f"mir_robot_missions_completed_total {completed}\n"
+        "# TYPE mir_robot_missions_aborted counter\n"
+        f"mir_robot_missions_aborted_total {aborted}\n"
         "# EOF\n"
     )
     return ctx.op.success_status, text, "text/plain; version=0.0.4"

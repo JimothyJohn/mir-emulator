@@ -61,6 +61,9 @@ Merges exactly the writable fields; a real robot ignores the rest.
   emulator accepts any string.
 - `POST /mission_queue {"mission_id": "<guid>"}` — enqueue; unknown
   mission → 400. Returns the queue entry with monotonic integer `id`.
+  Emulator-only: an `X-MiR-Mission-Duration: <seconds 0.1–3600>` header
+  freezes that duration onto the new entry (mixed long-haul/short-hop
+  workloads on one robot); battery drain and odometry scale with it.
 - `GET /mission_queue` — all entries with live `state`:
   Pending → Executing → Done on a simulated clock
   (`--mission-duration` seconds each, default 10). Aborted entries stay
@@ -74,7 +77,9 @@ Merges exactly the writable fields; a real robot ignores the rest.
   (POST also accepted). Out-of-range id → 404/400 per spec.
 
 ### Misc
-- `GET /metrics` — OpenMetrics text (battery, uptime, mission counters).
+- `GET /metrics` — OpenMetrics text: battery gauge, uptime and
+  distance-moved counters, and `mir_robot_missions_completed_total` /
+  `mir_robot_missions_aborted_total`.
 - `GET /swagger.json` (Swagger 2.0, verbatim) / `GET /openapi.json`
   (OpenAPI 3 conversion) — the machine-readable contract for this version.
 
@@ -149,6 +154,10 @@ state never disagree.
   ids) accordingly.
 - **`X-MiR-Latency: <ms>`** header (cap 10000) — delays that one response;
   for client timeout testing.
+- **`X-MiR-Mission-Duration: <seconds>`** header (0.1–3600) — on
+  `POST /mission_queue`, gives exactly that entry its own duration instead
+  of the global `--mission-duration`. Validated (400 out of range) on any
+  request; only enqueues consume it.
 - **`GET /_emulator/diff?from=<v>&to=<v>`** — structural API changes
   between two tracked versions (dispatcher only; cross-family refused).
 - **`/_emulator/ws/status`** — WebSocket push of `/status` documents.

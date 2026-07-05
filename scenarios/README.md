@@ -65,11 +65,11 @@ do not want pointed at a 100+ kg vehicle by accident.
 
 | Script | Based on | Deployment | API surface exercised |
 |---|---|---|---|
-| `whirlpool_lineside_loop.py` | [Whirlpool](https://mobile-industrial-robots.com/cases/whirlpool) | 3× MiR200 shuttle dryer doors on a 130 m loop; 2 active + 1 hot spare on the charger | `X-MiR-Session` multi-robot isolation, mission cycles, battery-driven spare rotation |
+| `whirlpool_lineside_loop.py` | [Whirlpool](https://mobile-industrial-robots.com/cases/whirlpool) | 3× MiR200 shuttle dryer doors on a 130 m loop; 2 active + 1 hot spare on the charger | `X-MiR-Session` multi-robot isolation, `X-MiR-Mission-Duration` (the loop outlasts the default), battery-driven spare rotation with real recharging via `/_emulator/battery` |
 | `sengkang_hospital_rounds.py` | [Sengkang General Hospital](https://mobile-industrial-robots.com/cases/sengkang-general-hospital) | 37× MiR250 run sterile-instrument, pharmacy, meal, and linen workflows | FIFO mission queue, `blocked_path` (active planner error, robot keeps trying), `emergency_stop` (unclearable via API — physical reset only) |
 | `stellantis_fleet_dispatch.py` | [Stellantis Caen](https://mobile-industrial-robots.com/cases/stellantis-caen) | 43 robots, ~1,000 missions/day, supervision program + MiR Fleet allocation | Fleet API: `x-api-key`, `GET /robots`, `POST /serial-order` round-robin, `GET /order/{id}` lifecycle |
 | `denso_jit_callbuttons.py` | [DENSO](https://mobile-industrial-robots.com/cases/denso) | Floor-level call buttons, REST integration, wireless door I/O; 500k+ missions | PLC registers as the integration bus: buttons in, door control out, dispatcher loop |
-| `fm_logistic_endurance.py` | [FM Logistic](https://mobile-industrial-robots.com/cases/fm-logistic) | One MiR200 ("Mirek"), 300 m recycling runs, 18.5 km/day, three shifts | Back-to-back cycles, `moved` odometry, battery drain, low-battery guard, `GET /metrics` |
+| `fm_logistic_endurance.py` | [FM Logistic](https://mobile-industrial-robots.com/cases/fm-logistic) | One MiR200 ("Mirek"), 300 m recycling runs, 18.5 km/day, three shifts | Back-to-back cycles with `X-MiR-Mission-Duration` (loaded haul vs empty return), `moved` odometry, battery drain, low-battery guard, `GET /metrics` incl. mission counters |
 | `novo_nordisk_crowded_route.py` | [Novo Nordisk China](https://mobile-industrial-robots.com/cases/novo-nordisk-china) | 5× MiR500 through the plant's busiest 100 m; people and forklifts everywhere | `blocked_path` mid-mission, error read-back and clearing, `X-MiR-Latency` timeout/retry drill |
 | `visteon_ondemand_carts.py` | [Visteon](https://mobile-industrial-robots.com/cases/visteon) | 4× MiR200, on-demand tablet requests, ROEQ click-in carts, 10k units/day | Mission authoring (`POST /missions` + action chains), request bursts, `DELETE /mission_queue/{id}` cancellation |
 | `dhl_parcel_hub_wcs.py` | [DHL's AMR pattern](https://www.dhl.com/us-en/home/innovation-in-logistics/logistics-trend-radar/amr-logistics.html) (no MiR-official case study) | 12 AMRs behind a warehouse control system: 120 orders in 3 waves, battery rotation, mid-shift e-stop and mission failure | 12 concurrent sessions at ~50 req/s, least-loaded dispatch, `/_emulator/battery` charge rotation, quarantine + re-dispatch, exactly-once order ledger |
@@ -91,8 +91,9 @@ do not want pointed at a 100+ kg vehicle by accident.
 * `DELETE /mission_queue/{id}` removes the entry entirely — a later `GET`
   on it returns 404 rather than an `Aborted` record.
 * Mission definitions and actions persist per session, but actions are not
-  semantically simulated: `hook_status.cart_attached` stays `False` and
-  every mission runs for `--mission-duration` seconds regardless of its
-  action chain. On real hardware, valid `action_type`s come from
+  semantically simulated: `hook_status.cart_attached` stays `False` and a
+  mission's runtime comes from `--mission-duration` (or the emulator-only
+  `X-MiR-Mission-Duration` header on that enqueue), never from its action
+  chain. On real hardware, valid `action_type`s come from
   `GET /actions` and positions from `GET /positions` — don't free-type them
   outside the emulator.

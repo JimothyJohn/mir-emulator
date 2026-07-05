@@ -64,6 +64,12 @@ SESSION_HEADER = "x-mir-session"
 # Capped so a hostile header can't hold a worker hostage.
 LATENCY_HEADER = "x-mir-latency"
 MAX_LATENCY_MS = 10_000.0
+# Emulator-only mission shaping: X-MiR-Mission-Duration: <seconds> on
+# POST /mission_queue freezes that duration onto the new entry, so one
+# robot can mix long hauls and short hops (real routes are not uniform).
+DURATION_HEADER = "x-mir-mission-duration"
+MIN_MISSION_DURATION_S = 0.1
+MAX_MISSION_DURATION_S = 3600.0
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 MAX_SESSIONS = 256
 
@@ -261,6 +267,23 @@ class Emulator:
                 _error_body(400, "Invalid X-MiR-Session: 1-64 chars from [A-Za-z0-9._-]"),
             )
 
+        duration_override: float | None = None
+        raw_duration = request.headers.get(DURATION_HEADER)
+        if raw_duration is not None:
+            try:
+                duration_override = float(raw_duration)
+            except ValueError:
+                duration_override = math.nan
+            if not (MIN_MISSION_DURATION_S <= duration_override <= MAX_MISSION_DURATION_S):
+                return _respond(
+                    400,
+                    _error_body(
+                        400,
+                        "Invalid X-MiR-Mission-Duration: seconds in "
+                        f"[{MIN_MISSION_DURATION_S}, {MAX_MISSION_DURATION_S}]",
+                    ),
+                )
+
         body: Any = None
         if op.method in ("POST", "PUT", "PATCH"):
             raw = await request.body()
@@ -288,6 +311,7 @@ class Emulator:
             mission_duration=self.mission_duration,
             seed_collection=lambda key, path: self._seed_collection(state, key, path),
             session_id=session_id,
+            duration_override=duration_override,
         )
 
         override = self._override_for(op)
@@ -499,6 +523,11 @@ def create_app(
                 "latency": (
                     "Send X-MiR-Latency: <ms> (cap 10000) to delay any response; "
                     "or start with --latency-ms for a baseline"
+                ),
+                "mission_duration": (
+                    "Send X-MiR-Mission-Duration: <seconds 0.1-3600> on "
+                    "POST /mission_queue to give that entry its own duration "
+                    "(default: --mission-duration)"
                 ),
                 "faults": (
                     "GET/PUT/DELETE /_emulator/faults — emulator-only fault injection "

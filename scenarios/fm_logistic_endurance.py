@@ -17,9 +17,12 @@ stop for a charge.
 
 What this exercises on the emulator:
   * back-to-back mission cycles on one robot
+  * X-MiR-Mission-Duration — the loaded 300 m haul runs 3x longer than the
+    empty return, in the same FIFO queue; odometry and drain scale with it
   * `moved` odometry and `battery_percentage` deltas per cycle
   * a low-battery guard (stop dispatching below a threshold)
-  * GET /metrics — the OpenMetrics endpoint a Prometheus stack would scrape
+  * GET /metrics — the OpenMetrics endpoint a Prometheus stack would
+    scrape, including the mission completed/aborted counters
 
 Run:
     uv run mir-emulator --mission-duration 2 &
@@ -37,6 +40,8 @@ MIR_URL = os.environ.get("MIR_URL", "http://127.0.0.1:8080")
 API = "/api/v2.0.0"
 CYCLES = int(os.environ.get("CYCLES", "5"))
 MIN_BATTERY = 20.0  # % — hold dispatch below this, like Fleet would
+HAUL_S = "6"  # loaded 300 m run (X-MiR-Mission-Duration, emulator-only)
+RETURN_S = "2"  # empty run back to the co-packing line
 
 
 def client(session: str) -> httpx.Client:
@@ -85,8 +90,16 @@ def main() -> None:
         if level < MIN_BATTERY:
             print(f"battery {level}% < {MIN_BATTERY}% — holding dispatch, send it to charge")
             break
+        # Loaded hauls outlast empty returns — alternate them so the same
+        # FIFO queue carries two different per-mission durations.
+        loaded = cycle % 2 == 1
+        duration = HAUL_S if loaded else RETURN_S
         t0 = time.monotonic()
-        qid = c.post(f"{API}/mission_queue", json={"mission_id": mission}).json()["id"]
+        qid = c.post(
+            f"{API}/mission_queue",
+            json={"mission_id": mission},
+            headers={"X-MiR-Mission-Duration": duration},
+        ).json()["id"]
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             if c.get(f"{API}/mission_queue/{qid}").json()["state"] == "Done":
@@ -99,8 +112,9 @@ def main() -> None:
         drained = before["battery_percentage"] - after["battery_percentage"]
         total_m += meters
         total_pct += drained
+        leg = "loaded haul " if loaded else "empty return"
         print(
-            f"cycle {cycle}: {meters:6.1f} m in {time.monotonic() - t0:4.1f}s, "
+            f"cycle {cycle} ({leg}): {meters:6.1f} m in {time.monotonic() - t0:4.1f}s, "
             f"battery -{drained:.2f}% (now {after['battery_percentage']:.2f}%)"
         )
 

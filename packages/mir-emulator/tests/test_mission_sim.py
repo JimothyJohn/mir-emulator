@@ -302,6 +302,62 @@ def test_created_mission_can_be_enqueued(clock, client):
     assert entry["mission_id"] == created.json()["guid"]
 
 
+def test_per_mission_duration_header_freezes_onto_that_entry(clock, client):
+    # A 5s haul via X-MiR-Mission-Duration, then a stock 10s mission: the
+    # FIFO timeline honors each entry's own duration.
+    short = enqueue(client, headers={**AUTH, "X-MiR-Mission-Duration": "5"})
+    stock = enqueue(client)
+    clock.tick(5.5)  # 1s lag + 5s: the short entry is in its last moments
+    assert q_state(client, short["id"]) == "Executing"
+    clock.tick(1.0)
+    assert q_state(client, short["id"]) == "Done"
+    assert q_state(client, stock["id"]) == "Executing", "stock mission started at 6s"
+    clock.tick(9.0)
+    assert q_state(client, stock["id"]) == "Executing", "stock entry still runs its full 10s"
+    clock.tick(1.0)
+    assert q_state(client, stock["id"]) == "Done"
+
+
+def test_per_mission_duration_scales_battery_and_odometry(clock, client):
+    moved_before = status(client)["moved"]
+    enqueue(client, headers={**AUTH, "X-MiR-Mission-Duration": "20"})
+    clock.tick(21.5)  # lag + 20s executing
+    doc = status(client)
+    assert doc["battery_percentage"] == pytest.approx(92.5 - 0.05 * 20.0)
+    assert doc["moved"] - moved_before == pytest.approx(0.5 * 20.0)
+
+
+def test_invalid_mission_duration_header_is_400(clock, client):
+    mission = mission_guid(client)
+    for bad in ("abc", "0", "-5", "3601", "nan", "inf", ""):
+        r = client.post(
+            "/api/v2.0.0/mission_queue",
+            json={"mission_id": mission},
+            headers={**AUTH, "X-MiR-Mission-Duration": bad},
+        )
+        assert r.status_code == 400, bad
+        assert "X-MiR-Mission-Duration" in r.json()["error_human"]
+    assert client.get("/api/v2.0.0/mission_queue", headers=AUTH).json() == []
+    # A valid header on a read is validated but has no effect.
+    r = client.get("/api/v2.0.0/status", headers={**AUTH, "X-MiR-Mission-Duration": "5"})
+    assert r.status_code == 200
+
+
+def test_metrics_count_completed_and_aborted_missions(clock, client):
+    enqueue(client)
+    enqueue(client)
+    clock.tick(11.5)  # first Done, second Executing
+    metrics = client.get("/api/v2.0.0/metrics", headers=AUTH).text
+    assert "mir_robot_missions_completed_total 1" in metrics
+    assert "mir_robot_missions_aborted_total 0" in metrics
+
+    client.put("/_emulator/faults", headers=AUTH, json={"faults": ["mission_failure"]})
+    client.put("/api/v2.0.0/status", headers=AUTH, json={"clear_error": True})
+    metrics = client.get("/api/v2.0.0/metrics", headers=AUTH).text
+    assert "mir_robot_missions_completed_total 1" in metrics
+    assert "mir_robot_missions_aborted_total 1" in metrics
+
+
 def test_create_mission_without_group_id_is_rejected_with_the_missing_field(clock, client):
     # Real robots require group_id on PostMissions; the 400 must name it so
     # a client knows what to add rather than guessing at the body schema.

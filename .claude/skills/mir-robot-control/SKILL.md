@@ -42,7 +42,9 @@ Work out where the robot is and whether it is real:
    uv run mir-emulator --fleet-version 1.5.0 &    # a Fleet with embedded robots
    ```
    Useful flags: `--mir-version 2.14.7`, `--port`, `--no-auth`,
-   `--mission-duration 3` (seconds per mission — keep it short for tests).
+   `--mission-duration 3` (seconds per mission — keep it short for tests;
+   an `X-MiR-Mission-Duration` header on `POST /mission_queue` overrides
+   it per entry).
 
 **Then ask the target what it is — never assume a version.** The path
 prefixes are constant (`/api/v2.0.0` robot, `/api/v1` fleet) across all MiR
