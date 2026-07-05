@@ -17,6 +17,7 @@ drains, and PUT /status {"state_id": 4} pauses the simulation clock
 
 from __future__ import annotations
 
+import itertools
 import math
 import time
 from collections.abc import Callable
@@ -615,6 +616,106 @@ def _declared_only(ctx: RequestCtx, doc: dict) -> dict:
     return {key: value for key, value in doc.items() if key in props}
 
 
+def _mission_waypoints(ctx: RequestCtx, mission_id: Any) -> list[dict]:
+    """The mission's move-action waypoints, in priority order.
+
+    Real MiR missions are lists of actions; a move action's parameters
+    carry {"id": "position", "value": <position-guid>}. Actions live in the
+    generic /missions/{mission_id}/actions collection, positions in
+    /positions — only references that resolve to a stored position with
+    coordinates count (seeded placeholders don't)."""
+    if not mission_id:
+        return []
+    actions = ctx.state.collection(f"/missions/{{mission_id}}/actions?mission_id={mission_id}")
+    positions: dict[str, dict] = {}
+    for stored in ctx.state.collection("/positions").values():
+        if not stored.get("guid"):
+            continue
+        # coordinates live on the client's stored request (the list schema
+        # carries only guid/map/name/type_id)
+        request = stored.get("_request") if isinstance(stored.get("_request"), dict) else {}
+        positions[str(stored["guid"])] = {**stored, **request}
+    waypoints: list[dict] = []
+    for action in sorted(actions.values(), key=lambda a: float(a.get("priority") or 0)):
+        # the response schema types parameters as a string (a real MiR spec
+        # quirk), so the client's actual array lives on the stored request
+        request = action.get("_request") if isinstance(action.get("_request"), dict) else {}
+        parameters = request.get("parameters")
+        if not isinstance(parameters, list):
+            parameters = action.get("parameters")
+        for parameter in parameters if isinstance(parameters, list) else []:
+            if not (isinstance(parameter, dict) and parameter.get("id") == "position"):
+                continue
+            target = positions.get(str(parameter.get("value")))
+            if isinstance(target, dict) and "pos_x" in target and "pos_y" in target:
+                waypoints.append(target)
+    return waypoints
+
+
+def _along_polyline(
+    points: list[tuple[float, float]], fraction: float
+) -> tuple[float, float, float]:
+    """(x, y, heading°) at *fraction* of the polyline's total length."""
+    lengths = [math.dist(p0, p1) for p0, p1 in itertools.pairwise(points)]
+    total = sum(lengths)
+    if total <= 0:
+        x, y = points[-1]
+        return x, y, 0.0
+    target = max(0.0, min(1.0, fraction)) * total
+    covered = 0.0
+    for (p0, p1), segment in zip(itertools.pairwise(points), lengths, strict=True):
+        (x0, y0), (x1, y1) = p0, p1
+        if segment and target <= covered + segment:
+            t = (target - covered) / segment
+            heading = math.degrees(math.atan2(y1 - y0, x1 - x0))
+            return x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, heading
+        covered += segment
+    x, y = points[-1]
+    return x, y, 0.0
+
+
+def _waypoint_pose(
+    ctx: RequestCtx, timeline: list[tuple[dict, float, float]], clock: float
+) -> dict | None:
+    """Pose from mission waypoints, or None when the patrol model applies.
+
+    Executing a waypoint mission interpolates along anchor → waypoints,
+    where the anchor is the last finished waypoint mission's final waypoint
+    (consecutive missions chain) or the relocalized/home position. Idle
+    after a waypoint mission rests at its final waypoint."""
+    overlay = ctx.state.singleton("/status", {})
+    user_pos = overlay.get("position")
+    if not isinstance(user_pos, dict):
+        user_pos = {}
+    anchor = (
+        float(user_pos.get("x", POSITION_HOME_X)),
+        float(user_pos.get("y", POSITION_HOME_Y)),
+    )
+    rest: dict | None = None
+    for entry, start, finish in timeline:
+        if finish <= clock:
+            waypoints = _mission_waypoints(ctx, entry.get("mission_id"))
+            if waypoints:
+                rest = waypoints[-1]
+        elif start <= clock < finish:
+            waypoints = _mission_waypoints(ctx, entry.get("mission_id"))
+            if not waypoints:
+                return None  # executing a plain mission: patrol model
+            if rest is not None:
+                anchor = (float(rest["pos_x"]), float(rest["pos_y"]))
+            points = [anchor] + [(float(w["pos_x"]), float(w["pos_y"])) for w in waypoints]
+            fraction = (clock - start) / (finish - start) if finish > start else 1.0
+            x, y, heading = _along_polyline(points, fraction)
+            return {"x": round(x, 2), "y": round(y, 2), "orientation": round(heading, 1)}
+    if rest is not None:
+        return {
+            "x": round(float(rest["pos_x"]), 2),
+            "y": round(float(rest["pos_y"]), 2),
+            "orientation": float(rest.get("orientation", 0.0)),
+        }
+    return None
+
+
 def _mission_snapshot(ctx: RequestCtx) -> dict:
     """Sim-derived /status fields: state, battery, odometry, position."""
     clock = _sim_clock(ctx)
@@ -629,6 +730,7 @@ def _mission_snapshot(ctx: RequestCtx) -> dict:
         "battery_time_remaining": int(battery * BATTERY_SECONDS_PER_PERCENT),
         "moved": round(1204.5 + distance, 2),
         "_distance_m": distance,
+        "_waypoint_pose": _waypoint_pose(ctx, timeline, clock),
     }
 
     hold_id = 11 if _sim(ctx).get("hold") == "manual" else 4
@@ -667,6 +769,7 @@ def _status_doc(ctx: RequestCtx) -> dict:
 
     snapshot = _mission_snapshot(ctx)
     distance = snapshot.pop("_distance_m")
+    waypoint_pose = snapshot.pop("_waypoint_pose")
     for key, value in snapshot.items():
         if key in doc:
             doc[key] = value
@@ -674,7 +777,13 @@ def _status_doc(ctx: RequestCtx) -> dict:
         clock = _sim_clock(ctx)
         boot = ctx.state.singleton("/boot", {"at": clock - UPTIME_START_S})
         doc["uptime"] = int(clock - boot["at"])
-    if isinstance(doc.get("position"), dict):
+    if isinstance(doc.get("position"), dict) and waypoint_pose is not None:
+        # Mission move-actions define the path: the pose rides the waypoint
+        # polyline (or rests at the last mission's final waypoint).
+        position = dict(doc["position"])
+        position.update(waypoint_pose)
+        doc["position"] = position
+    elif isinstance(doc.get("position"), dict):
         position = dict(doc["position"])
         # Patrol a straight out-and-back segment of the loop. A position set
         # via PUT /status relocalizes the robot: it becomes the loop's home

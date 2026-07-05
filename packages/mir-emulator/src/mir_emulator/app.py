@@ -387,7 +387,12 @@ class Emulator:
 
         if op.method == "GET" and not is_item and (is_array_response or has_item_sibling):
             self._seed_collection(ctx.state, key, collection_path)
-            return op.success_status, list(ctx.state.collection(key).values())
+            # underscore keys are emulator-internal (e.g. the verbatim client
+            # body stashed at create time) — never part of the API surface
+            return op.success_status, [
+                {k: v for k, v in element.items() if not k.startswith("_")}
+                for element in ctx.state.collection(key).values()
+            ]
 
         if op.method == "GET" and is_item:
             self._seed_collection(ctx.state, key, collection_path)
@@ -402,7 +407,7 @@ class Emulator:
                 if "guid" in stored:
                     full.setdefault("guid", stored["guid"])
                 return op.success_status, full
-            return op.success_status, stored
+            return op.success_status, {k: v for k, v in stored.items() if not k.startswith("_")}
 
         if op.method == "GET":
             # Singleton document (e.g. /system/info).
@@ -442,7 +447,13 @@ class Emulator:
                 self._assign_ids(element, new_id)
                 stored = element
             else:
-                stored = item
+                stored = dict(item)
+            if isinstance(ctx.body, dict):
+                # Keep the client's body verbatim: response/list schemas may
+                # type fields differently (parameters: array in, string out),
+                # but behaviors (e.g. waypoint paths from move actions) need
+                # what was actually sent. Never emitted — see the GET paths.
+                stored["_request"] = dict(ctx.body)
             ctx.state.insert(key, str(item.get("guid", new_id)), stored)
             return op.success_status, item
 
