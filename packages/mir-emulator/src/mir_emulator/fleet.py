@@ -662,6 +662,11 @@ def create_fleet_app(
                     "emulator-only proxy to an embedded robot's fault injection and "
                     "battery control (fleet auth; session forwarded)"
                 ),
+                "clock": (
+                    "GET/PUT/DELETE /_emulator/clock — emulator-only time scaling "
+                    '(PUT {"scale": N} runs simulated time Nx wall speed, fleet and '
+                    "embedded robots together; DELETE restores 1.0)"
+                ),
                 "specs": {"openapi3": "/openapi.json", "swagger2": None},
                 "official_docs": docs_url,
                 "source": {
@@ -706,6 +711,35 @@ def create_fleet_app(
         doc = scenario_doc(state, version=version, family="fleet")
         doc["replay"] = "save this document; mir-emulator --replay <file> re-runs it"
         return JSONResponse(doc)
+
+    async def clock_endpoint(request: Request) -> JSONResponse:
+        """Same time scaling as the robot apps (/_emulator/clock). The clock
+        is process-wide, so the fleet and its embedded robots speed up
+        together — fleet auth outside, no session semantics."""
+        import json as _json
+
+        from mir_emulator.app import MAX_BODY_BYTES
+        from mir_emulator.behaviors import clock_doc, reset_time_scale, set_time_scale
+
+        def error(status: int, human: str) -> JSONResponse:
+            return JSONResponse(_error_body(status, human), status_code=status)
+
+        if not emulator._authorized(request):
+            return error(401, "Not authorized")
+        if request.method == "DELETE":
+            reset_time_scale()
+        elif request.method == "PUT":
+            raw = await request.body()
+            if len(raw) > MAX_BODY_BYTES:
+                return error(400, "Payload too large")
+            try:
+                body = _json.loads(raw) if raw else {}
+            except ValueError:
+                return error(400, "Invalid JSON")
+            problem = set_time_scale(body)
+            if problem is not None:
+                return error(400, problem)
+        return JSONResponse(clock_doc())
 
     async def robot_emulator_proxy(request: Request) -> JSONResponse:
         """Emulator-only chaos proxy (/_emulator/robots/{robot-id}/{surface}):
@@ -761,6 +795,7 @@ def create_fleet_app(
             Route("/swagger.json", spec_json),  # parity with the robot apps
             *extra_doc_routes,
             Route("/_emulator/recorder", recorder_endpoint, methods=["GET", "PUT", "DELETE"]),
+            Route("/_emulator/clock", clock_endpoint, methods=["GET", "PUT", "DELETE"]),
             Route(
                 "/_emulator/robots/{robot_id}/{surface}",
                 robot_emulator_proxy,

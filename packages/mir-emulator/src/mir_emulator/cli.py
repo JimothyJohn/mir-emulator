@@ -64,6 +64,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Seconds a queued mission spends Executing before it is Done (default: 10)",
     )
     parser.add_argument(
+        "--time-scale",
+        type=float,
+        default=1.0,
+        metavar="N",
+        help=(
+            "Run simulated time Nx faster than wall time; missions and battery "
+            "curves keep realistic simulated durations and timestamps "
+            "(runtime control: PUT /_emulator/clock)"
+        ),
+    )
+    parser.add_argument(
         "--replay",
         default=None,
         metavar="SCENARIO.json",
@@ -93,7 +104,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
 
     if args.replay:
         import json
@@ -137,6 +149,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     import uvicorn
+
+    if args.time_scale != 1.0:
+        from mir_emulator import behaviors
+
+        problem = behaviors.set_time_scale({"scale": args.time_scale})
+        if problem is not None:
+            parser.error(problem)
+        print(f"time scale: {args.time_scale}x (simulated seconds per wall second)")
 
     if args.fleet_version:
         from mir_emulator.fleet import create_fleet_app

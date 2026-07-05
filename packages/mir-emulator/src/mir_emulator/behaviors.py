@@ -17,6 +17,7 @@ drains, and PUT /status {"state_id": 4} pauses the simulation clock
 
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -490,6 +491,65 @@ def battery_doc(state: StateStore, mission_duration: float = MISSION_DURATION_S)
         "target": float(battery.get("target_pct", CHARGE_TARGET_DEFAULT)),
         "drain_per_s": BATTERY_DRAIN_PER_S,
         "usage": _BATTERY_USAGE,
+    }
+
+
+# --- time scaling --------------------------------------------------------------
+# Speeding up a test by shortening durations (--mission-duration 3, hot
+# charge_rate) makes the emitted timestamps lie: a "two minute" mission shows
+# a three-second window. Scaling the clock instead keeps every simulated
+# duration — mission windows, battery curves, `ordered/started/finished` —
+# realistic while the wall wait shrinks. Process-wide (one clock, every
+# session and embedded fleet robot); anchored at the current simulated
+# instant on every change, because rewinding would flip Done missions back
+# to Executing.
+TIME_SCALE_MIN = 0.001  # slow motion is allowed; zero and negatives are not
+TIME_SCALE_MAX = 3600.0  # an hour of simulation per wall second is plenty
+_TIME_SCALE_USAGE = (
+    f'Body must be {{"scale": <simulated seconds per wall second, '
+    f"{TIME_SCALE_MIN}-{TIME_SCALE_MAX}>}}"
+)
+_time_scale: float = 1.0
+
+
+def set_time_scale(body: Any) -> str | None:
+    """Apply a PUT /_emulator/clock body; returns an error string or None."""
+    if not isinstance(body, dict):
+        return _TIME_SCALE_USAGE
+    scale = body.get("scale")
+    if isinstance(scale, bool) or not isinstance(scale, int | float):
+        return _TIME_SCALE_USAGE
+    if not math.isfinite(scale) or not (TIME_SCALE_MIN <= scale <= TIME_SCALE_MAX):
+        return _TIME_SCALE_USAGE
+
+    global _now, _time_scale
+    anchor_sim = _now()
+    anchor_wall = _wall_clock()
+
+    def scaled_clock() -> float:
+        return anchor_sim + (_wall_clock() - anchor_wall) * scale
+
+    _now = scaled_clock
+    _time_scale = float(scale)
+    return None
+
+
+def reset_time_scale() -> None:
+    """Back to real time (scale 1.0). Simulated time keeps whatever offset it
+    accumulated — continuity over wall-clock agreement."""
+    set_time_scale({"scale": 1.0})
+
+
+def clock_doc() -> dict:
+    return {
+        "scale": _time_scale,
+        "sim_time": _iso(_now()),
+        "wall_time": _iso(_wall_clock()),
+        "usage": (
+            'PUT {"scale": N} runs simulated time at N seconds per wall second, '
+            "process-wide (all sessions, all embedded robots); DELETE restores "
+            "1.0. Changing scale never rewinds simulated time."
+        ),
     }
 
 

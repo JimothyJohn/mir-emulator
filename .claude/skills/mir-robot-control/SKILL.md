@@ -42,9 +42,12 @@ Work out where the robot is and whether it is real:
    uv run mir-emulator --fleet-version 1.5.0 &    # a Fleet with embedded robots
    ```
    Useful flags: `--mir-version 2.14.7`, `--port`, `--no-auth`,
-   `--mission-duration 3` (seconds per mission — keep it short for tests;
-   an `X-MiR-Mission-Duration` header on `POST /mission_queue` overrides
-   it per entry).
+   `--time-scale 60` (simulated time runs 60x wall speed — missions and
+   charging keep realistic durations and timestamps but finish in seconds;
+   runtime control via `PUT /_emulator/clock {"scale": N}`, prefer this
+   over the older shortcuts below when timestamps matter),
+   `--mission-duration 3` (seconds per mission — an `X-MiR-Mission-Duration`
+   header on `POST /mission_queue` overrides it per entry).
 
 **Then ask the target what it is — never assume a version.** The path
 prefixes are constant (`/api/v2.0.0` robot, `/api/v1` fleet) across all MiR
@@ -139,7 +142,8 @@ version diff): read [references/endpoints.md](references/endpoints.md).
   If a named mission doesn't exist, list what does and ask.
 - Waiting for a mission: poll `GET /mission_queue/{id}` until `state` is
   `Done` (or `Aborted`); on the emulator each mission takes
-  `--mission-duration` seconds (default 10).
+  `--mission-duration` seconds (default 10) — divided by the `/_emulator/clock`
+  scale, if one is set.
 
 ## Multi-robot / test isolation (emulator only)
 

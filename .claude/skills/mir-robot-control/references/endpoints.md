@@ -146,6 +146,15 @@ state never disagree.
   percentage exactly as `/status` does. Without this surface battery only
   ever drains — "charge to N%" is observable on the emulator only through
   it.
+- **`GET|PUT|DELETE /_emulator/clock`** — time scaling, *process-wide* (all
+  sessions and embedded fleet robots share the one clock). `PUT` body:
+  `{"scale": <simulated seconds per wall second, 0.001–3600>}`. Prefer this
+  over short `--mission-duration` / hot `charge_rate` when timestamps should
+  stay believable: a 120 s mission still reports `started`/`finished` 120
+  simulated seconds apart, but at scale 60 it *runs* in 2 wall seconds;
+  battery curves scale identically. Changing scale never rewinds simulated
+  time (mission history stays consistent), so `DELETE` (back to 1.0) keeps
+  whatever offset accumulated. Startup baseline: `--time-scale N`.
 - **`X-MiR-Session: <id>`** header (1–64 chars `[A-Za-z0-9._-]`) — fully
   isolated state per session id, robots *and* fleet. Invalid format → 400.
   Sessions are LRU-capped at 256 per emulator process: the 257th distinct

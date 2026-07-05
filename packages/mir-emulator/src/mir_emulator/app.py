@@ -40,11 +40,14 @@ from mir_emulator.behaviors import (
     OVERRIDES,
     RequestCtx,
     battery_doc,
+    clock_doc,
     faults_doc,
     get_status,
     reset_battery,
+    reset_time_scale,
     set_battery,
     set_faults,
+    set_time_scale,
 )
 from mir_emulator.examples import example_from_schema, overlay_compatible
 from mir_emulator.openapi3 import to_openapi3
@@ -551,6 +554,11 @@ def create_app(
                     "(set percentage, run a charging curve via charging/charge_rate/target; "
                     "DELETE restores the stock drain model)"
                 ),
+                "clock": (
+                    "GET/PUT/DELETE /_emulator/clock — emulator-only time scaling "
+                    '(PUT {"scale": N} runs simulated time Nx wall speed with realistic '
+                    "durations and timestamps, process-wide; DELETE restores 1.0)"
+                ),
                 "source": {
                     "primary_source": registry.primary_source(),
                     "provenance": entry["provenance"],
@@ -624,6 +632,28 @@ def create_app(
             if error is not None:
                 return _respond(400, _error_body(400, error))
         return _respond(200, battery_doc(state, emulator.mission_duration))
+
+    async def clock_endpoint(request: Request) -> Response:
+        """Emulator-only time scaling (/_emulator/clock): simulated time runs
+        Nx wall speed while mission windows, battery curves and timestamps
+        keep their realistic simulated lengths. Process-wide — one clock for
+        every session — so no X-MiR-Session handling here."""
+        if not emulator._authorized(request):
+            return _respond(401, _error_body(401, "Not authorized"))
+        if request.method == "DELETE":
+            reset_time_scale()
+        elif request.method == "PUT":
+            raw = await request.body()
+            if len(raw) > MAX_BODY_BYTES:
+                return _respond(400, _error_body(400, "Payload too large"))
+            try:
+                body = json.loads(raw) if raw else {}
+            except ValueError:
+                return _respond(400, _error_body(400, "Invalid JSON"))
+            error = set_time_scale(body)
+            if error is not None:
+                return _respond(400, _error_body(400, error))
+        return _respond(200, clock_doc())
 
     async def status_websocket(websocket: WebSocket) -> None:
         """Emulator-only status push (/_emulator/ws/status): the /status
@@ -724,6 +754,7 @@ def create_app(
             Route("/openapi.json", openapi_json),
             Route("/_emulator/faults", faults_endpoint, methods=["GET", "PUT", "DELETE"]),
             Route("/_emulator/battery", battery_endpoint, methods=["GET", "PUT", "DELETE"]),
+            Route("/_emulator/clock", clock_endpoint, methods=["GET", "PUT", "DELETE"]),
             Route("/_emulator/recorder", recorder_endpoint, methods=["GET", "PUT", "DELETE"]),
             WebSocketRoute("/_emulator/ws/status", status_websocket),
             *routes,
