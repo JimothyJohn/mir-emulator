@@ -68,34 +68,3 @@ truth rather than hand-maintained.
       files, resurrect ours from the scraped registry.
 
 ## Shipped
-
-- 2026-07-04 — **Network robot discovery**: `mir_client.scan_network()` +
-  `mir-discover` CLI, MCP `mir_discover_robots`, and a console localhost
-  scan — find MiR robots by IP (subnet sweep on ports 80/8080 + the
-  identification handshake) without knowing an address. Deadline-bounded
-  and adversarially tested (hung sockets, garbage bytes, non-MiR servers).
-- 2026-07-04 — **Connect-time version discovery**: every surface (SDK
-  `connect()`/`detect_server()`, MCP `mir_server_info` + dispatcher-aware
-  URLs, console, skill) asks the target its kind and software version
-  instead of requiring a matching install.
-- 2026-07-04 — **Scenario record/replay**: `/_emulator/recorder` +
-  `--replay`, byte-identical replays including timestamps.
-- 2026-07-04 — **Generated Python SDK**: `packages/mir-client`, drift-gated
-  in CI, contract-tested against the emulator.
-- 2026-07-04 — **MiR Fleet API emulation**: 1.5.0/1.4.2/1.3.1, all three
-  official documents per version, embedded robots, session isolation.
-- 2026-07-04 — **WebSocket status push**: `/_emulator/ws/status`
-  (local/container; Lambda demo can't hold sockets).
-- 2026-07-04 — **Latency shaping**: `X-MiR-Latency` header + `--latency-ms`.
-- 2026-07-04 — **Fault injection**: `/_emulator/faults`, holding and
-  resettable faults, official end-state enums, mission_failure.
-- 2026-07-04 — **Version-diff surface**: `/_emulator/diff` + console
-  compare view, 3.5.4→3.5.6 structurally identical invariant.
-- **Mission lifecycle realism**: Pending → Executing → Done with spec-shaped
-  timestamps, interpolated motion, battery drain.
-- **Multi-language console samples**: cURL/Python/JS/Go/Rust, runnable
-  unmodified, persistent language choice.
-- **Version tracking**: newest 4 minor lines per major (robot) + fleet
-  versions, kept current by the weekly scrape.
-- 2026-07-04 — ~~Stripe-style API reference~~: shipped, then deliberately
-  removed — official MiR docs are linked instead; see contingency above.
