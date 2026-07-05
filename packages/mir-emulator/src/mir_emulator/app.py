@@ -39,6 +39,7 @@ from mir_emulator.behaviors import (
     MISSION_DURATION_S,
     OVERRIDES,
     RequestCtx,
+    active_faults,
     battery_doc,
     clock_doc,
     faults_doc,
@@ -83,6 +84,26 @@ MAX_VALIDATION_ERRORS = 16
 
 def _error_body(status: int, human: str) -> dict:
     return {"error_code": str(status), "error_human": human}
+
+
+class _DroppedConnection(Response):
+    """Sever the connection mid-response: declare a body length, send one
+    byte, then abandon the exchange. A real HTTP server (uvicorn) aborts the
+    connection, so the client observes the transport failure a rebooting
+    robot produces — never an HTTP status. In-process ASGI test clients
+    surface the abandonment as a server-side error instead."""
+
+    async def __call__(self, scope, receive, send) -> None:
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [(b"content-type", b"application/json"), (b"content-length", b"1024")],
+            }
+        )
+        await send({"type": "http.response.body", "body": b"{", "more_body": True})
+        # Returning without completing the declared body makes the server
+        # tear the connection down.
 
 
 def _respond(status: int, body: Any, media_type: str = "application/json") -> Response:
@@ -280,6 +301,14 @@ class Emulator:
                 _error_body(400, "Invalid X-MiR-Session: 1-64 chars from [A-Za-z0-9._-]"),
             )
 
+        # A connection-dropping fault kills API traffic before any handling —
+        # a rebooting robot doesn't validate your request first. /_emulator/*
+        # surfaces bypass this (they have their own endpoints), so the fault
+        # stays clearable.
+        drop_state = self.state_for(session_id)
+        if any(FAULTS[n].get("drops_connections") for n in active_faults(drop_state)):
+            return _DroppedConnection()
+
         duration_override: float | None = None
         raw_duration = request.headers.get(DURATION_HEADER)
         if raw_duration is not None:
@@ -358,7 +387,12 @@ class Emulator:
 
         if op.method == "GET" and not is_item and (is_array_response or has_item_sibling):
             self._seed_collection(ctx.state, key, collection_path)
-            return op.success_status, list(ctx.state.collection(key).values())
+            # underscore keys are emulator-internal (e.g. the verbatim client
+            # body stashed at create time) — never part of the API surface
+            return op.success_status, [
+                {k: v for k, v in element.items() if not k.startswith("_")}
+                for element in ctx.state.collection(key).values()
+            ]
 
         if op.method == "GET" and is_item:
             self._seed_collection(ctx.state, key, collection_path)
@@ -373,7 +407,7 @@ class Emulator:
                 if "guid" in stored:
                     full.setdefault("guid", stored["guid"])
                 return op.success_status, full
-            return op.success_status, stored
+            return op.success_status, {k: v for k, v in stored.items() if not k.startswith("_")}
 
         if op.method == "GET":
             # Singleton document (e.g. /system/info).
@@ -413,7 +447,13 @@ class Emulator:
                 self._assign_ids(element, new_id)
                 stored = element
             else:
-                stored = item
+                stored = dict(item)
+            if isinstance(ctx.body, dict):
+                # Keep the client's body verbatim: response/list schemas may
+                # type fields differently (parameters: array in, string out),
+                # but behaviors (e.g. waypoint paths from move actions) need
+                # what was actually sent. Never emitted — see the GET paths.
+                stored["_request"] = dict(ctx.body)
             ctx.state.insert(key, str(item.get("guid", new_id)), stored)
             return op.success_status, item
 
@@ -424,12 +464,21 @@ class Emulator:
                 return 404, _error_body(404, "Not found")
             patch = ctx.body if isinstance(ctx.body, dict) else {}
             updated = overlay_compatible(dict(existing), patch)
+            # The verbatim-body stash follows updates too: a PUT that changes
+            # a field the response schema types differently (parameters:
+            # array in, string out) must still reach behaviors that read it.
+            previous_request = existing.get("_request")
+            if patch:
+                updated["_request"] = {
+                    **(previous_request if isinstance(previous_request, dict) else {}),
+                    **patch,
+                }
             ctx.state.insert(key, item_id or "", updated)
             full = self._example(op.success_schema)
             if isinstance(full, dict) and full:
                 overlay_compatible(full, updated)
                 return op.success_status, full
-            return op.success_status, updated
+            return op.success_status, {k: v for k, v in updated.items() if not k.startswith("_")}
 
         if op.method in ("PUT", "PATCH"):
             # Singleton update (e.g. PUT /wifi/enabled).

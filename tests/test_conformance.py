@@ -262,7 +262,7 @@ def test_route_surface_is_exactly_the_spec_plus_reserved_emulator_paths(client, 
     served = set()
     for route in client.app.routes:
         if isinstance(route, Route):
-            for method in route.methods - {"HEAD", "OPTIONS"}:
+            for method in (route.methods or set()) - {"HEAD", "OPTIONS"}:
                 served.add((method, re.sub(r"{(\w+):\w+}", r"{\1}", route.path)))
         elif isinstance(route, WebSocketRoute):
             served.add(("WS", route.path))
@@ -298,3 +298,24 @@ def test_generic_crud_round_trip(client, spec):
     deleted = client.delete(f"{base}/missions/{guid}", headers=AUTH_HEADER)
     assert deleted.status_code in (200, 204)
     assert client.get(f"{base}/missions/{guid}", headers=AUTH_HEADER).status_code == 404
+
+
+def test_no_private_keys_leak_from_any_response(client, spec):
+    """Underscore-prefixed keys are emulator-internal storage (e.g. the
+    verbatim client body stashed at create time) and must never appear on
+    the wire — reads and writes alike."""
+    leaked = []
+    for op in spec.operations.values():
+        if op.method not in ("GET", "POST", "PUT") or "application/json" not in op.produces[0]:
+            continue
+        url = spec.base_path + _fill_path(op, op.path)
+        response = client.request(op.method, url, **_request_kwargs(spec, op))
+        try:
+            body = response.json()
+        except ValueError:
+            continue
+        for doc in body if isinstance(body, list) else [body]:
+            private = sorted(k for k in doc if k.startswith("_")) if isinstance(doc, dict) else []
+            if private:
+                leaked.append(f"{op.method} {op.path}: {private}")
+    assert not leaked, "\n".join(leaked[:20])

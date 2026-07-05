@@ -547,7 +547,7 @@ def test_fleet_route_surface_is_exactly_the_specs_plus_reserved_paths():
         served = set()
         for route in app.routes:
             if isinstance(route, Route):
-                for method in route.methods - {"HEAD", "OPTIONS"}:
+                for method in (route.methods or set()) - {"HEAD", "OPTIONS"}:
                     served.add((method, re.sub(r"{(\w+):\w+}", r"{\1}", route.path)))
 
         expected = set()

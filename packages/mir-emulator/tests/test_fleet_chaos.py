@@ -138,3 +138,23 @@ def test_estop_mid_order_holds_it_and_release_finishes_it(clock, fleet):
     fleet.delete(f"/_emulator/robots/{rid}/faults", headers=KEY)
     clock.tick(9.5)  # the remaining ~9s of execution resume in place
     assert fleet.get("/api/v1/order", headers=KEY).json()[0]["order-status"] == "Finished"
+
+
+def test_fleet_treats_a_connection_dropped_robot_as_unreachable(fleet):
+    """connection_drop on an embedded robot must not 500 the fleet — the
+    fleet sees an unreachable robot, exactly like a rebooting one."""
+    robot_id = robot_ids(fleet)[0]
+    armed = fleet.put(
+        f"/_emulator/robots/{robot_id}/faults",
+        json={"faults": ["connection_drop"]},
+        headers=KEY,
+    )
+    assert armed.status_code == 200
+    listing = fleet.get("/api/v1/robots", headers=KEY)
+    assert listing.status_code == 200  # fleet survives; identity is cached knowledge
+    # clearing goes through the chaos proxy, which rides the robot's
+    # /_emulator surface — that stays reachable by design
+    cleared = fleet.delete(f"/_emulator/robots/{robot_id}/faults", headers=KEY)
+    assert cleared.status_code == 200
+    detail = fleet.get(f"/api/v1/robots/{robot_id}", headers=KEY)
+    assert detail.status_code == 200

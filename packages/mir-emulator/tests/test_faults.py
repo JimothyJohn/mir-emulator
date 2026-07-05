@@ -60,6 +60,7 @@ def test_catalog_lists_every_fault(robot):
         "battery_critical",
         "blocked_path",
         "mission_failure",
+        "connection_drop",
     }
 
 

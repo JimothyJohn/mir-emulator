@@ -79,7 +79,7 @@ def test_rescale_keeps_sim_time_continuous(wall):
 # --- the point of the feature: realistic durations, shrunk wall waits ---------
 
 
-def test_scaled_mission_keeps_realistic_timestamps(client):
+def test_scaled_mission_keeps_realistic_timestamps(client, wall):
     assert client.put("/_emulator/clock", json={"scale": 60}, headers=AUTH).json()["scale"] == 60
     mission = client.get("/api/v2.0.0/missions", headers=AUTH).json()[0]["guid"]
     queued = client.post(
@@ -87,7 +87,7 @@ def test_scaled_mission_keeps_realistic_timestamps(client):
         json={"mission_id": mission},
         headers={**AUTH, "X-MiR-Mission-Duration": "120"},
     ).json()
-    behaviors._wall_clock.tick(3)  # 3 wall seconds = 180 simulated: 1 s lag + 120 s run
+    wall.tick(3)  # 3 wall seconds = 180 simulated: 1 s lag + 120 s run
 
     entry = client.get(f"/api/v2.0.0/mission_queue/{queued['id']}", headers=AUTH).json()
     assert entry["state"] == "Done"
@@ -95,14 +95,14 @@ def test_scaled_mission_keeps_realistic_timestamps(client):
     assert _iso_seconds(entry["started"], entry["finished"]) == 120
 
 
-def test_battery_curve_follows_scaled_time(client):
+def test_battery_curve_follows_scaled_time(client, wall):
     client.put("/_emulator/clock", json={"scale": 60}, headers=AUTH)
     client.put(
         "/_emulator/battery",
         json={"percentage": 38, "charging": True, "charge_rate": 0.5, "target": 100},
         headers=AUTH,
     )
-    behaviors._wall_clock.tick(1)  # 60 simulated seconds at 0.5 %/s -> +30 %
+    wall.tick(1)  # 60 simulated seconds at 0.5 %/s -> +30 %
     pct = client.get("/api/v2.0.0/status", headers=AUTH).json()["battery_percentage"]
     assert pct == pytest.approx(68.0, abs=0.5)
 
@@ -110,10 +110,10 @@ def test_battery_curve_follows_scaled_time(client):
 # --- surface contract ----------------------------------------------------------
 
 
-def test_get_reports_and_delete_restores_without_rewinding(client):
+def test_get_reports_and_delete_restores_without_rewinding(client, wall):
     assert client.get("/_emulator/clock", headers=AUTH).json()["scale"] == 1.0
     client.put("/_emulator/clock", json={"scale": 30}, headers=AUTH)
-    behaviors._wall_clock.tick(2)
+    wall.tick(2)
     before = behaviors._now()
     doc = client.delete("/_emulator/clock", headers=AUTH).json()
     assert doc["scale"] == 1.0

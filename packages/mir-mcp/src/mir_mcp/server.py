@@ -41,6 +41,15 @@ def _dump(payload: Any) -> str:
     return json.dumps(payload, indent=1, sort_keys=True)
 
 
+def _as_list(value: Any) -> list:
+    """MiR specs declare some list endpoints with the element's object schema,
+    and servers differ on which shape they answer with — accept both (same
+    defense as mir_client.report._as_list)."""
+    if isinstance(value, list):
+        return value
+    return [value] if isinstance(value, dict) else []
+
+
 def _trim_status(doc: dict[str, Any]) -> dict[str, Any]:
     return {k: doc[k] for k in STATUS_FIELDS if k in doc}
 
@@ -75,7 +84,7 @@ async def _resolve_mission(name_or_guid: str) -> str | dict[str, Any]:
     missions = await _robot("GET", "/missions")
     if isinstance(missions, str):
         return missions
-    entries = missions if isinstance(missions, list) else []
+    entries = _as_list(missions)
     exact = [m for m in entries if m.get("guid") == name_or_guid]
     named = [m for m in entries if str(m.get("name", "")).lower() == name_or_guid.lower()]
     matches = exact or named
@@ -273,7 +282,7 @@ async def mir_list_missions() -> str:
     body = await _robot("GET", "/missions")
     if isinstance(body, str):
         return body
-    entries = body if isinstance(body, list) else []
+    entries = _as_list(body)
     return _dump([{"guid": m.get("guid"), "name": m.get("name")} for m in entries])
 
 

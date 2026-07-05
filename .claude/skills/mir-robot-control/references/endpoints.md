@@ -5,6 +5,23 @@ Everything here is verified against `packages/mir-emulator/src/mir_emulator/`
 official MiR REST API; paths under `/_emulator/*` and `X-MiR-*` headers are
 emulator-only test surfaces that do not exist on real hardware.
 
+## Spec quirks every consumer must survive
+
+Two inconsistencies in MiR's own API files, verified against real spec
+documents — code defensively:
+
+- **List endpoints declared with the element's object schema.** Servers
+  differ on which shape they answer with (a list, or a single object).
+  Treat an object-shaped answer as a one-element list, never as "nothing":
+  see `mir_client.report._as_list` and `mir_mcp.server._as_list`.
+- **Fields typed differently in request and response.** e.g. a mission
+  action's `parameters` is an array in the request body but a string in
+  the response schema, and `POST /positions` responses omit
+  `pos_x`/`pos_y`. Don't expect to read back what you wrote; the emulator
+  keeps the verbatim client body internally (a private `_request` key on
+  stored elements, never emitted) so behaviors like waypoint paths still
+  work.
+
 ## Version discovery (connect-time handshake)
 
 Path versions never change (`/api/v2.0.0` robot, `/api/v1` fleet); the
