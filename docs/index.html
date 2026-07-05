@@ -499,6 +499,9 @@ table.plain td:last-child { color: var(--ink-dim); }
             <div><input type="text" id="custom-url" placeholder="http://192.168.12.20 &nbsp;or&nbsp; http://mir.local" spellcheck="false" autocomplete="off"></div>
           </div>
           <button class="connect-btn" id="connect">Connect</button>
+          <button class="connect-btn" id="scan" style="margin-top:8px">Scan localhost for robots</button>
+          <div class="hint" id="scan-status"></div>
+          <div id="scan-results"></div>
           <div class="hint" id="ep-status"></div>
           <div class="hint warn" id="mixed-warn" style="display:none">
             &#9888; This page is HTTPS but the endpoint is plain HTTP &mdash; browsers block that
@@ -1667,6 +1670,70 @@ async function connectTo(rawBase) {
   loadVersionMeta(); loadSpec(); loadProvenance(); fillCompare(); refreshSample();
 }
 
+/* ---------- localhost scan ----------
+   A browser can't sweep an arbitrary LAN (no raw sockets, mixed-content
+   rules), but it CAN probe localhost ports — the common case: an emulator
+   running locally, or a robot port-forwarded to this machine. Same probe
+   ladder as connectTo, run against a handful of usual ports. */
+const SCAN_PORTS = [8080, 8081, 80, 8000, 8888];
+async function probeKind(base) {
+  try {
+    const h = await fetchT(base + "/healthz", {}, 1500);
+    if (h.ok) { const j = await h.json(); if (Array.isArray(j.versions) && j.versions.length)
+      return { kind: "dispatcher", version: (j.versions.length + " versions") }; }
+  } catch { /* next */ }
+  try {
+    const r = await fetchT(base + "/", { headers: { Accept: "application/json" } }, 1500);
+    if (r.ok) { const j = await r.json();
+      if (j.kind === "robot" || j.emulated_mir_version) return { kind: "robot", version: j.emulated_mir_version || null };
+      if (j.kind === "fleet" || j.emulated_fleet_version) return { kind: "fleet", version: j.emulated_fleet_version || null };
+    }
+  } catch { /* next */ }
+  try {
+    const r = await fetchT(base + "/api/v1/system/version", { headers: { "x-api-key": apiKey() } }, 1500);
+    if (r.ok) { const j = await r.json(); if (j && typeof j.version === "string") return { kind: "fleet", version: j.version }; }
+  } catch { /* next */ }
+  try {
+    const r = await fetchT(base + "/api/v2.0.0/status", {}, 1500);
+    if (r.status === 200 || r.status === 401) return { kind: "robot", version: null };
+  } catch { /* unreachable */ }
+  return null;
+}
+
+async function scanLocalhost() {
+  const btn = $("scan"), st = $("scan-status"), out = $("scan-results");
+  btn.disabled = true;
+  st.className = "hint"; st.textContent = "scanning localhost ports " + SCAN_PORTS.join(", ") + " …";
+  out.innerHTML = "";
+  const bases = SCAN_PORTS.map((p) => "http://127.0.0.1:" + p);
+  const results = await Promise.all(bases.map(async (b) => ({ base: b, hit: await probeKind(b) })));
+  btn.disabled = false;
+  const found = results.filter((r) => r.hit);
+  if (!found.length) {
+    st.className = "hint warn";
+    st.textContent = "No MiR targets on localhost. Start one with `uv run mir-emulator`, " +
+      "or if your robot is on the LAN use `mir-discover` from a terminal (browsers can't scan the LAN).";
+    return;
+  }
+  st.className = "hint ok";
+  st.textContent = "Found " + found.length + " on localhost — click to connect:";
+  found.forEach(({ base, hit }) => {
+    const b = document.createElement("button");
+    b.className = "connect-btn";
+    b.style.marginTop = "6px";
+    const label = hit.kind === "dispatcher" ? "dispatcher (" + hit.version + ")"
+      : (hit.kind === "fleet" ? "Fleet" : "robot") + (hit.version ? " " + hit.version : "");
+    b.textContent = base.replace(/^https?:\/\//, "") + " — " + label;
+    b.onclick = () => {
+      $("ep-custom").checked = true;
+      $("custom-row").style.display = "";
+      $("custom-url").value = base;
+      connectTo(base);
+    };
+    out.appendChild(b);
+  });
+}
+
 /* ---------- version compare (GET /_emulator/diff) ---------- */
 function fillCompare() {
   const from = $("cmp-from"), to = $("cmp-to"), go = $("cmp-go");
@@ -1783,6 +1850,7 @@ $("op-select").addEventListener("change", () => {
 try { hist = JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch { hist = []; }
 renderHistory();
 $("connect").onclick = () => connectTo(selectedEndpoint());
+$("scan").onclick = scanLocalhost;
 $("cmp-go").onclick = runCompare;
 $("tele-toggle").onclick = () => setTelemetry(!teleTimer);
 $("new-session").onclick = () => {
