@@ -302,6 +302,7 @@ def test_every_fleet_version_boots_and_routes_its_own_operations():
         doc = client.get("/openapi.json").json()
         assert doc["openapi"].startswith("3")
         index = client.get("/").json()
+        assert index["kind"] == "fleet"
         assert index["emulated_fleet_version"] == version
         assert index["official_docs"].startswith("https://supportportal")
         spec = app.state.emulator.spec

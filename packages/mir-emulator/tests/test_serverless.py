@@ -74,8 +74,11 @@ def test_healthz(call):
     assert response["statusCode"] == 200
     doc = body_json(response)
     assert doc["status"] == "ok"
+    assert doc["kind"] == "dispatcher"
     assert doc["versions"] == registry.supported_versions()
+    assert doc["latest"] == registry.supported_versions()[0]
     assert doc["fleet_versions"] == registry.fleet_supported_versions()
+    assert doc["fleet_latest"] == registry.fleet_supported_versions()[0]
 
 
 def test_index_lists_fleet_versions(call):

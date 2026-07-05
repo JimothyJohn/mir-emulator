@@ -185,7 +185,14 @@ def build_app() -> Starlette:
 
     async def healthz(_request: Request) -> JSONResponse:
         return JSONResponse(
-            {"status": "ok", "versions": versions, "fleet_versions": fleet_versions}
+            {
+                "status": "ok",
+                "kind": "dispatcher",
+                "versions": versions,
+                "latest": latest,
+                "fleet_versions": fleet_versions,
+                "fleet_latest": fleet_versions[0] if fleet_versions else None,
+            }
         )
 
     async def console(_request: Request) -> HTMLResponse | JSONResponse:
