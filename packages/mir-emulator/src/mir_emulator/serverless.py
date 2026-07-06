@@ -45,12 +45,16 @@ CONSOLE_FILE = Path(__file__).with_name("console.html")
 
 # The console is a single inline-script page (hence 'unsafe-inline'); it
 # fetches Google Fonts and, via its ?api= override, arbitrary user-chosen
-# emulator endpoints — hence the broad connect-src.
+# emulator endpoints — hence the broad connect-src. The chat panel's opt-in
+# in-browser model (WebLLM, pinned version) is imported from jsDelivr —
+# esm.run is jsDelivr's ES-module alias and redirects to cdn.jsdelivr.net,
+# so both origins are needed — and its runtime instantiates WebAssembly,
+# hence 'wasm-unsafe-eval'. Model weights arrive via fetch (connect-src).
 CONSOLE_CSP = (
     "default-src 'none'; "
     "style-src 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src https://fonts.gstatic.com; "
-    "script-src 'unsafe-inline'; "
+    "script-src 'unsafe-inline' 'wasm-unsafe-eval' https://esm.run https://cdn.jsdelivr.net; "
     "img-src data:; "
     "connect-src https: http://127.0.0.1:* http://localhost:*; "
     "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
