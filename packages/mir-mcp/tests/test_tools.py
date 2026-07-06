@@ -355,7 +355,9 @@ def test_generate_report_writes_a_robot_dashboard(robot, tmp_path):
     assert result["robots"] and 0 <= result["robots"][0]["battery"] <= 100
     html = out.read_text()
     assert html.startswith("<!DOCTYPE html>")
-    for section in ("Current status", "Daily trend", "Timeline"):
+    # "Timeline" became the collapsed "Event log" when the dashboard
+    # moved to the shift-KPI layout (mir-client report.py).
+    for section in ("Current status", "Daily trend", "Event log"):
         assert section in html, section
 
 
