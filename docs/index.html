@@ -350,6 +350,11 @@ pre.resp .b { color: #8a3ea8; }
 .api-chip .st.s2 { color: var(--green); }
 .api-chip .st.s4 { color: var(--amber); }
 .api-chip .st.s5, .api-chip .st.s0 { color: var(--red); }
+.msg .via {
+  display: block; margin-top: 5px;
+  font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-faint);
+}
 .chat-row { display: flex; gap: 10px; margin-top: 12px; }
 #chat-input { flex: 1; min-width: 0; font-family: var(--sans); }
 .ai-row { margin-top: 10px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
@@ -662,7 +667,9 @@ curl -H 'x-api-key: distributor' https://mir.advin.io/fleet/latest/api/v1/robots
       </div>
       <div>
         <b>2 &mdash; Or skip the terminal.</b> The <a href="#console">console above</a> has the full API catalog,
-        generated request bodies, live telemetry, and a curl mirror of every request it sends.
+        generated request bodies, live telemetry, and a curl mirror of every request it sends &mdash;
+        plus a chat panel that turns &ldquo;pause the robot&rdquo; into the right API call, optionally
+        through a tiny language model running entirely in your browser.
       </div>
       <div>
         <b>3 &mdash; Run it yourself.</b> The emulator is a Python package: clone
@@ -734,7 +741,7 @@ curl -H 'x-api-key: distributor' https://mir.advin.io/fleet/latest/api/v1/robots
   <h2 class="sect-title">Endpoints</h2>
   <table class="plain">
     <tr><th>Path</th><th>What it serves</th></tr>
-    <tr><td>/console</td><td>This page (also served at <code>/</code> to browsers) — catalog, telemetry, virtual robot sessions.</td></tr>
+    <tr><td>/console</td><td>This page (also served at <code>/</code> to browsers) — plain-language chat, catalog, telemetry, virtual robot sessions.</td></tr>
     <tr><td>/&lt;version&gt;/api/v2.0.0/&hellip;</td><td>The emulated MiR robot REST API for that software version (also <code>/latest/&hellip;</code>).</td></tr>
     <tr><td>/fleet/&lt;version&gt;/api/v1/&hellip;</td><td>The emulated MiR Fleet Enterprise Integration API (also <code>/fleet/latest/&hellip;</code>); auth is an <code>x-api-key</code> header, default key <code>distributor</code>. Each fleet embeds robot emulators it controls over their own REST API.</td></tr>
     <tr><td>/fleet/&lt;version&gt;/openapi.json</td><td>The official Fleet OpenAPI 3 document, served verbatim.</td></tr>
@@ -1679,6 +1686,13 @@ function pickByName(items, name, getName) {
   return bestScore > 0 ? best : null;
 }
 
+/* "the first mission", "any", "one", "it" are picks, not names — empty
+   means take the first, in both the rule and the LLM planner's args. */
+function ordinalToEmpty(name) {
+  const want = String(name || "").trim();
+  return /^(the\s+)?(first|any|some|a|one|it)(\s+(mission|one|job))?$/i.test(want) ? "" : want;
+}
+
 const intIn = (v, lo, hi, what) => {
   const n = Math.trunc(Number(v));
   if (!Number.isFinite(n) || n < lo || n > hi)
@@ -1690,9 +1704,9 @@ function chatHelp() {
   return currentKind === "mirfleet"
     ? 'Fleet mode. Try: "how many robots are online?" · "any active orders?" · ' +
       '"dispatch the <name> mission" · "fleet version".'
-    : 'Try: "what’s the battery at?" · "pause" / "resume" · "clear the error" · ' +
+    : 'Try: "what’s the battery at?" · "pause" / "resume" · "what’s wrong?" · "clear the error" · ' +
       '"what missions does it know?" · "queue the <name> mission" · "clear the queue" · ' +
-      '"read register 5" / "set register 5 to 42" · "rename it to Wall-E".';
+      '"read register 5" / "set register 5 to 42" · "rename it to Wall-E" · "clear the chat".';
 }
 
 const TOOLS = {
@@ -1716,6 +1730,16 @@ const TOOLS = {
     async run() { return "Resuming. " + statusLine(await chatApi("PUT", "/status", { state_id: 3 })); } },
   clear_error: { kind: "robot", desc: "clear a resettable error state",
     async run() { return "Error cleared. " + statusLine(await chatApi("PUT", "/status", { clear_error: true })); } },
+  get_errors: { kind: "robot", desc: "what's wrong: the robot's current error list",
+    async run() {
+      const s = await chatApi("GET", "/status");
+      const errs = Array.isArray(s && s.errors) ? s.errors : [];
+      if (!errs.length) return "No errors reported — " + statusLine(s);
+      return errs.length + " error" + (errs.length === 1 ? "" : "s") + ": " +
+        errs.slice(0, 5).map((e) =>
+          (e.code != null ? "[" + e.code + "] " : "") + (e.description || e.module || "unknown")).join("; ") +
+        ". Say “clear the error” to reset the resettable ones.";
+    } },
   rename: { kind: "robot", argSpec: '{"name": string}', desc: "rename the robot",
     async run(a) {
       const name = String(a.name || "").trim().slice(0, 64);
@@ -1736,7 +1760,7 @@ const TOOLS = {
     async run(a) {
       const missions = asList(await chatApi("GET", "/missions"), "missions");
       if (!missions.length) throw new Error("The robot reports no missions to queue.");
-      const want = String(a.name || "").trim();
+      const want = ordinalToEmpty(a.name);
       const hit = pickByName(missions, want, (m) => m.name);
       if (!hit)
         throw new Error("No mission matching “" + want + "”. It knows: " +
@@ -1803,7 +1827,7 @@ const TOOLS = {
       const site = await chatApi("GET", "/site/mission");
       const missions = asList(site, "missions");
       if (!missions.length) throw new Error("The site reports no missions to dispatch.");
-      const want = String(a.name || "").trim();
+      const want = ordinalToEmpty(a.name);
       const hit = pickByName(missions, want, (m) => m.name || m.id);
       if (!hit)
         throw new Error("No site mission matching “" + want + "”. Known: " +
@@ -1874,6 +1898,7 @@ function robotRules(raw, t) {
   if (/batter|\bcharge\b|\bjuice\b|\bpower level\b/.test(t)) return { tool: "get_battery", args: {} };
   if (/\b(clear|reset|acknowledge|ack|fix)\b[^.]*\b(errors?|faults?|alarms?)\b|\b(errors?|faults?)\b[^.]*\b(clear|reset|away)\b/.test(t))
     return { tool: "clear_error", args: {} };
+  if (/\b(errors?|faults?|alarms?)\b|\bwrong\b|\bbroken\b/.test(t)) return { tool: "get_errors", args: {} };
   if (/\b(resume|unpause|continue|keep going|carry on|go again)\b/.test(t)) return { tool: "resume", args: {} };
   if (/\b(pause|stop|halt|hold|freeze|wait)\b/.test(t)) return { tool: "pause", args: {} };
   if (/\brename\b|\b(call|name) (it|the robot)\b/.test(t))
@@ -1909,17 +1934,43 @@ function aiSystemPrompt() {
     .join("\n");
   return "You translate one user message about a MiR robot into exactly one JSON object " +
     'on a single line — no prose, no code fences: {"tool": "<name>", "args": {...}}. Available tools:\n' + tools +
-    '\nIf nothing fits, answer {"tool": "none", "args": {"reply": "<one short sentence>"}}.';
+    '\nUse "help" only when the user asks what you can do. For anything unrelated to the robot, ' +
+    'answer {"tool": "none", "args": {"reply": "<one short sentence>"}}.';
+}
+
+/* Fixed few-shot pairs anchor the 0.5B model to the JSON contract; the
+   session's own successful translations are appended after them, which is
+   what lets follow-ups like "run the first one" resolve in context. */
+let aiHistory = []; // [{u: user text, a: assistant JSON}], capped
+function aiExamples() {
+  return currentKind === "mirfleet"
+    ? [
+        ["how busy are we?", '{"tool": "fleet_orders", "args": {}}'],
+        ["send out the delivery job", '{"tool": "dispatch_order", "args": {"name": "delivery"}}'],
+        ["what's the weather like?", '{"tool": "none", "args": {"reply": "I only manage this MiR fleet."}}'],
+      ]
+    : [
+        ["is it charged up?", '{"tool": "get_battery", "args": {}}'],
+        ["take a break for a moment", '{"tool": "pause", "args": {}}'],
+        ["do the delivery run", '{"tool": "enqueue_mission", "args": {"name": "delivery run"}}'],
+        // a follow-up pair: teaches that "run/start it/one" after missions = enqueue
+        ["which missions are there?", '{"tool": "list_missions", "args": {}}'],
+        ["ok run the first one", '{"tool": "enqueue_mission", "args": {}}'],
+        ["what's the weather like?", '{"tool": "none", "args": {"reply": "I only control this robot."}}'],
+      ];
 }
 
 async function planWithAI(text) {
   try {
+    const shots = [...aiExamples(), ...aiHistory.map((h) => [h.u, h.a])]
+      .flatMap(([u, a]) => [{ role: "user", content: u }, { role: "assistant", content: a }]);
     // Race the model against a deadline: a wedged generation must degrade
     // to the rule engine, never hang the chat turn.
     const r = await Promise.race([
       ai.engine.chat.completions.create({
         messages: [
           { role: "system", content: aiSystemPrompt() },
+          ...shots,
           { role: "user", content: text },
         ],
         temperature: 0,
@@ -1936,6 +1987,8 @@ async function planWithAI(text) {
     if (out.tool === "none")
       return { none: String((out.args && out.args.reply) || "That's outside what I can do here.").slice(0, 300) };
     if (!TOOLS[out.tool]) return null;
+    aiHistory.push({ u: text.slice(0, 200), a: JSON.stringify({ tool: out.tool, args: out.args || {} }) });
+    aiHistory = aiHistory.slice(-3);
     return { tool: out.tool, args: (out.args && typeof out.args === "object") ? out.args : {} };
   } catch { return null; } // any failure → the rule engine takes the message
 }
@@ -1978,14 +2031,41 @@ async function loadAI() {
 }
 
 /* ---- transcript ---- */
+const CHAT_KEY = "mir-console-chat";
+let chatStore = []; // [{c: css class, t: text}] — chips are not persisted
+
 function chatMsg(cls, text) {
   const log = $("chat-log");
   const div = document.createElement("div");
   div.className = "msg " + cls;
   div.textContent = text;
   log.appendChild(div);
+  while (log.children.length > 200) log.removeChild(log.firstChild);
   log.scrollTop = log.scrollHeight;
   return div;
+}
+
+function chatPersist(cls, text) {
+  chatStore.push({ c: cls, t: String(text).slice(0, 600) });
+  chatStore = chatStore.slice(-40);
+  try { localStorage.setItem(CHAT_KEY, JSON.stringify(chatStore)); } catch { /* private mode */ }
+}
+
+const CHAT_GREETING = "Tell your robot what to do in plain words — no endpoint paths needed. " +
+  "Try a suggestion below, or load the in-browser AI for free-form phrasing.";
+
+function chatWipe(say) {
+  chatStore = [];
+  try { localStorage.removeItem(CHAT_KEY); } catch { /* private mode */ }
+  $("chat-log").innerHTML = "";
+  chatMsg("bot", say || CHAT_GREETING);
+}
+
+function markVia(div, via) {
+  const v = document.createElement("span");
+  v.className = "via";
+  v.textContent = "via " + via;
+  div.appendChild(v);
 }
 
 function attachCalls(div, calls) {
@@ -2026,6 +2106,7 @@ const CHAT_SUGGESTS = {
 };
 
 function renderChatSuggests() {
+  aiHistory = []; // tool set may have changed with the API family
   const box = $("chat-suggests");
   box.innerHTML = "";
   (CHAT_SUGGESTS[currentKind] || CHAT_SUGGESTS.robot).forEach((s) => {
@@ -2038,28 +2119,46 @@ function renderChatSuggests() {
 }
 
 async function chatSend(text) {
+  if (/\b(clear|wipe|reset)\b[^.]*\b(chat|transcript|conversation)\b/i.test(text)) {
+    chatWipe("Chat cleared. " + CHAT_GREETING);
+    return;
+  }
   chatMsg("user", text);
+  chatPersist("user", text);
   if (!BASE || (MODE === "fleet" && !currentVersion)) {
     chatMsg("bot err", "Not connected — pick an endpoint in the panel on the left first.");
     return;
   }
-  const reply = chatMsg("bot", "…");
+  const reply = chatMsg("bot", ai ? "thinking…" : "…");
   turnCalls = [];
-  let plan = ai ? await planWithAI(text) : null;
-  if (plan && plan.none) { reply.textContent = plan.none; return; }
+  let plan = null, via = "rules";
+  if (ai) {
+    plan = await planWithAI(text);
+    if (plan) via = "AI · " + ai.model.replace(/-MLC$/, "");
+  }
   if (!plan) plan = planWithRules(text);
+  if (plan && plan.none) {
+    reply.textContent = plan.none;
+    chatPersist("bot", plan.none);
+    markVia(reply, via);
+    return;
+  }
   if (!plan) {
     reply.classList.add("err");
     reply.textContent = "I didn't catch that — try a suggestion below" +
       (ai ? "." : ", or load the in-browser AI for free-form phrasing.");
     return;
   }
+  let cls = "bot";
   try {
     reply.textContent = await runTool(plan.tool, plan.args);
   } catch (e) {
+    cls = "bot err";
     reply.classList.add("err");
     reply.textContent = e.message;
   }
+  chatPersist(cls, reply.textContent);
+  markVia(reply, via);
   attachCalls(reply, turnCalls);
 }
 
@@ -2368,8 +2467,10 @@ $("tele-toggle").onclick = () => setTelemetry(!teleTimer);
 $("chat-send").onclick = chatSubmit;
 $("chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter") chatSubmit(); });
 $("ai-load").onclick = loadAI;
-chatMsg("bot", "Tell your robot what to do in plain words — no endpoint paths needed. " +
-  "Try a suggestion below, or load the in-browser AI for free-form phrasing.");
+try { chatStore = (JSON.parse(localStorage.getItem(CHAT_KEY)) || []).filter(
+  (m) => m && typeof m.t === "string" && /^(user|bot|bot err)$/.test(m.c)); } catch { chatStore = []; }
+if (chatStore.length) chatStore.forEach((m) => chatMsg(m.c, m.t));
+else chatMsg("bot", CHAT_GREETING);
 try { if (localStorage.getItem(AI_KEY) === "1") loadAI(); } catch { /* private mode */ }
 $("new-session").onclick = () => {
   $("session").value = newSessionId();
