@@ -3,8 +3,8 @@
 Collects everything from documented endpoints only — robot: ``/status``,
 ``/missions``, ``/mission_queue``, ``/log/error_reports``,
 ``/statistics/distance``; fleet: ``/robots``, ``/robots/{id}``, ``/order`` —
-and renders a self-contained HTML dashboard: current-status indicators, the
-daily trend, and a descriptive timeline of actions. Works against real
+and renders a self-contained HTML dashboard: a shift-level KPI row,
+current-status indicators, the daily trend, and a collapsed event log. Works against real
 robots and the emulator alike; nothing here touches ``/_emulator`` surfaces.
 
     mir-report http://192.168.12.20 -o robot.html
@@ -232,42 +232,95 @@ _CSS = """
   --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
   --sans:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif; }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.6}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.6}
 .brandbar{height:4px;background:var(--brand)}
-.wrap{max-width:1080px;margin:0 auto;padding:18px 20px 60px}
-h1{font-size:24px;font-weight:300}
+.wrap{max-width:1140px;margin:0 auto;padding:22px 24px 70px}
+h1{font-size:34px;font-weight:300}
 h1 span{color:var(--brand)}
-.sub{font-size:12.5px;color:var(--ink-dim);margin-bottom:18px}
+.sub{font-size:16px;color:var(--ink-dim);margin-bottom:22px}
 code{font-family:var(--mono);font-size:.92em;background:var(--tint);
   border:1px solid var(--tint-2);border-radius:4px;padding:0 4px;color:var(--blue-deep)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:.4rem;
+  box-shadow:0 1px 3px rgba(0,0,0,.35);padding:18px 22px}
+.kpi .lb{font-size:15px;color:var(--ink-dim)}
+.kpi .v{font-size:46px;font-weight:600;line-height:1.2;letter-spacing:-.5px}
+.kpi .v small{font-size:24px;font-weight:400;color:var(--ink-dim)}
+.kpi .d{font-size:14px;color:var(--ink-faint)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:.4rem;
-  box-shadow:0 1px 3px rgba(0,0,0,.35);margin-top:16px;overflow:hidden}
-.panel-head{display:flex;align-items:center;gap:10px;padding:11px 16px;
-  border-bottom:1px solid var(--line);font-size:15px;font-weight:600}
-.panel-head::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--brand)}
-.panel-head .tag{margin-left:auto;color:var(--ink-faint);font-size:11px;
+  box-shadow:0 1px 3px rgba(0,0,0,.35);margin-top:18px;overflow:hidden}
+.panel-head{display:flex;align-items:center;gap:12px;padding:14px 20px;
+  border-bottom:1px solid var(--line);font-size:19px;font-weight:600}
+.panel-head::before{content:"";width:9px;height:9px;border-radius:2px;background:var(--brand)}
+.panel-head .tag{margin-left:auto;color:var(--ink-faint);font-size:12.5px;
   font-family:var(--mono);font-weight:400}
-.panel-body{padding:16px}
-.bots{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
-.bot{border:1px solid var(--line);border-radius:.4rem;padding:12px 14px}
-.bot .nm{font-weight:600;display:flex;align-items:center;gap:8px}
-.led{width:9px;height:9px;border-radius:50%;flex:none}
-.bot .st{font-size:12px;color:var(--ink-dim)}
-.batt{margin-top:8px;height:8px;border-radius:4px;background:var(--tint);
+.panel-body{padding:20px}
+.bots{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px}
+.bot{border:1px solid var(--line);border-radius:.4rem;padding:16px 18px}
+.bot .nm{font-weight:600;font-size:19px;display:flex;align-items:center;gap:10px}
+.led{width:12px;height:12px;border-radius:50%;flex:none}
+.bot .st{font-size:15px;color:var(--ink-dim)}
+.batt{margin-top:10px;height:10px;border-radius:5px;background:var(--tint);
   border:1px solid var(--tint-2);overflow:hidden}
 .batt i{display:block;height:100%;background:var(--green)}
 .batt.low i{background:var(--red)}
-.kv{margin-top:8px;font-size:12px;color:var(--ink-dim);display:grid;gap:2px;font-variant-numeric:tabular-nums}
-.err{color:var(--red);font-size:12px;margin-top:6px}
+.kv{margin-top:10px;font-size:15px;color:var(--ink-dim);display:grid;gap:2px;font-variant-numeric:tabular-nums}
+.err{color:var(--red);font-size:15px;margin-top:8px}
 .trend svg{display:block;width:100%;height:auto}
-.tl{max-height:420px;overflow-y:auto}
-.ev{display:flex;gap:10px;padding:5px 6px;border-radius:6px;font-size:12.5px}
+details.panel>summary{cursor:pointer;list-style:none}
+details.panel>summary::-webkit-details-marker{display:none}
+details.panel>summary .tag::after{content:" · click to expand"}
+details.panel[open]>summary .tag::after{content:" · click to collapse"}
+.tl{max-height:480px;overflow-y:auto}
+.ev{display:flex;gap:12px;padding:7px 8px;border-radius:6px;font-size:15px}
 .ev:hover{background:var(--tint)}
-.ev .t{color:var(--ink-faint);font-family:var(--mono);font-size:11.5px;flex:0 0 118px}
+.ev .t{color:var(--ink-faint);font-family:var(--mono);font-size:13px;flex:0 0 152px}
 .ev.error .tx{color:var(--red)}
 .ev .tx{color:var(--ink-dim)}
-footer{color:var(--ink-faint);font-size:12px;margin-top:18px}
+footer{color:var(--ink-faint);font-size:14px;margin-top:20px}
 """
+
+
+def _kpi_tiles(data: dict) -> list[tuple[str, str, str]]:
+    """Shift-level headline numbers, computed from the collected data."""
+    robots = data.get("robots", [])
+    timeline = data.get("timeline", [])
+    trend = data.get("trend", [])
+    today = round(trend[-1]["value"]) if trend else 0
+    if data.get("kind") == "fleet":
+        orders = [e for e in timeline if e["kind"] == "order"]
+        done = sum(1 for e in orders if e.get("state") == "Done")
+        batteries = [r.get("battery", 0.0) for r in robots]
+        average = round(sum(batteries) / len(batteries)) if batteries else 0
+        return [
+            ("Robots on the floor", f"{len(robots)}", ""),
+            ("Orders this shift", f"{len(orders)}", f"{done} completed"),
+            ("Orders today", f"{today:,}", ""),
+            ("Fleet battery", f"{average}<small>%</small>", "average across robots"),
+        ]
+    robot = robots[0] if robots else {}
+    missions = [e for e in timeline if e["kind"] == "mission"]
+    done = sum(1 for e in missions if e.get("state") == "Done")
+    faults = sum(1 for e in timeline if e["kind"] == "error")
+    active = len(robot.get("errors", []))
+    state = robot.get("state") or "—"
+    uptime_s = robot.get("uptime_s")
+    up = f" · up {uptime_s / 3600:.1f} h" if uptime_s else ""
+    return [
+        ("Missions this shift", f"{len(missions)}", f"{done} completed"),
+        ("Distance today", f"{today:,}<small> m</small>", ""),
+        ("Battery", f"{robot.get('battery', 0)}<small>%</small>", f"{escape(state)}{up}"),
+        ("Faults this shift", f"{faults}", f"{active} active now"),
+    ]
+
+
+def _render_kpis(data: dict) -> str:
+    tiles = "".join(
+        f'<div class="kpi"><div class="lb">{escape(label)}</div>'
+        f'<div class="v">{value}</div>' + (f'<div class="d">{sub}</div>' if sub else "") + "</div>"
+        for label, value, sub in _kpi_tiles(data)
+    )
+    return f'<div class="kpis">{tiles}</div>'
 
 
 def _render_bot(robot: dict) -> str:
@@ -300,11 +353,11 @@ def _render_bot(robot: dict) -> str:
 def _render_trend(trend: list[dict], label: str) -> str:
     if not trend:
         return '<p style="color:var(--ink-faint)">no data yet</p>'
-    width, height, pad = 720, 150, 26
+    width, height, pad = 720, 160, 28
     bar_zone = width - 2 * pad
     peak = max((d["value"] for d in trend), default=0) or 1
     step = bar_zone / len(trend)
-    bar_w = min(56.0, step - 8)
+    bar_w = min(16.0, step - 8)
     bars = []
     for i, day in enumerate(trend):
         h = (day["value"] / peak) * (height - 2 * pad)
@@ -313,10 +366,10 @@ def _render_trend(trend: list[dict], label: str) -> str:
         bars.append(
             f'<rect x="{bx:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="{max(h, 1):.1f}" '
             f'rx="4" fill="#1a76bc"><title>{escape(day["date"])}: {day["value"]}</title></rect>'
-            f'<text x="{bx + bar_w / 2:.1f}" y="{height - pad + 14}" text-anchor="middle" '
-            f'font-size="10" fill="#767c99">{escape(day["date"][5:])}</text>'
-            f'<text x="{bx + bar_w / 2:.1f}" y="{by - 5:.1f}" text-anchor="middle" '
-            f'font-size="10" fill="#a6abc4">{round(day["value"])}</text>'
+            f'<text x="{bx + bar_w / 2:.1f}" y="{height - pad + 16}" text-anchor="middle" '
+            f'font-size="12" fill="#767c99">{escape(day["date"][5:])}</text>'
+            f'<text x="{bx + bar_w / 2:.1f}" y="{by - 6:.1f}" text-anchor="middle" '
+            f'font-size="12" fill="#a6abc4">{round(day["value"])}</text>'
         )
     baseline = (
         f'<line x1="{pad}" y1="{height - pad}" x2="{width - pad}" y2="{height - pad}" '
@@ -362,6 +415,8 @@ def render_report(data: dict) -> str:
   <div class="sub">{escape(str(data.get("target", "")))} &middot;
   generated from official API endpoints</div>
 
+  {_render_kpis(data)}
+
   <div class="panel">
     <div class="panel-head">Current status <span class="tag">{status_src}</span></div>
     <div class="panel-body"><div class="bots">{"".join(_render_bot(r) for r in robots)}</div></div>
@@ -373,10 +428,11 @@ def render_report(data: dict) -> str:
     <div class="panel-body">{trend_svg}</div>
   </div>
 
-  <div class="panel">
-    <div class="panel-head">Timeline <span class="tag">{timeline_src}</span></div>
+  <details class="panel">
+    <summary class="panel-head">Event log
+      <span class="tag">{len(timeline)} events · {timeline_src}</span></summary>
     <div class="panel-body"><div class="tl">{timeline_rows}</div></div>
-  </div>
+  </details>
 
   <footer>Generated by <code>mir-report</code> (mir-client) from documented endpoints only —
   works identically against real MiR robots, fleets, and the emulator.</footer>
