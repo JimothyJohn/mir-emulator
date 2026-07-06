@@ -21,6 +21,7 @@ uv run scenarios/denso_jit_callbuttons.py
 uv run scenarios/fm_logistic_endurance.py
 uv run scenarios/novo_nordisk_crowded_route.py
 uv run scenarios/visteon_ondemand_carts.py
+uv run scenarios/machineshop_barfeed_lathes.py
 
 # the fleet scenario wants a fleet emulator on its own port
 uv run mir-emulator --fleet-version 1.5.0 --fleet-robots 3.8.1,3.8.1,3.8.1 \
@@ -73,6 +74,7 @@ do not want pointed at a 100+ kg vehicle by accident.
 | `novo_nordisk_crowded_route.py` | [Novo Nordisk China](https://mobile-industrial-robots.com/cases/novo-nordisk-china) | 5× MiR500 through the plant's busiest 100 m; people and forklifts everywhere | `blocked_path` mid-mission, error read-back and clearing, `X-MiR-Latency` timeout/retry drill |
 | `visteon_ondemand_carts.py` | [Visteon](https://mobile-industrial-robots.com/cases/visteon) | 4× MiR200, on-demand tablet requests, ROEQ click-in carts, 10k units/day | Mission authoring (`POST /missions` + action chains), request bursts, `DELETE /mission_queue/{id}` cancellation |
 | `dhl_parcel_hub_wcs.py` | [DHL's AMR pattern](https://www.dhl.com/us-en/home/innovation-in-logistics/logistics-trend-radar/amr-logistics.html) (no MiR-official case study) | 12 AMRs behind a warehouse control system: 120 orders in 3 waves, battery rotation, mid-shift e-stop and mission failure | 12 concurrent sessions at ~50 req/s, least-loaded dispatch, `/_emulator/battery` charge rotation, quarantine + re-dispatch, exactly-once order ledger |
+| `machineshop_barfeed_lathes.py` | Classic bar-feeder machine-tending pattern (composite; no MiR-official case study) | 1 robot feeds 5 bar-fed CNC lathes from a central rod rack across a compressed production day; feeders consume at different rates | Registers as machine telemetry (magazine levels in, rack stock out), lowest-stock-first dispatch feeding a single-robot queue, per-lathe `X-MiR-Mission-Duration` (realistic 1-3 min trips) under `/_emulator/clock` 60x time scaling for shift-realistic odometry and battery, exact rod-conservation ledger + zero-starvation assertion |
 
 ## Emulator behaviors these scripts rely on (verified)
 
