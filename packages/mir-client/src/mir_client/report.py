@@ -225,13 +225,14 @@ _STATE_LED = {
 }
 
 _CSS = """
-:root { --brand:#00bfff; --blue:#1a76bc; --blue-deep:#105aa8; --ink:#0c0931;
-  --ink-dim:#565b74; --ink-faint:#8a8fa5; --tint:#effafe; --tint-2:#cbeefa;
-  --line:#e4e9f0; --green:#1d9e61; --amber:#c77700; --red:#cf3228;
+:root { --brand:#00bfff; --blue:#4da3e8; --blue-deep:#7cc4f4; --ink:#e8eaf2;
+  --ink-dim:#a6abc4; --ink-faint:#767c99; --tint:#1a2233; --tint-2:#24304a;
+  --line:#262a40; --bg:#0d0f1c; --panel:#151829;
+  --green:#2ecc7a; --amber:#e6a23c; --red:#ff6b5e;
   --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
   --sans:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif; }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#fff;color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.6}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.6}
 .brandbar{height:4px;background:var(--brand)}
 .wrap{max-width:1080px;margin:0 auto;padding:18px 20px 60px}
 h1{font-size:24px;font-weight:300}
@@ -239,8 +240,8 @@ h1 span{color:var(--brand)}
 .sub{font-size:12.5px;color:var(--ink-dim);margin-bottom:18px}
 code{font-family:var(--mono);font-size:.92em;background:var(--tint);
   border:1px solid var(--tint-2);border-radius:4px;padding:0 4px;color:var(--blue-deep)}
-.panel{background:#fff;border:1px solid var(--line);border-radius:.4rem;
-  box-shadow:0 1px 3px rgba(12,9,49,.06);margin-top:16px;overflow:hidden}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:.4rem;
+  box-shadow:0 1px 3px rgba(0,0,0,.35);margin-top:16px;overflow:hidden}
 .panel-head{display:flex;align-items:center;gap:10px;padding:11px 16px;
   border-bottom:1px solid var(--line);font-size:15px;font-weight:600}
 .panel-head::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--brand)}
@@ -313,13 +314,13 @@ def _render_trend(trend: list[dict], label: str) -> str:
             f'<rect x="{bx:.1f}" y="{by:.1f}" width="{bar_w:.1f}" height="{max(h, 1):.1f}" '
             f'rx="4" fill="#1a76bc"><title>{escape(day["date"])}: {day["value"]}</title></rect>'
             f'<text x="{bx + bar_w / 2:.1f}" y="{height - pad + 14}" text-anchor="middle" '
-            f'font-size="10" fill="#8a8fa5">{escape(day["date"][5:])}</text>'
+            f'font-size="10" fill="#767c99">{escape(day["date"][5:])}</text>'
             f'<text x="{bx + bar_w / 2:.1f}" y="{by - 5:.1f}" text-anchor="middle" '
-            f'font-size="10" fill="#565b74">{round(day["value"])}</text>'
+            f'font-size="10" fill="#a6abc4">{round(day["value"])}</text>'
         )
     baseline = (
         f'<line x1="{pad}" y1="{height - pad}" x2="{width - pad}" y2="{height - pad}" '
-        f'stroke="#c9d3de" stroke-width="1"/>'
+        f'stroke="#3a4059" stroke-width="1"/>'
     )
     return (
         f'<div class="trend"><svg viewBox="0 0 {width} {height}" role="img" '
