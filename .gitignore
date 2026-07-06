@@ -13,3 +13,5 @@ build/
 .coverage
 coverage.xml
 scrape-report.md
+*-report.html
+mir-report.html
