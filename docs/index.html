@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MiR Emulator — a spec-faithful emulator of the MiR robot REST API</title>
+<title>AMR Emulator — spec-faithful emulators of AMR robot REST APIs</title>
 <meta name="description" content="Develop and harden MiR robot integrations without a robot: every tracked MiR software version of the REST API on one public endpoint, with a live console built from the official MiR API documentation.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%2300bfff'/><rect x='18' y='34' width='64' height='32' rx='6' fill='white'/><circle cx='34' cy='50' r='7' fill='%2300bfff'/><circle cx='66' cy='50' r='7' fill='%2300bfff'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -437,7 +437,7 @@ table.plain td:last-child { color: var(--ink-dim); }
       <svg width="26" height="26" viewBox="0 0 100 100"><rect x="8" y="30" width="84" height="40" rx="8" fill="white"/><circle cx="30" cy="50" r="9" fill="#00bfff"/><circle cx="70" cy="50" r="9" fill="#00bfff"/></svg>
     </div>
     <div>
-      <h1>MiR Emulator <span>/</span> Fleet Console</h1>
+      <h1>AMR Emulator <span>/</span> Fleet Console</h1>
       <div class="sub">Spec-faithful MiR robot REST API &mdash; every tracked version, one serverless endpoint</div>
     </div>
     <nav class="topnav">
@@ -519,7 +519,7 @@ table.plain td:last-child { color: var(--ink-dim); }
         <div class="panel-body auth">
           <label class="radio">
             <input type="radio" name="ep" id="ep-demo" checked>
-            <span>demo unit <span class="dim">mir.advin.io</span></span>
+            <span>demo unit <span class="dim">amr-emulator.com</span></span>
           </label>
           <label class="radio">
             <input type="radio" name="ep" id="ep-custom">
@@ -536,7 +536,7 @@ table.plain td:last-child { color: var(--ink-dim); }
           <div class="hint warn" id="mixed-warn" style="display:none">
             &#9888; This page is HTTPS but the endpoint is plain HTTP &mdash; browsers block that
             (mixed content). To reach a robot on your LAN, run the console over HTTP from your own
-            machine: <code>curl -so console.html https://mir.advin.io/console && python3 -m http.server 8000</code>
+            machine: <code>curl -so console.html https://amr-emulator.com/console && python3 -m http.server 8000</code>
             then open <code>http://localhost:8000/console.html</code>. The curl mirror below always works.
           </div>
         </div>
@@ -656,12 +656,12 @@ table.plain td:last-child { color: var(--ink-dim); }
         <b>1 &mdash; From your terminal.</b> The demo speaks plain HTTPS; the only trick is MiR's hashed-password Basic auth.
         A robot only queues missions it knows, so list them first &mdash; exactly like a real one:
 <pre class="snippet">TOKEN=$(printf 'distributor:%s' "$(printf 'distributor' | shasum -a 256 | cut -d' ' -f1)" | base64 | tr -d '\n')
-curl -H "Authorization: Basic $TOKEN" https://mir.advin.io/latest/api/v2.0.0/status
-MISSION=$(curl -s -H "Authorization: Basic $TOKEN" https://mir.advin.io/latest/api/v2.0.0/missions | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["guid"])')
+curl -H "Authorization: Basic $TOKEN" https://amr-emulator.com/latest/api/v2.0.0/status
+MISSION=$(curl -s -H "Authorization: Basic $TOKEN" https://amr-emulator.com/latest/api/v2.0.0/missions | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["guid"])')
 curl -X POST -H "Authorization: Basic $TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"mission_id\": \"$MISSION\"}" https://mir.advin.io/latest/api/v2.0.0/mission_queue
+  -d "{\"mission_id\": \"$MISSION\"}" https://amr-emulator.com/latest/api/v2.0.0/mission_queue
 # the same emulator also runs MiR Fleet Enterprise — simpler auth, bigger picture:
-curl -H 'x-api-key: distributor' https://mir.advin.io/fleet/latest/api/v1/robots</pre>
+curl -H 'x-api-key: distributor' https://amr-emulator.com/fleet/latest/api/v1/robots</pre>
       </div>
       <div>
         <b>2 &mdash; Or skip the terminal.</b> The <a href="#console">console above</a> has the full API catalog,
@@ -751,7 +751,7 @@ curl -H 'x-api-key: distributor' https://mir.advin.io/fleet/latest/api/v1/robots
 
   <footer>
     <div>
-      MiR Emulator is an independent open-source emulator; not affiliated with Mobile Industrial Robots A/S.
+      AMR Emulator is an independent open-source emulator by <a href="https://advin.io" rel="noopener">Advin</a>; not affiliated with Mobile Industrial Robots A/S.
       The endpoint is rate-limited and concurrency-capped; responses are deterministic, stateful simulations
       generated from the <a href="https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/" rel="noopener">official
       MiR API definitions</a>. State is in-memory per runtime instance and resets on cold start — don't store
@@ -767,7 +767,7 @@ curl -H 'x-api-key: distributor' https://mir.advin.io/fleet/latest/api/v1/robots
 /* ================= configuration =================
    Default endpoint, set at deploy time. Per-visit override: ?api=https://...
    The endpoint panel persists a custom choice in localStorage. */
-const DEFAULT_BASE = "https://mir.advin.io";
+const DEFAULT_BASE = "https://amr-emulator.com";
 const STORE_KEY = "mir-console-endpoint";
 /* ================================================= */
 

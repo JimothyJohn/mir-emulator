@@ -22,6 +22,10 @@ Parameters:
     Type: String
     Default: Z039212425BG1MHVPYWDN
     Description: Route53 zone the demo stack may write DNS records into
+  SecondaryHostedZoneId:
+    Type: String
+    Default: Z00853032XEEE2WAQSDAH
+    Description: Second Route53 zone (amr-emulator.com) the demo stack may write into
 
 Resources:
   CfnExecRole:
@@ -109,13 +113,15 @@ Resources:
                   - acm:AddTagsToCertificate
                   - acm:ListTagsForCertificate
                 Resource: "*"
-              - Sid: DnsRecordsInOwnedZoneOnly
+              - Sid: DnsRecordsInOwnedZonesOnly
                 Effect: Allow
                 Action:
                   - route53:ChangeResourceRecordSets
                   - route53:GetHostedZone
                   - route53:ListResourceRecordSets
-                Resource: !Sub arn:aws:route53:::hostedzone/${HostedZoneId}
+                Resource:
+                  - !Sub arn:aws:route53:::hostedzone/${HostedZoneId}
+                  - !Sub arn:aws:route53:::hostedzone/${SecondaryHostedZoneId}
               - Sid: DnsChangePolling
                 Effect: Allow
                 Action: route53:GetChange
