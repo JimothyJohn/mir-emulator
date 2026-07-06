@@ -325,9 +325,9 @@ pre.resp .b { color: #8a3ea8; }
 .hrow .hm { font-weight: 600; color: var(--ink); flex: none; }
 .hrow .hp { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hrow .hs { margin-left: auto; font-weight: 600; flex: none; }
-.hrow .hs.s2 { color: var(--green); }
-.hrow .hs.s4 { color: var(--amber); }
-.hrow .hs.s5, .hrow .hs.s0 { color: var(--red); }
+.hrow .hs.s2, .api-chip .st.s2 { color: var(--green); }
+.hrow .hs.s4, .api-chip .st.s4 { color: var(--amber); }
+.hrow .hs.s5, .hrow .hs.s0, .api-chip .st.s5, .api-chip .st.s0 { color: var(--red); }
 
 /* ---------- chat ---------- */
 .chat-log { display: grid; gap: 8px; max-height: 340px; overflow-y: auto; }
@@ -347,9 +347,7 @@ pre.resp .b { color: #8a3ea8; }
 }
 .api-chip:hover { color: var(--blue-deep); border-color: var(--brand); }
 .api-chip b { font-weight: 600; color: var(--ink); margin-right: 4px; }
-.api-chip .st.s2 { color: var(--green); }
-.api-chip .st.s4 { color: var(--amber); }
-.api-chip .st.s5, .api-chip .st.s0 { color: var(--red); }
+/* .api-chip .st status colors are shared with .hrow .hs above */
 .msg .via {
   display: block; margin-top: 5px;
   font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
@@ -1476,6 +1474,17 @@ function rebuildPath() {
 const HIST_KEY = "mir-console-history";
 let hist = [];
 
+/* One definition of "load this request into the console form" — used by
+   history rows and the chat's api chips. */
+function loadIntoConsole(m, p, body) {
+  clearOperation();
+  $("method").value = m;
+  $("path").value = p;
+  $("body").value = body || "";
+  syncBodyVisibility();
+  refreshSample();
+}
+
 function renderHistory() {
   const box = $("history");
   $("hist-count").textContent = hist.length ? hist.length + " sent" : "";
@@ -1490,14 +1499,7 @@ function renderHistory() {
     b.title = h.ms + " ms — click to reload into the console";
     b.innerHTML = '<span class="hm">' + esc(h.m) + '</span><span class="hp">' + esc(h.p) + "</span>" +
       '<span class="hs s' + String(h.status)[0] + '">' + (h.status || "ERR") + "</span>";
-    b.onclick = () => {
-      clearOperation();
-      $("method").value = h.m;
-      $("path").value = h.p;
-      $("body").value = h.body || "";
-      syncBodyVisibility();
-      refreshSample();
-    };
+    b.onclick = () => loadIntoConsole(h.m, h.p, h.body);
     box.appendChild(b);
   });
 }
@@ -1635,17 +1637,17 @@ async function chatApi(m, p, body) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
   }
+  const entry = { m, p, body: opts.body || "", status: 0 };
+  turnCalls.push(entry);
   const t0 = performance.now();
   let r;
   try {
     r = await fetchT(url, opts, 8000);
   } catch (e) {
-    turnCalls.push({ m, p, body: opts.body || "", status: 0 });
     throw new Error("network error talking to the robot: " + e.message);
   }
-  const ms = Math.round(performance.now() - t0);
-  turnCalls.push({ m, p, body: opts.body || "", status: r.status });
-  pushHistory({ m, p, status: r.status, ms, body: opts.body || "" });
+  entry.status = r.status;
+  pushHistory({ m, p, status: r.status, ms: Math.round(performance.now() - t0), body: entry.body });
   const text = await r.text();
   let j = null;
   try { j = JSON.parse(text); } catch { /* non-JSON answer */ }
@@ -1687,11 +1689,16 @@ function pickByName(items, name, getName) {
 }
 
 /* "the first mission", "any", "one", "it" are picks, not names — empty
-   means take the first, in both the rule and the LLM planner's args. */
+   means take the first. One vocabulary, shared by the rule planner
+   (missionName) and the executor (ordinalToEmpty). */
+const PICK_WORDS = "first|any|some|a|one|it";
 function ordinalToEmpty(name) {
   const want = String(name || "").trim();
-  return /^(the\s+)?(first|any|some|a|one|it)(\s+(mission|one|job))?$/i.test(want) ? "" : want;
+  return new RegExp("^(the\\s+)?(" + PICK_WORDS + ")(\\s+(mission|one|job))?$", "i").test(want)
+    ? "" : want;
 }
+
+const isActive = (state) => /pending|executing/i.test(String(state));
 
 const intIn = (v, lo, hi, what) => {
   const n = Math.trunc(Number(v));
@@ -1700,18 +1707,47 @@ const intIn = (v, lo, hi, what) => {
   return n;
 };
 
-function chatHelp() {
-  return currentKind === "mirfleet"
-    ? 'Fleet mode. Try: "how many robots are online?" · "any active orders?" · ' +
-      '"dispatch the <name> mission" · "fleet version".'
-    : 'Try: "what’s the battery at?" · "pause" / "resume" · "what’s wrong?" · "clear the error" · ' +
+/* All per-API-family chat copy in one place: help text, few-shot examples
+   for the LLM planner, and the suggestion chips. */
+const PER_KIND = {
+  robot: {
+    help: 'Try: "what’s the battery at?" · "pause" / "resume" · "what’s wrong?" · "clear the error" · ' +
       '"what missions does it know?" · "queue the <name> mission" · "clear the queue" · ' +
-      '"read register 5" / "set register 5 to 42" · "rename it to Wall-E" · "clear the chat".';
-}
+      '"read register 5" / "set register 5 to 42" · "rename it to Wall-E" · "clear the chat".',
+    examples: [
+      ["is it charged up?", '{"tool": "get_battery", "args": {}}'],
+      ["take a break for a moment", '{"tool": "pause", "args": {}}'],
+      ["do the delivery run", '{"tool": "enqueue_mission", "args": {"name": "delivery run"}}'],
+      // a follow-up pair: teaches that "run/start it/one" after missions = enqueue
+      ["which missions are there?", '{"tool": "list_missions", "args": {}}'],
+      ["ok run the first one", '{"tool": "enqueue_mission", "args": {}}'],
+      ["what's the weather like?", '{"tool": "none", "args": {"reply": "I only control this robot."}}'],
+    ],
+    suggests: ["what's the battery at?", "pause the robot", "resume", "what missions does it know?",
+      "queue the first mission", "clear the error"],
+  },
+  mirfleet: {
+    help: 'Fleet mode. Try: "how many robots are online?" · "any active orders?" · ' +
+      '"dispatch the <name> mission" · "fleet version".',
+    examples: [
+      ["how busy are we?", '{"tool": "fleet_orders", "args": {}}'],
+      ["send out the delivery job", '{"tool": "dispatch_order", "args": {"name": "delivery"}}'],
+      ["what's the weather like?", '{"tool": "none", "args": {"reply": "I only manage this MiR fleet."}}'],
+    ],
+    suggests: ["how many robots are online?", "any active orders?", "dispatch an order", "fleet version"],
+  },
+};
+const kindCfg = () => PER_KIND[currentKind] || PER_KIND.robot;
 
 const TOOLS = {
   help: { kind: "both", desc: "list what this chat can do",
-    run: async () => chatHelp() },
+    run: async () => kindCfg().help },
+  none: { kind: "both", argSpec: '{"reply": string}',
+    desc: "reply when the request is unrelated to the robot",
+    run: async (a) => String((a && a.reply) || "That's outside what I can do here.").slice(0, 300) },
+  clear_chat: { kind: "both", desc: "clear this chat transcript",
+    // Renders for itself: null tells chatSend the turn is already on screen.
+    run: async () => { chatWipe("Chat cleared. " + CHAT_GREETING); return null; } },
   get_status: { kind: "robot", desc: "robot state: mode, battery, position, current mission",
     async run() { return statusLine(await chatApi("GET", "/status")); } },
   get_battery: { kind: "robot", desc: "battery percentage and time remaining",
@@ -1775,7 +1811,7 @@ const TOOLS = {
     async run() {
       const list = asList(await chatApi("GET", "/mission_queue"), "mission_queue");
       if (!list.length) return "The mission queue is empty.";
-      const active = list.filter((e) => /pending|executing/i.test(String(e.state)));
+      const active = list.filter((e) => isActive(e.state));
       return list.length + " entr" + (list.length === 1 ? "y" : "ies") + " in the queue" +
         (active.length ? ", " + active.length + " pending or executing." : ", none active.");
     } },
@@ -1817,7 +1853,7 @@ const TOOLS = {
     async run() {
       const orders = asList(await chatApi("GET", "/order"), "orders");
       if (!orders.length) return "No orders on record.";
-      const active = orders.filter((o) => /pending|executing/i.test(String(o["order-status"])));
+      const active = orders.filter((o) => isActive(o["order-status"]));
       return orders.length + " order" + (orders.length === 1 ? "" : "s") +
         (active.length ? ", " + active.length + " active." : ", none active.");
     } },
@@ -1863,7 +1899,7 @@ function quotedOr(raw, re) {
   return m ? m[1].replace(/[?.!]+\s*$/, "").trim() : "";
 }
 function missionName(raw) {
-  if (/\b(first|any|a|some) mission\b/i.test(raw)) return "";
+  if (new RegExp("\\b(" + PICK_WORDS + ") (mission|one|job)\\b", "i").test(raw)) return "";
   let n = quotedOr(raw, /mission (?:called |named )?(.+)$/i);
   if (n) return n;
   const m = raw.match(/\b(?:queue|enqueue|run|start|launch|execute|dispatch|do)\s+(?:the\s+)?(.+?)\s+mission\b/i);
@@ -1872,6 +1908,8 @@ function missionName(raw) {
 
 function planWithRules(raw) {
   const t = raw.toLowerCase();
+  if (/\b(clear|wipe|reset|erase)\b[^.]*\b(chat|transcript|conversation)\b/.test(t))
+    return { tool: "clear_chat", args: {} };
   if (/^(help|\?)\s*$|\bwhat can (you|this|i)\b/.test(t)) return { tool: "help", args: {} };
   if (currentKind === "mirfleet") {
     if (/\b(dispatch|place|create)\b|\b(send|start|queue|enqueue|run|execute|do)\b.*\b(order|mission)\b/.test(t))
@@ -1918,7 +1956,7 @@ function robotRules(raw, t) {
 }
 
 /* ---- tier 1: the in-browser model (WebLLM, opt-in) ---- */
-let ai = null, aiLoading = false;
+let ai = null, aiLoading = false, aiWanted = false;
 const AI_KEY = "mir-console-ai";
 const WEBLLM_URL = "https://esm.run/@mlc-ai/web-llm@0.2.84"; // pinned; CSP allows only esm.run + cdn.jsdelivr.net
 const AI_PREFERRED = [ // smallest first; the real list is read from the runtime at load time
@@ -1929,7 +1967,7 @@ const AI_PREFERRED = [ // smallest first; the real list is read from the runtime
 
 function aiSystemPrompt() {
   const tools = Object.entries(TOOLS)
-    .filter(([, t]) => t.kind === "both" || t.kind === currentKind)
+    .filter(([name, t]) => name !== "none" && (t.kind === "both" || t.kind === currentKind))
     .map(([name, t]) => "- " + name + (t.argSpec ? " " + t.argSpec : " {}") + " — " + t.desc)
     .join("\n");
   return "You translate one user message about a MiR robot into exactly one JSON object " +
@@ -1938,31 +1976,16 @@ function aiSystemPrompt() {
     'answer {"tool": "none", "args": {"reply": "<one short sentence>"}}.';
 }
 
-/* Fixed few-shot pairs anchor the 0.5B model to the JSON contract; the
-   session's own successful translations are appended after them, which is
-   what lets follow-ups like "run the first one" resolve in context. */
+/* Fixed few-shot pairs (kindCfg().examples) anchor the 0.5B model to the
+   JSON contract; the session's own successful translations are appended
+   after them, which is what lets follow-ups like "run the first one"
+   resolve in context. */
 let aiHistory = []; // [{u: user text, a: assistant JSON}], capped
-function aiExamples() {
-  return currentKind === "mirfleet"
-    ? [
-        ["how busy are we?", '{"tool": "fleet_orders", "args": {}}'],
-        ["send out the delivery job", '{"tool": "dispatch_order", "args": {"name": "delivery"}}'],
-        ["what's the weather like?", '{"tool": "none", "args": {"reply": "I only manage this MiR fleet."}}'],
-      ]
-    : [
-        ["is it charged up?", '{"tool": "get_battery", "args": {}}'],
-        ["take a break for a moment", '{"tool": "pause", "args": {}}'],
-        ["do the delivery run", '{"tool": "enqueue_mission", "args": {"name": "delivery run"}}'],
-        // a follow-up pair: teaches that "run/start it/one" after missions = enqueue
-        ["which missions are there?", '{"tool": "list_missions", "args": {}}'],
-        ["ok run the first one", '{"tool": "enqueue_mission", "args": {}}'],
-        ["what's the weather like?", '{"tool": "none", "args": {"reply": "I only control this robot."}}'],
-      ];
-}
 
 async function planWithAI(text) {
+  let deadline;
   try {
-    const shots = [...aiExamples(), ...aiHistory.map((h) => [h.u, h.a])]
+    const shots = [...kindCfg().examples, ...aiHistory.map((h) => [h.u, h.a])]
       .flatMap(([u, a]) => [{ role: "user", content: u }, { role: "assistant", content: a }]);
     // Race the model against a deadline: a wedged generation must degrade
     // to the rule engine, never hang the chat turn.
@@ -1979,18 +2002,23 @@ async function planWithAI(text) {
         // wedges the generation ("Cannot pass non-string to std::string");
         // the prompt demands JSON and the parse below is defensive instead.
       }),
-      new Promise((_, rej) => setTimeout(() => rej(new Error("model timeout")), 45000)),
+      new Promise((_, rej) => {
+        deadline = setTimeout(() => rej(new Error("model timeout")), 45000);
+      }),
     ]);
     const raw = r.choices[0].message.content;
     // Small models sometimes wrap the object in prose — take the first {...}.
     const out = JSON.parse((raw.match(/\{[^]*\}/) || [raw])[0]);
-    if (out.tool === "none")
-      return { none: String((out.args && out.args.reply) || "That's outside what I can do here.").slice(0, 300) };
     if (!TOOLS[out.tool]) return null;
-    aiHistory.push({ u: text.slice(0, 200), a: JSON.stringify({ tool: out.tool, args: out.args || {} }) });
+    const args = (out.args && typeof out.args === "object") ? out.args : {};
+    aiHistory.push({ u: text.slice(0, 200), a: JSON.stringify({ tool: out.tool, args }) });
     aiHistory = aiHistory.slice(-3);
-    return { tool: out.tool, args: (out.args && typeof out.args === "object") ? out.args : {} };
-  } catch { return null; } // any failure → the rule engine takes the message
+    return { tool: out.tool, args };
+  } catch {
+    return null; // any failure → the rule engine takes the message
+  } finally {
+    clearTimeout(deadline);
+  }
 }
 
 async function loadAI() {
@@ -2014,8 +2042,8 @@ async function loadAI() {
     const engine = await webllm.CreateMLCEngine(model, {
       initProgressCallback: (p) => { st.textContent = (p && p.text) || "loading model…"; },
     });
-    ai = { engine, model };
-    $("chat-brain").textContent = "AI · " + model.replace(/-MLC$/, "");
+    ai = { engine, model, label: "AI · " + model.replace(/-MLC$/, "") };
+    $("chat-brain").textContent = ai.label;
     btn.style.display = "none";
     st.className = "hint ok";
     st.textContent = "model loaded — free-form phrasing on. It still only picks from the same fixed actions.";
@@ -2025,6 +2053,7 @@ async function loadAI() {
     st.textContent = "couldn't load the model (" + e.message + ") — the rule engine keeps working. " +
       "A strict Content-Security-Policy or an offline network blocks the CDN import.";
     btn.disabled = false;
+    aiWanted = false;
     try { localStorage.removeItem(AI_KEY); } catch { /* private mode */ }
   }
   aiLoading = false;
@@ -2085,13 +2114,9 @@ function attachCalls(div, calls) {
     b.appendChild(document.createTextNode(c.p));
     b.appendChild(st);
     b.onclick = () => {
-      clearOperation();
-      $("method").value = c.m;
-      $("path").value = c.p;
-      try { $("body").value = c.body ? JSON.stringify(JSON.parse(c.body), null, 2) : ""; }
-      catch { $("body").value = c.body; }
-      syncBodyVisibility();
-      refreshSample();
+      let body = c.body;
+      try { body = c.body ? JSON.stringify(JSON.parse(c.body), null, 2) : ""; } catch { /* raw */ }
+      loadIntoConsole(c.m, c.p, body);
     };
     row.appendChild(b);
   });
@@ -2099,17 +2124,11 @@ function attachCalls(div, calls) {
   $("chat-log").scrollTop = $("chat-log").scrollHeight;
 }
 
-const CHAT_SUGGESTS = {
-  robot: ["what's the battery at?", "pause the robot", "resume", "what missions does it know?",
-          "queue the first mission", "clear the error"],
-  mirfleet: ["how many robots are online?", "any active orders?", "dispatch an order", "fleet version"],
-};
-
 function renderChatSuggests() {
   aiHistory = []; // tool set may have changed with the API family
   const box = $("chat-suggests");
   box.innerHTML = "";
-  (CHAT_SUGGESTS[currentKind] || CHAT_SUGGESTS.robot).forEach((s) => {
+  kindCfg().suggests.forEach((s) => {
     const b = document.createElement("button");
     b.className = "preset";
     b.textContent = s;
@@ -2118,48 +2137,45 @@ function renderChatSuggests() {
   });
 }
 
+/* Every terminal branch of a chat turn ends here: set the text, persist
+   the exchange (one localStorage write per turn), tag provenance, attach
+   the request chips. */
+function finishBot(reply, text, opts = {}) {
+  if (opts.err) reply.classList.add("err");
+  reply.textContent = text;
+  chatPersist(opts.err ? "bot err" : "bot", text);
+  if (opts.via) markVia(reply, opts.via);
+  attachCalls(reply, opts.calls || []);
+}
+
 async function chatSend(text) {
-  if (/\b(clear|wipe|reset)\b[^.]*\b(chat|transcript|conversation)\b/i.test(text)) {
-    chatWipe("Chat cleared. " + CHAT_GREETING);
-    return;
-  }
   chatMsg("user", text);
-  chatPersist("user", text);
+  chatStore.push({ c: "user", t: text.slice(0, 600) }); // written with the reply
+  if (aiWanted) loadAI(); // deferred opt-in: first chat use starts the load
+  const reply = chatMsg("bot", ai ? "thinking…" : "…");
   if (!BASE || (MODE === "fleet" && !currentVersion)) {
-    chatMsg("bot err", "Not connected — pick an endpoint in the panel on the left first.");
+    finishBot(reply, "Not connected — pick an endpoint in the panel on the left first.", { err: true });
     return;
   }
-  const reply = chatMsg("bot", ai ? "thinking…" : "…");
   turnCalls = [];
   let plan = null, via = "rules";
   if (ai) {
     plan = await planWithAI(text);
-    if (plan) via = "AI · " + ai.model.replace(/-MLC$/, "");
+    if (plan) via = ai.label;
   }
   if (!plan) plan = planWithRules(text);
-  if (plan && plan.none) {
-    reply.textContent = plan.none;
-    chatPersist("bot", plan.none);
-    markVia(reply, via);
-    return;
-  }
   if (!plan) {
-    reply.classList.add("err");
-    reply.textContent = "I didn't catch that — try a suggestion below" +
-      (ai ? "." : ", or load the in-browser AI for free-form phrasing.");
+    finishBot(reply, "I didn't catch that — try a suggestion below" +
+      (ai ? "." : ", or load the in-browser AI for free-form phrasing."), { err: true });
     return;
   }
-  let cls = "bot";
   try {
-    reply.textContent = await runTool(plan.tool, plan.args);
+    const out = await runTool(plan.tool, plan.args);
+    if (out === null) return; // the tool rendered for itself (clear_chat wipes the log)
+    finishBot(reply, out, { via, calls: turnCalls });
   } catch (e) {
-    cls = "bot err";
-    reply.classList.add("err");
-    reply.textContent = e.message;
+    finishBot(reply, e.message, { err: true, via, calls: turnCalls });
   }
-  chatPersist(cls, reply.textContent);
-  markVia(reply, via);
-  attachCalls(reply, turnCalls);
 }
 
 async function chatSubmit() {
@@ -2471,7 +2487,13 @@ try { chatStore = (JSON.parse(localStorage.getItem(CHAT_KEY)) || []).filter(
   (m) => m && typeof m.t === "string" && /^(user|bot|bot err)$/.test(m.c)); } catch { chatStore = []; }
 if (chatStore.length) chatStore.forEach((m) => chatMsg(m.c, m.t));
 else chatMsg("bot", CHAT_GREETING);
-try { if (localStorage.getItem(AI_KEY) === "1") loadAI(); } catch { /* private mode */ }
+// Opted-in AI loads on first chat use, not on page load — visitors who never
+// touch the chat shouldn't pay the engine init and model residency.
+try { aiWanted = localStorage.getItem(AI_KEY) === "1"; } catch { /* private mode */ }
+if (aiWanted) {
+  $("ai-status").textContent = "AI enabled — the model loads the first time you use the chat.";
+  $("chat-input").addEventListener("focus", () => loadAI(), { once: true });
+}
 $("new-session").onclick = () => {
   $("session").value = newSessionId();
   try { localStorage.setItem(SESSION_KEY, $("session").value); } catch { /* private mode */ }

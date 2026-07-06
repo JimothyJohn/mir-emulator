@@ -171,16 +171,15 @@ def test_console_serves_bundled_page_with_csp(call, tmp_path, monkeypatch):
     assert response["headers"]["x-content-type-options"] == "nosniff"
 
 
-def test_console_csp_script_src_is_pinned(call, tmp_path, monkeypatch):
+def test_console_csp_script_src_is_pinned():
     # The chat panel may import the WebLLM runtime from jsDelivr; script-src
     # must allow exactly those pinned origins and nothing broader. Widening
     # this list is a supply-chain decision — do it in a deliberate diff, and
-    # update this test in the same commit.
-    page = tmp_path / "console.html"
-    page.write_text("<!DOCTYPE html><title>console</title>", encoding="utf-8")
-    monkeypatch.setattr(serverless, "CONSOLE_FILE", page)
-    csp = call(event("GET", "/console"))["headers"]["content-security-policy"]
-    directives = dict((parts[0], parts[1:]) for parts in (d.split(" ") for d in csp.split("; ")))
+    # update this test in the same commit. (That the served /console header
+    # carries CONSOLE_CSP is covered by the bundled-page tests above; this
+    # test pins the allowlist itself.)
+    csp = serverless.CONSOLE_CSP
+    directives = {p[0]: p[1:] for p in (d.split(" ") for d in csp.split("; "))}
     assert directives["default-src"] == ["'none'"]
     assert set(directives["script-src"]) == {
         "'unsafe-inline'",
