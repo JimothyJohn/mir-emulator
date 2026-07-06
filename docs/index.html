@@ -443,7 +443,7 @@ table.plain td:last-child { color: var(--ink-dim); }
     <nav class="topnav">
       <a href="#console">Console</a>
       <a href="#docs">Documentation</a>
-      <a href="https://github.com/JimothyJohn/mir-emulator" rel="noopener">GitHub</a>
+      <a href="https://github.com/JimothyJohn/amr-emulator" rel="noopener">GitHub</a>
     </nav>
     <div class="head-right">
       <div class="led-box"><span class="led" id="led"></span><span id="led-text">probing&hellip;</span></div>
@@ -467,7 +467,7 @@ table.plain td:last-child { color: var(--ink-dim); }
     <div class="cta">
       <a class="btn btn-primary" href="#console">Use the live console</a>
       <a class="btn btn-ghost" href="#quickstart">Start in 30 seconds</a>
-      <a class="btn btn-ghost" href="https://github.com/JimothyJohn/mir-emulator" rel="noopener">View on GitHub</a>
+      <a class="btn btn-ghost" href="https://github.com/JimothyJohn/amr-emulator" rel="noopener">View on GitHub</a>
     </div>
   </div>
 
@@ -671,7 +671,7 @@ curl -H 'x-api-key: distributor' https://amr-emulator.com/fleet/latest/api/v1/ro
       </div>
       <div>
         <b>3 &mdash; Run it yourself.</b> The emulator is a Python package: clone
-        <a href="https://github.com/JimothyJohn/mir-emulator" rel="noopener">the repo</a> and
+        <a href="https://github.com/JimothyJohn/amr-emulator" rel="noopener">the repo</a> and
         <code>uv run mir-emulator --mir-version 3.8.1</code> for a robot on <code>localhost</code>,
         CI, or an air-gapped bench.
       </div>
@@ -703,12 +703,12 @@ curl -H 'x-api-key: distributor' https://amr-emulator.com/fleet/latest/api/v1/ro
       <p>MiR ships the API definition as PDFs only. A weekly scraper converts each tracked version's MIR250 PDF
         back to Swagger 2.0, gated by a correctness oracle: the one machine-readable spec MiR ever published
         (3.5.4 <code>swagger.json</code>) must re-convert with <b>zero structural differences</b> on every run.
-        See the <a href="https://github.com/JimothyJohn/mir-emulator#how-it-stays-current" rel="noopener">README</a>
+        See the <a href="https://github.com/JimothyJohn/amr-emulator#how-it-stays-current" rel="noopener">README</a>
         for the full pipeline.</p>
     </div>
     <div class="card">
       <h3>Verifiable provenance</h3>
-      <p>The <a href="https://github.com/JimothyJohn/mir-emulator/blob/master/packages/mir-emulator/src/mir_emulator/specs/registry.json" rel="noopener">spec
+      <p>The <a href="https://github.com/JimothyJohn/amr-emulator/blob/master/packages/mir-emulator/src/mir_emulator/specs/registry.json" rel="noopener">spec
         registry</a> records, for every tracked version, the source PDF URL and SHA-256 of both the PDF and the
         converted spec. The emulator serves its own definitions at <code>/&lt;version&gt;/swagger.json</code> and
         <code>/&lt;version&gt;/openapi.json</code>, so contract-testing tools can point straight at it.</p>
@@ -757,7 +757,7 @@ curl -H 'x-api-key: distributor' https://amr-emulator.com/fleet/latest/api/v1/ro
       MiR API definitions</a>. State is in-memory per runtime instance and resets on cold start — don't store
       anything you need to keep. Machine-readable specs per version:
       <code>/&lt;version&gt;/swagger.json</code> (Swagger 2.0) &middot; <code>/&lt;version&gt;/openapi.json</code> (OpenAPI 3.0).
-      Source, issues, and local install: <a href="https://github.com/JimothyJohn/mir-emulator" rel="noopener">github.com/JimothyJohn/mir-emulator</a>.
+      Source, issues, and local install: <a href="https://github.com/JimothyJohn/amr-emulator" rel="noopener">github.com/JimothyJohn/amr-emulator</a>.
     </div>
   </footer>
 </div>

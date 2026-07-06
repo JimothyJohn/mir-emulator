@@ -4,7 +4,7 @@ An [advin.io](https://advin.io) service — spec-faithful emulators of
 autonomous mobile robot (AMR) REST APIs, starting with Mobile Industrial
 Robots (MiR).
 
-[![GitHub](https://img.shields.io/badge/GitHub-JimothyJohn%2Fmir--emulator-181717?logo=github)](https://github.com/JimothyJohn/mir-emulator)
+[![GitHub](https://img.shields.io/badge/GitHub-JimothyJohn%2Famr--emulator-181717?logo=github)](https://github.com/JimothyJohn/amr-emulator)
 [![Live demo](https://img.shields.io/badge/Live_demo-amr--emulator.com-2ea44f)](https://amr-emulator.com/console)
 
 Self-updating emulator of the [Mobile Industrial Robots (MiR) robot REST API](https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/)
