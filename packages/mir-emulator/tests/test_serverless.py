@@ -171,6 +171,30 @@ def test_console_serves_bundled_page_with_csp(call, tmp_path, monkeypatch):
     assert response["headers"]["x-content-type-options"] == "nosniff"
 
 
+def test_console_csp_script_src_is_pinned():
+    # The chat panel may import the WebLLM runtime from jsDelivr; script-src
+    # must allow exactly those pinned origins and nothing broader. Widening
+    # this list is a supply-chain decision — do it in a deliberate diff, and
+    # update this test in the same commit. (That the served /console header
+    # carries CONSOLE_CSP is covered by the bundled-page tests above; this
+    # test pins the allowlist itself.)
+    csp = serverless.CONSOLE_CSP
+    directives = {p[0]: p[1:] for p in (d.split(" ") for d in csp.split("; "))}
+    assert directives["default-src"] == ["'none'"]
+    assert set(directives["script-src"]) == {
+        "'unsafe-inline'",
+        "'wasm-unsafe-eval'",
+        "https://esm.run",
+        "https://cdn.jsdelivr.net",
+    }
+    # no eval, and connections stay HTTPS-or-loopback only
+    assert "'unsafe-eval'" not in csp
+    assert all(
+        source.startswith(("https:", "http://127.0.0.1", "http://localhost"))
+        for source in directives["connect-src"]
+    )
+
+
 def test_every_version_serves_status_with_auth(call):
     for version in registry.supported_versions():
         response = call(

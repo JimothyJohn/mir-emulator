@@ -20,6 +20,17 @@ uv run mir-emulator --fleet-version 1.5.0   # a MiR Fleet with two embedded robo
 curl -H 'x-api-key: distributor' http://127.0.0.1:8080/api/v1/robots
 ```
 
+## Chat with it — plain words, no endpoints
+
+The [live console](https://mir.advin.io/console) includes a chat panel that
+turns "pause the robot" or "queue the charging mission" into the right API
+calls and shows every request it sent as a clickable chip. A deterministic
+rule engine handles common phrasings with zero download; free-form phrasing
+can run through an optional ~0.5B-parameter model executing entirely in your
+browser ([WebLLM](https://github.com/mlc-ai/web-llm) on WebGPU, fetched once
+and cached). Both planners feed one whitelisted executor — neither can reach
+an endpoint outside the fixed tool table.
+
 ## The fleet emulates MiR Fleet Enterprise — by driving robot emulators
 
 `mir_emulator.fleet` embeds a configurable set of robot emulators and controls
