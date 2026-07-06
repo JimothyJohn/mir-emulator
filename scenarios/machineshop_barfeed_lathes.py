@@ -1,0 +1,232 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["httpx>=0.27", "mir-client"]
+#
+# [tool.uv.sources]
+# mir-client = { path = "../packages/mir-client" }
+# ///
+"""Machine shop — one robot feeds five bar-fed lathes from a central rod rack.
+
+The classic 1-to-many machine-tending pattern (no MiR-official case study;
+composite of published bar-feeder replenishment deployments). A machine shop
+runs five CNC lathes, each with a bar feeder holding a short magazine of
+cylindrical rods. The feeders chew through stock at different rates — part
+cycle times differ per lathe — and a single MiR shuttles rod bundles from the
+central storage rack to whichever feeder is running lowest. The whole tension
+of a 1-to-many cell is here: one robot, five consumers, and a day clock that
+never stops for the robot.
+
+What this exercises on the emulator:
+  * GET/PUT /registers/{n} as machine-side telemetry: each bar feeder
+    publishes its magazine level, the rack publishes remaining stock
+  * lowest-stock-first dispatch — the priority decision lives in the shop's
+    dispatcher, not the robot's FIFO queue (which only ever holds one job)
+  * per-lathe X-MiR-Mission-Duration — near lathes are quick runs, the far
+    wall is a long one, all through the same mission definitions
+  * a rod-conservation ledger: rack out == magazines in, checked exactly at
+    end of day, plus a zero-starvation assertion (no lathe ever waits on air)
+
+Register map used here (pick your own on a real site):
+  30-34  bar feeder magazine level, lathes L1-L5 (rods remaining)
+  50     central rack stock (rods remaining)
+
+Run:
+    uv run mir-emulator --mission-duration 2 &
+    uv run scenarios/machineshop_barfeed_lathes.py
+"""
+
+import os
+import sys
+import time
+
+import httpx
+from mir_client import robot_token
+
+MIR_URL = os.environ.get("MIR_URL", "http://127.0.0.1:8080")
+API = "/api/v2.0.0"
+
+# The compressed production day: consumption advances once per tick whether
+# or not the robot is moving.
+DAY_TICKS = 120
+TICK_S = 0.25
+
+MAGAZINE_CAP = 8  # rods a bar feeder holds
+REORDER_AT = 3  # dispatch a refill at or below this level
+RACK_INITIAL = 80  # rods on the central storage rack at shift start
+RACK_REG = 50
+
+# One row per lathe: PLC register for its magazine, delivery duration from
+# the rack (X-MiR-Mission-Duration, emulator-only — near bays run 1 s, the
+# far wall 3 s), and part cycle time as ticks-per-rod.
+LATHES = [
+    {"name": "L1 (near bay)", "reg": 30, "trip_s": "1", "ticks_per_rod": 8},
+    {"name": "L2 (near bay)", "reg": 31, "trip_s": "1", "ticks_per_rod": 10},
+    {"name": "L3 (mid aisle)", "reg": 32, "trip_s": "2", "ticks_per_rod": 12},
+    {"name": "L4 (mid aisle)", "reg": 33, "trip_s": "2", "ticks_per_rod": 14},
+    {"name": "L5 (far wall)", "reg": 34, "trip_s": "3", "ticks_per_rod": 16},
+]
+
+
+def client(session: str) -> httpx.Client:
+    user = os.environ.get("MIR_USERNAME", "distributor")
+    password = os.environ.get("MIR_PASSWORD", "distributor")
+    token = robot_token(user, password)
+    return httpx.Client(
+        base_url=MIR_URL,
+        headers={"Authorization": f"Basic {token}", "X-MiR-Session": session},
+        timeout=15,
+    )
+
+
+def require_emulator(c: httpx.Client) -> None:
+    try:
+        index = c.get("/").json()
+    except httpx.ConnectError:
+        sys.exit(f"Nothing at {MIR_URL} — start one: uv run mir-emulator --mission-duration 2")
+    if "emulated_mir_version" not in index:
+        sys.exit(
+            f"{MIR_URL} does not look like the emulator; refusing to write PLC registers on it."
+        )
+
+
+def reg_get(c: httpx.Client, n: int) -> int:
+    return int(c.get(f"{API}/registers/{n}").json()["value"])
+
+
+def reg_set(c: httpx.Client, n: int, value: int) -> None:
+    c.put(f"{API}/registers/{n}", json={"value": value}).raise_for_status()
+
+
+def queue_state(c: httpx.Client, qid: int) -> str:
+    return c.get(f"{API}/mission_queue/{qid}").json()["state"]
+
+
+def main() -> None:
+    c = client("machineshop")
+    require_emulator(c)
+    c.put(f"{API}/status", json={"name": "BarRunner"})
+
+    group = c.get(f"{API}/mission_groups").json()[0]["guid"]
+    for lathe in LATHES:
+        lathe["mission"] = c.post(
+            f"{API}/missions",
+            json={"name": f"Bar stock: rack -> {lathe['name']}", "group_id": group},
+        ).json()["guid"]
+        lathe["level"] = MAGAZINE_CAP
+        lathe["consumed"] = 0
+        lathe["deliveries"] = 0
+        lathe["min_level"] = MAGAZINE_CAP
+        lathe["starved"] = 0
+        reg_set(c, lathe["reg"], MAGAZINE_CAP)
+    rack = RACK_INITIAL
+    reg_set(c, RACK_REG, rack)
+    print(
+        f"shift start: {len(LATHES)} lathes at {MAGAZINE_CAP} rods each, "
+        f"rack at {rack}, reorder point {REORDER_AT}\n"
+    )
+
+    in_flight = None  # {"qid", "lathe", "bundle"} while the robot is out
+    busy_ticks = 0
+
+    def land(delivery: dict) -> None:
+        lathe = delivery["lathe"]
+        lathe["level"] += delivery["bundle"]
+        lathe["deliveries"] += 1
+        reg_set(c, lathe["reg"], lathe["level"])
+        print(
+            f"  tick {tick:3d}: +{delivery['bundle']} rods to {lathe['name']} "
+            f"(magazine {lathe['level']}, rack {rack})"
+        )
+
+    for tick in range(1, DAY_TICKS + 1):
+        time.sleep(TICK_S)
+
+        # Bar feeders consume on their own clocks; a dry feeder is a stopped
+        # spindle, not a consumed rod.
+        for lathe in LATHES:
+            if tick % lathe["ticks_per_rod"] == 0:
+                if lathe["level"] > 0:
+                    lathe["level"] -= 1
+                    lathe["consumed"] += 1
+                    reg_set(c, lathe["reg"], lathe["level"])
+                else:
+                    lathe["starved"] += 1
+                lathe["min_level"] = min(lathe["min_level"], lathe["level"])
+
+        if in_flight is not None:
+            busy_ticks += 1
+            if queue_state(c, in_flight["qid"]) == "Done":
+                land(in_flight)
+                in_flight = None
+
+        if in_flight is None:
+            # The 1-to-many decision: of everyone at or below the reorder
+            # point (per their registers), serve the lowest magazine first.
+            low = [x for x in LATHES if reg_get(c, x["reg"]) <= REORDER_AT]
+            if low:
+                lathe = min(low, key=lambda x: x["level"])
+                bundle = min(MAGAZINE_CAP - lathe["level"], rack)
+                if bundle <= 0:
+                    sys.exit(f"rack empty at tick {tick} — shift under-stocked")
+                rack -= bundle
+                reg_set(c, RACK_REG, rack)
+                qid = c.post(
+                    f"{API}/mission_queue",
+                    json={"mission_id": lathe["mission"]},
+                    headers={"X-MiR-Mission-Duration": lathe["trip_s"]},
+                ).json()["id"]
+                in_flight = {"qid": qid, "lathe": lathe, "bundle": bundle}
+                print(
+                    f"  tick {tick:3d}: {lathe['name']} at {lathe['level']} rods -> "
+                    f"picked {bundle} from rack, queued [{qid}] ({lathe['trip_s']}s run)"
+                )
+
+    # A bundle picked before the whistle still gets delivered.
+    if in_flight is not None:
+        deadline = time.monotonic() + 60
+        while queue_state(c, in_flight["qid"]) != "Done":
+            if time.monotonic() > deadline:
+                sys.exit(f"final delivery [{in_flight['qid']}] never finished")
+            time.sleep(0.2)
+        tick = DAY_TICKS
+        land(in_flight)
+
+    print("\nend of shift:")
+    consumed_total = 0
+    for lathe in LATHES:
+        consumed_total += lathe["consumed"]
+        spindle_pct = 100 * (1 - lathe["starved"] * lathe["ticks_per_rod"] / DAY_TICKS)
+        print(
+            f"  {lathe['name']:14s} consumed {lathe['consumed']:2d} rods over "
+            f"{lathe['deliveries']} deliveries, min magazine {lathe['min_level']}, "
+            f"spindle uptime {spindle_pct:.0f}%"
+        )
+    print(
+        f"  BarRunner busy {100 * busy_ticks / DAY_TICKS:.0f}% of the day; "
+        f"rack {RACK_INITIAL} -> {rack}"
+    )
+
+    # Conservation of rods: every rod is on the rack, in a magazine, or
+    # already turned into parts. Registers must agree with the ledger.
+    magazines = sum(x["level"] for x in LATHES)
+    if RACK_INITIAL + len(LATHES) * MAGAZINE_CAP != rack + magazines + consumed_total:
+        sys.exit(
+            f"rod ledger broken: rack {rack} + magazines {magazines} "
+            f"+ consumed {consumed_total} != {RACK_INITIAL + len(LATHES) * MAGAZINE_CAP}"
+        )
+    rack_reg = reg_get(c, RACK_REG)
+    if rack_reg != rack:
+        sys.exit(f"rack register {rack_reg} != ledger {rack}")
+    for lathe in LATHES:
+        level_reg = reg_get(c, lathe["reg"])
+        if level_reg != lathe["level"]:
+            sys.exit(f"{lathe['name']} register {level_reg} != ledger {lathe['level']}")
+    starved_total = sum(x["starved"] for x in LATHES)
+    if starved_total:
+        sys.exit(f"{starved_total} starvation events — one robot did not keep up")
+    print("\nrod ledger balances exactly; zero starvation events — one robot fed five lathes")
+
+
+if __name__ == "__main__":
+    main()
