@@ -22,8 +22,14 @@ What this exercises on the emulator:
     publishes its magazine level, the rack publishes remaining stock
   * lowest-stock-first dispatch — the priority decision lives in the shop's
     dispatcher, not the robot's FIFO queue (which only ever holds one job)
-  * per-lathe X-MiR-Mission-Duration — near lathes are quick runs, the far
-    wall is a long one, all through the same mission definitions
+  * per-lathe X-MiR-Mission-Duration in *simulated* seconds — near lathes
+    are a 1-minute (~30 m) run, the far wall 3 minutes (~90 m)
+  * PUT /_emulator/clock at 60x: those realistic trips finish in 1-3 wall
+    seconds while odometry, /statistics/distance, battery drain, and
+    timestamps all come out shift-realistic. The clock is process-wide
+    (every session on the emulator), so the script restores it on exit —
+    but anything else running against the same process meanwhile will see
+    time fly.
   * a rod-conservation ledger: rack out == magazines in, checked exactly at
     end of day, plus a zero-starvation assertion (no lathe ever waits on air)
 
@@ -47,9 +53,12 @@ MIR_URL = os.environ.get("MIR_URL", "http://127.0.0.1:8080")
 API = "/api/v2.0.0"
 
 # The compressed production day: consumption advances once per tick whether
-# or not the robot is moving.
+# or not the robot is moving. The emulator clock runs at TIME_SCALE, so
+# trip durations below are simulated seconds (wall = sim / TIME_SCALE) and
+# odometry comes out realistic (the emulator drives 0.5 m per sim second).
 DAY_TICKS = 120
 TICK_S = 0.25
+TIME_SCALE = 60
 
 MAGAZINE_CAP = 8  # rods a bar feeder holds
 REORDER_AT = 3  # dispatch a refill at or below this level
@@ -57,14 +66,15 @@ RACK_INITIAL = 80  # rods on the central storage rack at shift start
 RACK_REG = 50
 
 # One row per lathe: PLC register for its magazine, delivery duration from
-# the rack (X-MiR-Mission-Duration, emulator-only — near bays run 1 s, the
-# far wall 3 s), and part cycle time as ticks-per-rod.
+# the rack (X-MiR-Mission-Duration, emulator-only, in simulated seconds —
+# near bays are a 1-minute / ~30 m run, the far wall 3 minutes / ~90 m),
+# and part cycle time as ticks-per-rod.
 LATHES = [
-    {"name": "L1 (near bay)", "reg": 30, "trip_s": "1", "ticks_per_rod": 8},
-    {"name": "L2 (near bay)", "reg": 31, "trip_s": "1", "ticks_per_rod": 10},
-    {"name": "L3 (mid aisle)", "reg": 32, "trip_s": "2", "ticks_per_rod": 12},
-    {"name": "L4 (mid aisle)", "reg": 33, "trip_s": "2", "ticks_per_rod": 14},
-    {"name": "L5 (far wall)", "reg": 34, "trip_s": "3", "ticks_per_rod": 16},
+    {"name": "L1 (near bay)", "reg": 30, "trip_s": "60", "ticks_per_rod": 8},
+    {"name": "L2 (near bay)", "reg": 31, "trip_s": "60", "ticks_per_rod": 10},
+    {"name": "L3 (mid aisle)", "reg": 32, "trip_s": "120", "ticks_per_rod": 12},
+    {"name": "L4 (mid aisle)", "reg": 33, "trip_s": "120", "ticks_per_rod": 14},
+    {"name": "L5 (far wall)", "reg": 34, "trip_s": "180", "ticks_per_rod": 16},
 ]
 
 
@@ -105,7 +115,18 @@ def queue_state(c: httpx.Client, qid: int) -> str:
 def main() -> None:
     c = client("machineshop")
     require_emulator(c)
+    # 60x simulated time makes the realistic trip durations fit the wall
+    # clock. Process-wide, so restore it however the shift ends.
+    c.put("/_emulator/clock", json={"scale": TIME_SCALE}).raise_for_status()
+    try:
+        run_shift(c)
+    finally:
+        c.delete("/_emulator/clock")
+
+
+def run_shift(c: httpx.Client) -> None:
     c.put(f"{API}/status", json={"name": "BarRunner"})
+    start = c.get(f"{API}/status").json()
 
     group = c.get(f"{API}/mission_groups").json()[0]["guid"]
     for lathe in LATHES:
@@ -177,9 +198,11 @@ def main() -> None:
                     headers={"X-MiR-Mission-Duration": lathe["trip_s"]},
                 ).json()["id"]
                 in_flight = {"qid": qid, "lathe": lathe, "bundle": bundle}
+                trip_sim = int(lathe["trip_s"])
                 print(
                     f"  tick {tick:3d}: {lathe['name']} at {lathe['level']} rods -> "
-                    f"picked {bundle} from rack, queued [{qid}] ({lathe['trip_s']}s run)"
+                    f"picked {bundle} from rack, queued [{qid}] "
+                    f"({trip_sim // 60} min / ~{trip_sim * 0.5:.0f} m run)"
                 )
 
     # A bundle picked before the whistle still gets delivered.
@@ -205,6 +228,11 @@ def main() -> None:
     print(
         f"  BarRunner busy {100 * busy_ticks / DAY_TICKS:.0f}% of the day; "
         f"rack {RACK_INITIAL} -> {rack}"
+    )
+    end = c.get(f"{API}/status").json()
+    print(
+        f"  odometer +{end['moved'] - start['moved']:.0f} m for the day; "
+        f"battery {start['battery_percentage']:.0f}% -> {end['battery_percentage']:.1f}%"
     )
 
     # Conservation of rods: every rod is on the rack, in a magazine, or
