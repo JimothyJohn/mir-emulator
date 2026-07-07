@@ -25,7 +25,8 @@ sha256() { # portable: macOS has shasum, GitHub runners have both
 }
 
 STACK_NAME="${STACK_NAME:-mir-emulator-demo}"
-DOMAIN_NAME="${DOMAIN_NAME:-mir.advin.io}" # DOMAIN_NAME="" skips the custom domain
+DOMAIN_NAME="${DOMAIN_NAME:-amr-emulator.com}"        # DOMAIN_NAME="" skips the custom domain
+LEGACY_DOMAIN_NAME="${LEGACY_DOMAIN_NAME:-}"          # old alias kept alive (e.g. mir.advin.io)
 CFN_ROLE_ARN="${CFN_ROLE_ARN:-}"           # optional CloudFormation service role
 REGION="${AWS_REGION:-$(aws configure get region)}"
 ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
@@ -81,18 +82,38 @@ else
     log "Bundle already uploaded (content-addressed), skipping"
 fi
 
+zone_for_domain() { # walk the labels: apex domains own their zone, subdomains sit in a parent's
+    local candidate="$1" zone_id
+    while [[ "$candidate" == *.* ]]; do
+        zone_id="$(aws route53 list-hosted-zones-by-name --dns-name "$candidate" \
+            --query "HostedZones[?Name=='${candidate}.'].Id | [0]" --output text)"
+        zone_id="${zone_id##*/}"
+        if [[ -n "$zone_id" && "$zone_id" != "None" ]]; then
+            echo "$zone_id"
+            return 0
+        fi
+        candidate="${candidate#*.}"
+    done
+    return 1
+}
+
 DOMAIN_PARAMS=()
 if [[ -n "$DOMAIN_NAME" ]]; then
-    PARENT_DOMAIN="${DOMAIN_NAME#*.}"
-    HOSTED_ZONE_ID="$(aws route53 list-hosted-zones-by-name --dns-name "$PARENT_DOMAIN" \
-        --query "HostedZones[?Name=='${PARENT_DOMAIN}.'].Id | [0]" --output text)"
-    HOSTED_ZONE_ID="${HOSTED_ZONE_ID##*/}"
-    if [[ -z "$HOSTED_ZONE_ID" || "$HOSTED_ZONE_ID" == "None" ]]; then
-        log "ERROR: no public hosted zone found for ${PARENT_DOMAIN}"
+    if ! HOSTED_ZONE_ID="$(zone_for_domain "$DOMAIN_NAME")"; then
+        log "ERROR: no public hosted zone found for ${DOMAIN_NAME}"
         exit 1
     fi
     log "Custom domain ${DOMAIN_NAME} in zone ${HOSTED_ZONE_ID}"
     DOMAIN_PARAMS=("DomainName=${DOMAIN_NAME}" "HostedZoneId=${HOSTED_ZONE_ID}")
+fi
+
+if [[ -n "$LEGACY_DOMAIN_NAME" ]]; then
+    if ! LEGACY_ZONE_ID="$(zone_for_domain "$LEGACY_DOMAIN_NAME")"; then
+        log "ERROR: no public hosted zone found for ${LEGACY_DOMAIN_NAME}"
+        exit 1
+    fi
+    log "Legacy domain ${LEGACY_DOMAIN_NAME} in zone ${LEGACY_ZONE_ID}"
+    DOMAIN_PARAMS+=("LegacyDomainName=${LEGACY_DOMAIN_NAME}" "LegacyHostedZoneId=${LEGACY_ZONE_ID}")
 fi
 
 ROLE_ARGS=()
@@ -165,5 +186,8 @@ if [[ -n "$DOMAIN_NAME" ]]; then
     done
     check 200 "https://${DOMAIN_NAME}/console"
     check 200 "https://${DOMAIN_NAME}/latest/api/v2.0.0/status" -H "Authorization: Basic ${AUTH_TOKEN}"
+fi
+if [[ -n "$LEGACY_DOMAIN_NAME" ]]; then
+    check 200 "https://${LEGACY_DOMAIN_NAME}/healthz"
 fi
 log "Smoke test passed"

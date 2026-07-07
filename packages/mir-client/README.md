@@ -2,7 +2,7 @@
 
 Typed Python client for the **MiR robot REST API** (`mir_client.robot`) and the
 **MiR Fleet Enterprise Integration API** (`mir_client.fleet`), generated from
-the official specs bundled with [mir-emulator](https://github.com/JimothyJohn/mir-emulator).
+the official specs bundled with [mir-emulator](https://github.com/JimothyJohn/amr-emulator).
 
 `mir_client/robot`, `mir_client/fleet`, and `_provenance.py` are entirely
 generated (`scripts/generate_client.py`); CI fails if they drift from the spec

@@ -37,7 +37,7 @@ source of truth per fact, and CI that proves claims instead of trusting them.
 ## Setup
 
 ```sh
-git clone https://github.com/JimothyJohn/mir-emulator.git
+git clone https://github.com/JimothyJohn/amr-emulator.git
 cd mir-emulator
 ./Quickstart -t     # installs uv if needed, then lint + unit + integration
 ```

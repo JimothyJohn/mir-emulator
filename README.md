@@ -1,7 +1,11 @@
-# MiR emulator
+# AMR Emulator
 
-[![GitHub](https://img.shields.io/badge/GitHub-JimothyJohn%2Fmir--emulator-181717?logo=github)](https://github.com/JimothyJohn/mir-emulator)
-[![Live demo](https://img.shields.io/badge/Live_demo-mir.advin.io-2ea44f)](https://mir.advin.io/console)
+An [advin.io](https://advin.io) service — spec-faithful emulators of
+autonomous mobile robot (AMR) REST APIs, starting with Mobile Industrial
+Robots (MiR).
+
+[![GitHub](https://img.shields.io/badge/GitHub-JimothyJohn%2Famr--emulator-181717?logo=github)](https://github.com/JimothyJohn/amr-emulator)
+[![Live demo](https://img.shields.io/badge/Live_demo-amr--emulator.com-2ea44f)](https://amr-emulator.com/console)
 
 Self-updating emulator of the [Mobile Industrial Robots (MiR) robot REST API](https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/)
 **and the [MiR Fleet Enterprise Integration API](https://supportportal.mobile-industrial-robots.com/support-files/manuals/MiR_Fleet_Enterprise_OpenAPI_Specification/1.5.0/index.html?urls.primaryName=MiR+Fleet+Integration+API+v1)**.
@@ -19,6 +23,17 @@ curl -H "Authorization: Basic $(printf '%s:%s' distributor "$(printf distributor
 uv run mir-emulator --fleet-version 1.5.0   # a MiR Fleet with two embedded robots
 curl -H 'x-api-key: distributor' http://127.0.0.1:8080/api/v1/robots
 ```
+
+## Chat with it — plain words, no endpoints
+
+The [live console](https://amr-emulator.com/console) includes a chat panel that
+turns "pause the robot" or "queue the charging mission" into the right API
+calls and shows every request it sent as a clickable chip. A deterministic
+rule engine handles common phrasings with zero download; free-form phrasing
+can run through an optional ~0.5B-parameter model executing entirely in your
+browser ([WebLLM](https://github.com/mlc-ai/web-llm) on WebGPU, fetched once
+and cached). Both planners feed one whitelisted executor — neither can reach
+an endpoint outside the fixed tool table.
 
 ## The fleet emulates MiR Fleet Enterprise — by driving robot emulators
 
