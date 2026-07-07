@@ -1,6 +1,7 @@
 name: Deploy demo
 
-# Prod path for the public demo (mir.advin.io): master-only, OIDC-assumed
+# Prod path for the public demo (amr-emulator.com, legacy alias mir.advin.io):
+# master-only, OIDC-assumed
 # role that can only drive CloudFormation + the artifacts bucket. Resource
 # permissions live in the CloudFormation service role (deploy/github-oidc.yaml).
 
@@ -49,5 +50,6 @@ jobs:
       - name: Build bundle, deploy stack, smoke test
         env:
           CFN_ROLE_ARN: ${{ vars.AWS_CFN_EXEC_ROLE_ARN }}
-          DOMAIN_NAME: mir.advin.io
+          DOMAIN_NAME: amr-emulator.com
+          LEGACY_DOMAIN_NAME: mir.advin.io
         run: ./scripts/deploy_demo.sh

@@ -1,8 +1,9 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  mir-emulator public demo: one Lambda serving every tracked MiR REST API
-  version behind an API Gateway HTTP API. Hardened for public exposure:
-  stage throttling, reserved concurrency, scoped IAM, capped log retention.
+  AMR Emulator public demo (amr-emulator.com): one Lambda serving every
+  tracked MiR REST API version behind an API Gateway HTTP API. Hardened for
+  public exposure: stage throttling, reserved concurrency, scoped IAM,
+  capped log retention.
 
 Parameters:
   CodeS3Bucket:
@@ -29,16 +30,27 @@ Parameters:
   DomainName:
     Type: String
     Default: ""
-    Description: Custom domain for the API (e.g. mir.advin.io); empty disables
+    Description: Canonical custom domain for the API (e.g. amr-emulator.com); empty disables
   HostedZoneId:
     Type: String
     Default: ""
-    Description: Route53 public hosted zone that owns DomainName's parent
+    Description: Route53 public hosted zone that owns DomainName
+  LegacyDomainName:
+    Type: String
+    Default: ""
+    Description: Extra alias kept alive for old links (e.g. mir.advin.io); empty disables
+  LegacyHostedZoneId:
+    Type: String
+    Default: ""
+    Description: Route53 public hosted zone that owns LegacyDomainName's parent
 
 Conditions:
   HasCustomDomain: !And
     - !Not [!Equals [!Ref DomainName, ""]]
     - !Not [!Equals [!Ref HostedZoneId, ""]]
+  HasLegacyDomain: !And
+    - !Not [!Equals [!Ref LegacyDomainName, ""]]
+    - !Not [!Equals [!Ref LegacyHostedZoneId, ""]]
 
 Resources:
   FunctionLogGroup:
@@ -134,7 +146,11 @@ Resources:
           "integrationLatencyMs":"$context.integrationLatency",
           "error":"$context.error.messageString"}
 
-  Certificate:
+  # Canonical domain (amr-emulator.com). New logical IDs so the legacy
+  # resources below keep their names — flipping the old IDs to the new
+  # domain would force a replacement that collides on the in-use
+  # API Gateway domain name mid-update.
+  PrimaryCertificate:
     Type: AWS::CertificateManager::Certificate
     Condition: HasCustomDomain
     Properties:
@@ -144,25 +160,25 @@ Resources:
         - DomainName: !Ref DomainName
           HostedZoneId: !Ref HostedZoneId
 
-  ApiDomain:
+  PrimaryApiDomain:
     Type: AWS::ApiGatewayV2::DomainName
     Condition: HasCustomDomain
     Properties:
       DomainName: !Ref DomainName
       DomainNameConfigurations:
-        - CertificateArn: !Ref Certificate
+        - CertificateArn: !Ref PrimaryCertificate
           EndpointType: REGIONAL
           SecurityPolicy: TLS_1_2
 
-  ApiMapping:
+  PrimaryApiMapping:
     Type: AWS::ApiGatewayV2::ApiMapping
     Condition: HasCustomDomain
     Properties:
       ApiId: !Ref HttpApi
-      DomainName: !Ref ApiDomain
+      DomainName: !Ref PrimaryApiDomain
       Stage: !Ref Stage
 
-  DnsAliasA:
+  PrimaryDnsAliasA:
     Type: AWS::Route53::RecordSet
     Condition: HasCustomDomain
     Properties:
@@ -170,15 +186,68 @@ Resources:
       Name: !Ref DomainName
       Type: A
       AliasTarget:
-        DNSName: !GetAtt ApiDomain.RegionalDomainName
-        HostedZoneId: !GetAtt ApiDomain.RegionalHostedZoneId
+        DNSName: !GetAtt PrimaryApiDomain.RegionalDomainName
+        HostedZoneId: !GetAtt PrimaryApiDomain.RegionalHostedZoneId
 
-  DnsAliasAAAA:
+  PrimaryDnsAliasAAAA:
     Type: AWS::Route53::RecordSet
     Condition: HasCustomDomain
     Properties:
       HostedZoneId: !Ref HostedZoneId
       Name: !Ref DomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt PrimaryApiDomain.RegionalDomainName
+        HostedZoneId: !GetAtt PrimaryApiDomain.RegionalHostedZoneId
+
+  # Legacy alias (mir.advin.io): the original logical IDs, now fed by the
+  # Legacy* parameters with the same values they were created with, so this
+  # update is a no-op for the live resources and old links keep resolving.
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: HasLegacyDomain
+    Properties:
+      DomainName: !Ref LegacyDomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref LegacyDomainName
+          HostedZoneId: !Ref LegacyHostedZoneId
+
+  ApiDomain:
+    Type: AWS::ApiGatewayV2::DomainName
+    Condition: HasLegacyDomain
+    Properties:
+      DomainName: !Ref LegacyDomainName
+      DomainNameConfigurations:
+        - CertificateArn: !Ref Certificate
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
+
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Condition: HasLegacyDomain
+    Properties:
+      ApiId: !Ref HttpApi
+      DomainName: !Ref ApiDomain
+      Stage: !Ref Stage
+
+  DnsAliasA:
+    Type: AWS::Route53::RecordSet
+    Condition: HasLegacyDomain
+    Properties:
+      HostedZoneId: !Ref LegacyHostedZoneId
+      Name: !Ref LegacyDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ApiDomain.RegionalDomainName
+        HostedZoneId: !GetAtt ApiDomain.RegionalHostedZoneId
+
+  DnsAliasAAAA:
+    Type: AWS::Route53::RecordSet
+    Condition: HasLegacyDomain
+    Properties:
+      HostedZoneId: !Ref LegacyHostedZoneId
+      Name: !Ref LegacyDomainName
       Type: AAAA
       AliasTarget:
         DNSName: !GetAtt ApiDomain.RegionalDomainName
@@ -199,5 +268,8 @@ Outputs:
   PublicUrl:
     Description: Custom-domain URL (empty when no domain configured)
     Value: !If [HasCustomDomain, !Sub "https://${DomainName}", ""]
+  LegacyUrl:
+    Description: Legacy alias URL (empty when no legacy domain configured)
+    Value: !If [HasLegacyDomain, !Sub "https://${LegacyDomainName}", ""]
   FunctionName:
     Value: !Ref Function

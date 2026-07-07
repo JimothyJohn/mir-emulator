@@ -1,7 +1,7 @@
 # MiR REST API emulator — for CI services and docker compose test stacks.
 #
-#   docker build -t mir-emulator .
-#   docker run --rm -p 8080:8080 mir-emulator --mir-version 3.8.1
+#   docker build -t amr-emulator .
+#   docker run --rm -p 8080:8080 amr-emulator --mir-version 3.8.1
 FROM python:3.12-slim AS build
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /src
