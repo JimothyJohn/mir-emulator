@@ -3,9 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* Set the theme before first paint (no flash): stored choice wins, else the
+   OS preference. The main script wires the toggle and syncs the glyph. */
+(function () {
+  var t;
+  try { t = localStorage.getItem("mir-console-theme"); } catch (e) {}
+  if (t !== "dark" && t !== "light") {
+    t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  document.documentElement.setAttribute("data-theme", t);
+})();
+</script>
 <title>AMR Emulator — spec-faithful emulators of AMR robot REST APIs</title>
 <meta name="description" content="Develop and harden MiR robot integrations without a robot: every tracked MiR software version of the REST API on one public endpoint, with a live console built from the official MiR API documentation.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%2300bfff'/><rect x='18' y='34' width='64' height='32' rx='6' fill='white'/><circle cx='34' cy='50' r='7' fill='%2300bfff'/><circle cx='66' cy='50' r='7' fill='%2300bfff'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%2300bfff'/><rect x='18' y='30' width='64' height='32' rx='6' fill='white'/><circle cx='34' cy='46' r='7' fill='%2300bfff'/><circle cx='66' cy='46' r='7' fill='%2300bfff'/><circle cx='36' cy='70' r='7' fill='white'/><circle cx='64' cy='70' r='7' fill='white'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
@@ -14,6 +26,7 @@
    cyan #00bfff accent, blue #1a76bc/#105aa8 actions, ink #0c0931, pale cyan
    tints #effafe/#cbeefa, .4rem radii, card hover glow, light 300 headings. */
 :root {
+  color-scheme: light;
   --brand: #00bfff;
   --blue: #1a76bc;
   --blue-deep: #105aa8;
@@ -28,13 +41,47 @@
   --amber: #c77700;
   --red: #cf3228;
   --focus: #72c7e7;
+  /* surfaces + one-off colors, themed below */
+  --page: #fff;
+  --surface: #fff;
+  --field-border: #c9d3de;
+  --footer-bg: var(--ink);
+  --footer-fg: #b9bdd1;
+  --syn-s: #1d7a4f;   /* JSON string  */
+  --syn-n: #b3541e;   /* JSON number  */
+  --syn-b: #8a3ea8;   /* JSON boolean */
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans: "Open Sans", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+/* Dark theme: same MiR brand cyan, palette re-grounded on a dark surface.
+   Set by the inline head script (system preference or the stored toggle). */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --blue: #4a95d6;
+  --blue-deep: #78b6ec;
+  --ink: #e7e9f2;
+  --ink-dim: #a2a8c0;
+  --ink-faint: #6f7590;
+  --tint: #14313c;
+  --tint-2: #1d4a5d;
+  --line: #2a2f3f;
+  --code-bg: #12141d;
+  --green: #3fb87c;
+  --amber: #e0a44a;
+  --red: #e5695f;
+  --page: #0e1017;
+  --surface: #191c26;
+  --field-border: #363c4e;
+  --footer-bg: #12141d;
+  --footer-fg: var(--ink-dim);
+  --syn-s: #5ecb92;
+  --syn-n: #e0965a;
+  --syn-b: #c88fe0;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { -webkit-text-size-adjust: 100%; }
 body {
-  background: #fff;
+  background: var(--page);
   color: var(--ink);
   font-family: var(--sans);
   font-size: 14px;
@@ -57,7 +104,7 @@ button { font-family: var(--sans); }
 /* ---------- header ---------- */
 header {
   border-bottom: 1px solid var(--line);
-  background: #fff;
+  background: var(--surface);
   position: sticky; top: 0; z-index: 20;
 }
 .brandbar { height: 4px; background: var(--brand); }
@@ -80,7 +127,7 @@ h1 span { color: var(--brand); }
 .led-box {
   display: flex; align-items: center; gap: 8px;
   border: 1px solid var(--line); border-radius: 999px;
-  padding: 6px 14px; background: #fff;
+  padding: 6px 14px; background: var(--surface);
   font-size: 12px; color: var(--ink-dim);
 }
 .led { width: 9px; height: 9px; border-radius: 50%; background: var(--ink-faint); flex: none; }
@@ -92,7 +139,7 @@ h1 span { color: var(--brand); }
 .grid { display: grid; grid-template-columns: 340px 1fr; gap: 18px; margin-top: 26px; align-items: start; }
 @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 .panel {
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: .4rem;
   overflow: hidden;
@@ -104,7 +151,7 @@ h1 span { color: var(--brand); }
   display: flex; align-items: center; gap: 10px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--line);
-  background: #fff;
+  background: var(--surface);
   font-size: 15px; font-weight: 600;
   color: var(--ink);
 }
@@ -115,48 +162,15 @@ h1 span { color: var(--brand); }
 .panel-head .tag { margin-left: auto; color: var(--ink-faint); font-size: 11px; font-family: var(--mono); font-weight: 400; }
 .panel-body { padding: 16px; }
 
-/* ---------- intro strip ---------- */
-.intro {
-  margin-top: 26px; padding: 18px 20px;
-  border: 1px solid var(--tint-2); border-left: 4px solid var(--brand);
-  border-radius: .4rem; background: var(--tint);
-  display: flex; gap: 20px; flex-wrap: wrap; align-items: baseline;
-}
-.intro b { font-size: 14px; font-weight: 600; }
-.intro p { color: var(--ink-dim); font-size: 13.5px; max-width: 72ch; }
-.intro code { background: #fff; }
 
 /* ---------- version picker ---------- */
-.versions { display: flex; flex-direction: column; gap: 8px; }
-.vbtn {
-  display: flex; align-items: center; gap: 12px;
-  width: 100%; text-align: left; cursor: pointer;
-  background: #fff; color: var(--ink);
-  border: 1px solid var(--line); border-radius: .4rem;
-  padding: 12px 14px; font-size: 14px;
-  transition: border-color .15s, background .15s, box-shadow .3s ease;
-}
-.vbtn:hover { border-color: var(--tint-2); box-shadow: 0 0 15px var(--tint-2); }
-.vbtn.active { border-color: var(--brand); background: var(--tint); }
-.vbtn .vnum { font-weight: 600; font-size: 16px; }
-.vbtn.active .vnum { color: var(--blue-deep); }
-.vbtn .vpath { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--ink-faint); }
-.vbtn .chip {
-  font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
-  border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; color: var(--ink-dim);
-}
-.vbtn.active .chip.latest { border-color: var(--brand); color: var(--blue-deep); background: #fff; }
-.vbtn .chip.fleetc { border-color: var(--blue); color: var(--blue-deep); }
-.kv { margin-top: 16px; font-size: 12.5px; color: var(--ink-dim); display: grid; gap: 6px; }
-.kv div { display: flex; gap: 10px; }
-.kv dt { color: var(--ink-faint); min-width: 82px; text-transform: uppercase; font-size: 10px; letter-spacing: .1em; padding-top: 2px; }
-.kv dd { word-break: break-all; }
+.version-select { width: 100%; font-size: 14px; }
 
 /* ---------- console ---------- */
 .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .preset {
   cursor: pointer; font-family: var(--mono); font-size: 11.5px;
-  background: #fff; color: var(--ink-dim);
+  background: var(--surface); color: var(--ink-dim);
   border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px;
   transition: color .15s, border-color .15s;
 }
@@ -166,8 +180,8 @@ h1 span { color: var(--brand); }
 
 .reqline { display: flex; gap: 10px; flex-wrap: wrap; }
 select, input[type=text], textarea {
-  background: #fff; color: var(--ink);
-  border: 1px solid #c9d3de; border-radius: .4rem;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--field-border); border-radius: .4rem;
   font-family: var(--mono); font-size: 13.5px; padding: 10px 12px;
   outline: none;
 }
@@ -186,26 +200,13 @@ textarea { width: 100%; min-height: 96px; resize: vertical; line-height: 1.5; ma
 .send:hover { background: var(--blue-deep); border-color: var(--blue-deep); }
 .send:active { transform: translateY(1px); }
 .send[disabled] { opacity: .5; cursor: wait; }
-.body-label, .curl-label {
+.body-label {
   margin-top: 14px; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint);
   display: flex; align-items: center; gap: 10px;
 }
-.curl {
-  margin-top: 8px; position: relative;
-  background: var(--code-bg); border: 1px solid var(--line); border-radius: .4rem;
-  padding: 12px 60px 12px 12px; font-family: var(--mono); font-size: 12px; color: var(--ink-dim);
-  white-space: pre-wrap; word-break: break-all;
-}
-.copy {
-  position: absolute; top: 8px; right: 8px; cursor: pointer;
-  background: #fff; color: var(--ink-dim);
-  border: 1px solid var(--line); border-radius: 4px;
-  font-size: 11px; font-weight: 600; padding: 4px 10px;
-}
-.copy:hover { color: var(--blue-deep); border-color: var(--brand); }
 
 /* ---------- version compare ---------- */
-#compare { scroll-margin-top: 96px; }
+#console, #compare, #endpoints { scroll-margin-top: 96px; }
 .cmp-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
 .cmp-row select { min-width: 150px; }
 #cmp-result { margin-top: 14px; }
@@ -219,16 +220,6 @@ textarea { width: 100%; min-height: 96px; resize: vertical; line-height: 1.5; ma
 .cmp-col.chg li::before { content: "~ "; color: var(--amber); font-weight: 700; }
 .cmp-clean { color: var(--green); font-weight: 600; font-size: 14px; }
 
-/* ---------- language tabs (Stripe-style: pick once, everything follows) ---------- */
-.lang-tabs { display: inline-flex; gap: 4px; flex-wrap: wrap; }
-.lang-tab {
-  cursor: pointer; font-family: var(--mono); font-size: 11px; font-weight: 600;
-  background: #fff; color: var(--ink-dim);
-  border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px;
-  transition: color .15s, border-color .15s, background .15s;
-}
-.lang-tab:hover { color: var(--blue-deep); border-color: var(--brand); }
-.lang-tab.active { background: var(--ink); color: #fff; border-color: var(--ink); }
 
 /* ---------- response ---------- */
 .resp-meta {
@@ -247,9 +238,9 @@ pre.resp {
   max-height: 460px; overflow: auto; white-space: pre-wrap; word-break: break-word;
 }
 pre.resp .k { color: var(--blue-deep); }
-pre.resp .s { color: #1d7a4f; }
-pre.resp .n { color: #b3541e; }
-pre.resp .b { color: #8a3ea8; }
+pre.resp .s { color: var(--syn-s); }
+pre.resp .n { color: var(--syn-n); }
+pre.resp .b { color: var(--syn-b); }
 .hint { color: var(--ink-faint); font-size: 12px; margin-top: 10px; }
 .hint.warn { color: var(--red); }
 .hint.ok { color: var(--green); }
@@ -273,13 +264,23 @@ pre.resp .b { color: #8a3ea8; }
 .connect-btn {
   cursor: pointer; width: 100%;
   font-weight: 600; font-size: 13px;
-  background: #fff; color: var(--blue);
+  background: var(--surface); color: var(--blue);
   border: 1px solid var(--blue); border-radius: 999px; padding: 8px 0;
   transition: color .3s ease, border-color .3s ease, background-color .3s ease;
 }
 .connect-btn:hover { color: var(--blue-deep); border-color: var(--blue-deep); background: var(--tint); }
 .connect-btn[disabled] { opacity: .5; cursor: wait; }
 .auth label .dim { color: var(--ink-faint); text-transform: none; letter-spacing: 0; }
+/* Endpoint panel: one compact wrapping row (minimum height) */
+.ep-compact { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ep-compact .radio { margin: 0; }
+.ep-compact .connect-btn { width: auto; padding: 8px 18px; }
+.ep-compact #ep-status:empty { display: none; }
+.ep-extra { flex-basis: 100%; display: grid; gap: 6px; }
+.ep-extra:empty { display: none; }
+/* Credentials: robot key beside user/pass on the full-width row */
+.cred-cols { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; align-items: start; }
+@media (max-width: 720px) { .cred-cols { grid-template-columns: 1fr; } }
 
 /* ---------- telemetry strip ---------- */
 .telemetry {
@@ -291,7 +292,7 @@ pre.resp .b { color: #8a3ea8; }
 .telemetry button {
   cursor: pointer; flex: none;
   font-weight: 600; font-size: 11px;
-  background: #fff; color: var(--ink-dim);
+  background: var(--surface); color: var(--ink-dim);
   border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px;
 }
 .telemetry button:hover { color: var(--blue-deep); border-color: var(--brand); }
@@ -317,7 +318,7 @@ pre.resp .b { color: #8a3ea8; }
 .hrow {
   display: flex; align-items: center; gap: 8px; width: 100%;
   cursor: pointer; text-align: left;
-  background: #fff; color: var(--ink-dim);
+  background: var(--surface); color: var(--ink-dim);
   border: 1px solid var(--line); border-radius: .4rem;
   padding: 6px 10px; font-family: var(--mono); font-size: 11px;
 }
@@ -325,39 +326,10 @@ pre.resp .b { color: #8a3ea8; }
 .hrow .hm { font-weight: 600; color: var(--ink); flex: none; }
 .hrow .hp { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hrow .hs { margin-left: auto; font-weight: 600; flex: none; }
-.hrow .hs.s2, .api-chip .st.s2 { color: var(--green); }
-.hrow .hs.s4, .api-chip .st.s4 { color: var(--amber); }
-.hrow .hs.s5, .hrow .hs.s0, .api-chip .st.s5, .api-chip .st.s0 { color: var(--red); }
+.hrow .hs.s2 { color: var(--green); }
+.hrow .hs.s4 { color: var(--amber); }
+.hrow .hs.s5, .hrow .hs.s0 { color: var(--red); }
 
-/* ---------- chat ---------- */
-.chat-log { display: grid; gap: 8px; max-height: 340px; overflow-y: auto; }
-.msg {
-  max-width: 92%; border-radius: .4rem; padding: 8px 12px;
-  font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
-}
-.msg.user { justify-self: end; background: var(--blue); color: #fff; }
-.msg.bot { justify-self: start; background: var(--tint); border: 1px solid var(--tint-2); }
-.msg.bot.err { background: #fbeeed; border-color: #eec7c3; color: var(--red); }
-.chat-calls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.api-chip {
-  cursor: pointer; font-family: var(--mono); font-size: 10.5px;
-  background: #fff; color: var(--ink-dim);
-  border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px;
-  transition: color .15s, border-color .15s;
-}
-.api-chip:hover { color: var(--blue-deep); border-color: var(--brand); }
-.api-chip b { font-weight: 600; color: var(--ink); margin-right: 4px; }
-/* .api-chip .st status colors are shared with .hrow .hs above */
-.msg .via {
-  display: block; margin-top: 5px;
-  font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
-  color: var(--ink-faint);
-}
-.chat-row { display: flex; gap: 10px; margin-top: 12px; }
-#chat-input { flex: 1; min-width: 0; font-family: var(--sans); }
-.ai-row { margin-top: 10px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
-.ai-row .connect-btn { width: auto; padding: 6px 16px; font-size: 12px; flex: none; }
-.ai-row .hint { margin-top: 0; flex: 1; min-width: 220px; }
 
 /* ---------- response headers ---------- */
 details.resp-headers { margin-top: 8px; }
@@ -374,8 +346,8 @@ details.resp-headers pre {
 /* ---------- footer ---------- */
 footer {
   margin-top: 46px; padding: 22px 24px;
-  background: var(--ink); border-radius: .4rem;
-  color: #b9bdd1; font-size: 12.5px; line-height: 1.8;
+  background: var(--footer-bg); border-radius: .4rem;
+  color: var(--footer-fg); font-size: 12.5px; line-height: 1.8;
 }
 footer a { color: var(--tint-2); }
 footer code { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.18); color: var(--tint-2); }
@@ -384,9 +356,6 @@ footer code { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,
 
 /* ---------- landing sections (hero, docs, quickstart, endpoints) ---------- */
 #console, #docs, #quickstart { scroll-margin-top: 96px; } /* clear the sticky header */
-.topnav { display: flex; align-items: center; gap: 18px; font-size: 14px; }
-.topnav a { color: var(--ink-dim); }
-.topnav a:hover { color: var(--blue-deep); text-decoration: none; }
 .hero { padding: 56px 0 10px; max-width: 860px; }
 .hero h2 { font-size: 42px; line-height: 50px; font-weight: 300; margin: 0; }
 .hero h2 span { color: var(--brand); font-weight: 400; }
@@ -400,7 +369,7 @@ footer code { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,
 }
 .btn-primary { background: var(--blue); border: 1px solid var(--blue); color: #fff; }
 .btn-primary:hover { background: var(--blue-deep); border-color: var(--blue-deep); color: #fff; text-decoration: none; }
-.btn-ghost { background: #fff; border: 1px solid var(--blue); color: var(--blue); }
+.btn-ghost { background: var(--surface); border: 1px solid var(--blue); color: var(--blue); }
 .btn-ghost:hover { background: var(--tint); color: var(--blue-deep); border-color: var(--blue-deep); text-decoration: none; }
 .sect-title { font-size: 28px; line-height: 34px; font-weight: 300; margin: 54px 0 6px; }
 .lead { color: var(--ink-dim); max-width: 72ch; }
@@ -408,24 +377,47 @@ footer code { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,
 @media (max-width: 860px) { .cards { grid-template-columns: 1fr; } }
 .card {
   border: 1px solid var(--line); border-radius: .4rem; padding: 20px;
-  background: #fff; transition: box-shadow .3s ease;
+  background: var(--surface); transition: box-shadow .3s ease;
 }
 .card:hover { box-shadow: 0 0 15px var(--tint-2); }
 .card h3 { font-size: 16.5px; font-weight: 600; margin-bottom: 8px; }
 .card h3::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--brand); margin-right: 9px; vertical-align: 1px; }
 .card p { font-size: 13.5px; color: var(--ink-dim); }
-.quick { margin-top: 20px; border: 1px solid var(--tint-2); border-left: 4px solid var(--brand); border-radius: .4rem; background: var(--tint); padding: 20px; }
-.quick .steps { display: grid; gap: 14px; margin-top: 6px; font-size: 14px; color: var(--ink-dim); }
-pre.snippet {
-  background: var(--code-bg); border: 1px solid var(--line); border-radius: .4rem;
-  padding: 12px 14px; font-family: var(--mono); font-size: 12.5px; color: var(--ink);
-  overflow-x: auto; line-height: 1.6; margin-top: 6px;
-}
 table.plain { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13.5px; }
 table.plain th, table.plain td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
 table.plain th { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
 table.plain td:first-child { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; color: var(--blue-deep); }
 table.plain td:last-child { color: var(--ink-dim); }
+
+/* ---------- theme toggle ---------- */
+.theme-toggle {
+  width: 34px; height: 34px; flex: none;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); color: var(--ink-dim);
+  font-size: 15px; line-height: 1; cursor: pointer;
+  display: grid; place-items: center;
+  transition: border-color .15s, color .15s, box-shadow .3s ease;
+}
+.theme-toggle:hover { color: var(--blue-deep); border-color: var(--brand); box-shadow: 0 0 12px var(--tint-2); }
+.icon-btn {
+  width: 34px; height: 34px; flex: none;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); color: var(--ink-dim);
+  display: grid; place-items: center; text-decoration: none;
+  transition: border-color .15s, color .15s, box-shadow .3s ease;
+}
+.icon-btn:hover { color: var(--blue-deep); border-color: var(--brand); box-shadow: 0 0 12px var(--tint-2); text-decoration: none; }
+.session-feature {
+  margin-bottom: 14px; padding: 12px 14px;
+  border: 1px solid var(--tint-2); border-left: 4px solid var(--brand);
+  border-radius: .4rem; background: var(--tint);
+}
+.session-feature .row { align-items: stretch; }
+.session-feature #new-session { height: 100%; }
+
+/* Two rules use --ink as a *fill* (not text); it inverts under the dark
+   theme, so re-ground them on stable dark surfaces. */
+:root[data-theme="dark"] footer a { color: var(--brand); }
 </style>
 </head>
 <body>
@@ -434,20 +426,18 @@ table.plain td:last-child { color: var(--ink-dim); }
   <div class="brandbar"></div>
   <div class="masthead">
     <div class="mark">
-      <svg width="26" height="26" viewBox="0 0 100 100"><rect x="8" y="30" width="84" height="40" rx="8" fill="white"/><circle cx="30" cy="50" r="9" fill="#00bfff"/><circle cx="70" cy="50" r="9" fill="#00bfff"/></svg>
+      <svg width="26" height="26" viewBox="0 0 100 100"><rect x="8" y="24" width="84" height="40" rx="8" fill="white"/><circle cx="30" cy="44" r="9" fill="#00bfff"/><circle cx="70" cy="44" r="9" fill="#00bfff"/><circle cx="28" cy="76" r="9" fill="white"/><circle cx="72" cy="76" r="9" fill="white"/></svg>
     </div>
     <div>
-      <h1>AMR Emulator <span>/</span> Fleet Console</h1>
-      <div class="sub">Spec-faithful MiR robot REST API &mdash; every tracked version, one serverless endpoint</div>
+      <h1>AMR Emulator</h1>
+      <div class="sub">Every tracked MiR version, one serverless endpoint</div>
     </div>
-    <nav class="topnav">
-      <a href="#console">Console</a>
-      <a href="#docs">Documentation</a>
-      <a href="https://github.com/JimothyJohn/amr-emulator" rel="noopener">GitHub</a>
-    </nav>
     <div class="head-right">
       <div class="led-box"><span class="led" id="led"></span><span id="led-text">probing&hellip;</span></div>
-      <div class="led-box" id="endpoint-box" title="API endpoint">&#9096; <span id="endpoint-label">&mdash;</span></div>
+      <a class="icon-btn" href="https://github.com/JimothyJohn/amr-emulator" rel="noopener" title="Source code on GitHub" aria-label="Source code on GitHub">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
+      <button class="theme-toggle" id="theme-toggle" type="button" title="Toggle dark mode" aria-label="Toggle dark mode">&#9789;</button>
     </div>
   </div>
 </header>
@@ -455,273 +445,142 @@ table.plain td:last-child { color: var(--ink-dim); }
 <div class="wrap">
 
   <div class="hero">
-    <h2>Build against a MiR robot &mdash; or a whole MiR&nbsp;Fleet &mdash;<br><span>without owning either.</span></h2>
+    <h2>Simulate an AMR<br><span>without owning one.</span></h2>
     <p>
-      A spec-faithful, open-source emulator of the
-      <a href="https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/" rel="noopener">Mobile Industrial Robots REST API</a>
-      &mdash; every endpoint generated from MiR's official API documentation (<a href="#docs">primary sources below</a>).
-      Every tracked MiR software version is served from this endpoint, so you can develop, harden, and
-      regression-test your fleet integration before it ever touches hardware &mdash; then point the same
-      code at a real robot's IP.
+      It manages the versions so you don't have to: one endpoint speaks every tracked MiR software
+      generation. Build and test your integration against the demo, then point the same code at your
+      real robot's IP to switch over.
     </p>
     <div class="cta">
       <a class="btn btn-primary" href="#console">Use the live console</a>
-      <a class="btn btn-ghost" href="#quickstart">Start in 30 seconds</a>
-      <a class="btn btn-ghost" href="https://github.com/JimothyJohn/amr-emulator" rel="noopener">View on GitHub</a>
-    </div>
-  </div>
-
-  <h2 class="sect-title">Why an emulator</h2>
-  <p class="lead">Robot time is scarce and mistakes on real hardware are expensive. This endpoint gives you the API surface with none of the blast radius.</p>
-  <div class="cards">
-    <div class="card">
-      <h3>Every tracked version</h3>
-      <p>Each MiR software generation is mounted at its own prefix &mdash; <code>/&lt;version&gt;/api/v2.0.0/&hellip;</code>
-        for robots, <code>/fleet/&lt;version&gt;/api/v1/&hellip;</code> for MiR Fleet Enterprise &mdash;
-        so you can diff behavior across releases from one URL and catch upgrade breakage early.
-        Pick the version in the console's <a href="#console">software version panel</a>.</p>
-    </div>
-    <div class="card">
-      <h3>Real behavior, real auth</h3>
-      <p>Missions execute over simulated time: the queue drains FIFO with real <code>ordered/started/finished</code>
-        timestamps, battery drains, position moves, PLC registers hold writes, and unknown mission ids are
-        rejected with <code>400</code> like a factory robot. Auth mirrors one too &mdash;
-        <code>Basic BASE64(user:SHA-256(password))</code>, default <code>distributor/distributor</code>.</p>
-    </div>
-    <div class="card">
-      <h3>Made for hardening</h3>
-      <p>Deterministic responses generated from the official API definitions, documented error paths
-        (400/404/409) you can trigger on purpose, and per-session virtual robots &mdash; send an
-        <code>X-MiR-Session</code> header and you get your own isolated robots <b>and</b> your own
-        isolated MiR Fleet &mdash; which really dispatches its orders to those robot emulators over
-        their REST API, so the two views can never disagree.</p>
-    </div>
-  </div>
-
-  <div class="intro" id="console">
-    <b>&#9888; Shared demo unit</b>
-    <p>
-      This console talks to a live, public emulator of the
-      <a href="https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/" rel="noopener">Mobile Industrial Robots REST API</a>
-      running on AWS Lambda. Each tracked MiR software generation is mounted at its own path prefix
-      — <code>/&lt;version&gt;/api/v2.0.0/&hellip;</code> — so you can diff robot behavior across releases from one URL.
-      State (mission queue, PLC registers, status writes) is in-memory per runtime instance and resets on cold start.
-      Auth mirrors a factory robot: <code>Basic BASE64(user&colon;SHA-256(password))</code>, default account
-      <code>distributor / distributor</code>. Once your integration works against the demo, switch the
-      <b>endpoint</b> to a real MiR robot's IP or hostname on your network — same console, same requests.
-    </p>
-  </div>
-
-  <div class="grid">
-    <div style="display:grid; gap:18px;">
-      <section class="panel">
-        <div class="panel-head">Endpoint</div>
-        <div class="panel-body auth">
-          <label class="radio">
-            <input type="radio" name="ep" id="ep-demo" checked>
-            <span>demo unit <span class="dim">amr-emulator.com</span></span>
-          </label>
-          <label class="radio">
-            <input type="radio" name="ep" id="ep-custom">
-            <span>local robot / custom <span class="dim">same-network MiR</span></span>
-          </label>
-          <div class="row" id="custom-row" style="display:none">
-            <div><input type="text" id="custom-url" placeholder="http://192.168.12.20 &nbsp;or&nbsp; http://mir.local" spellcheck="false" autocomplete="off"></div>
-          </div>
-          <button class="connect-btn" id="connect">Connect</button>
-          <button class="connect-btn" id="scan" style="margin-top:8px">Scan localhost for robots</button>
-          <div class="hint" id="scan-status"></div>
-          <div id="scan-results"></div>
-          <div class="hint" id="ep-status"></div>
-          <div class="hint warn" id="mixed-warn" style="display:none">
-            &#9888; This page is HTTPS but the endpoint is plain HTTP &mdash; browsers block that
-            (mixed content). To reach a robot on your LAN, run the console over HTTP from your own
-            machine: <code>curl -so console.html https://amr-emulator.com/console && python3 -m http.server 8000</code>
-            then open <code>http://localhost:8000/console.html</code>. The curl mirror below always works.
-          </div>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-head">Software version <span class="tag" id="vcount"></span></div>
-        <div class="panel-body">
-          <div class="versions" id="versions"><div class="hint">loading version manifest&hellip;</div></div>
-          <dl class="kv" id="vmeta"></dl>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-head">Credentials</div>
-        <div class="panel-body auth">
-          <div class="row" id="robot-creds">
-            <div style="flex:1"><label for="user">user</label><input type="text" id="user" value="distributor" autocomplete="off"></div>
-            <div style="flex:1"><label for="pass">password</label><input type="text" id="pass" value="distributor" autocomplete="off"></div>
-          </div>
-          <div class="row" id="apikey-row" style="display:none">
-            <div style="flex:1"><label for="apikey">fleet api key <span class="dim">(x-api-key header)</span></label><input type="text" id="apikey" value="distributor" autocomplete="off"></div>
-          </div>
-          <div class="row">
-            <div style="flex:1">
-              <label for="session">virtual robot session <span class="dim">(emulator only)</span></label>
-              <input type="text" id="session" spellcheck="false" autocomplete="off" maxlength="64">
-            </div>
-            <div style="flex:none; align-self:flex-end">
-              <button class="connect-btn" id="new-session" style="padding:8px 14px" title="fresh isolated robot">New</button>
-            </div>
-          </div>
-          <div class="hint">Your session id gets its own robot &mdash; queue, registers, status &mdash; so
-            everyone on this demo simulates independently. Clear it to share the default robot.
-            Real robots ignore the header.</div>
-          <div class="token" id="token-view"></div>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-head">History <span class="tag" id="hist-count"></span></div>
-        <div class="panel-body">
-          <div class="history" id="history"></div>
-        </div>
-      </section>
-    </div>
-
-    <div style="display:grid; gap:18px; min-width:0;">
-    <section class="panel">
-      <div class="panel-head">Chat &mdash; plain-language console <span class="tag" id="chat-brain">rule engine</span></div>
-      <div class="panel-body">
-        <div class="chat-log" id="chat-log"></div>
-        <div class="presets" id="chat-suggests" style="margin:12px 0 0"></div>
-        <div class="chat-row">
-          <input type="text" id="chat-input" placeholder="tell the robot what to do, in your own words" autocomplete="off" spellcheck="false" maxlength="500">
-          <button class="send" id="chat-send">Send</button>
-        </div>
-        <div class="ai-row">
-          <button class="connect-btn" id="ai-load">Load in-browser AI</button>
-          <span class="hint" id="ai-status">optional &mdash; a ~0.5B-parameter model running on WebGPU in this tab
-            (<a href="https://github.com/mlc-ai/web-llm" rel="noopener">WebLLM</a>): a few hundred MB fetched once,
-            then cached; free; your words never leave the browser. Without it, a built-in rule engine parses commands.</span>
-        </div>
-        <div class="hint">Every answer shows the real request(s) it sent &mdash; click a chip to load one
-          into the request console below. The AI only ever picks from the same fixed set of actions;
-          it cannot invent endpoints.</div>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head">Request console <span class="tag" id="target-tag"></span></div>
-      <div class="panel-body">
-        <div class="telemetry">
-          <button id="tele-toggle" title="poll GET /status every 2s">&#9654; Telemetry</button>
-          <span id="tele-read">off &mdash; enqueue a mission, then watch your robot run it</span>
-        </div>
-        <div class="body-label" style="margin-top:0">API catalog <span id="op-count"></span></div>
-        <div class="cat-row">
-          <input type="text" id="op-filter" placeholder="filter operations&hellip; e.g. mission, registers, PUT" spellcheck="false" autocomplete="off">
-          <select id="op-select" disabled><option value="">browse all operations&hellip;</option></select>
-        </div>
-        <div class="op-params" id="op-params"></div>
-        <div class="hint op-info" id="op-info" style="display:none"></div>
-        <div class="body-label" style="margin-top:0">Quick actions</div>
-        <div class="presets" id="presets"></div>
-        <div class="reqline">
-          <select id="method"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select>
-          <input type="text" id="path" value="/status" spellcheck="false" autocomplete="off">
-          <button class="send" id="send">Send request</button>
-        </div>
-        <div class="body-label" id="body-label">request body &mdash; JSON</div>
-        <textarea id="body" spellcheck="false"></textarea>
-        <div class="curl-label">code sample &mdash; <span class="lang-tabs" id="lang-tabs"></span></div>
-        <div class="curl"><span id="curl"></span><button class="copy" id="copy">Copy</button></div>
-        <div class="resp-meta" id="resp-meta" style="display:none">
-          <span class="status-big" id="resp-status"></span>
-          <span id="resp-time"></span>
-          <span id="resp-type"></span>
-        </div>
-        <pre class="resp" id="resp" style="display:none"></pre>
-        <details class="resp-headers" id="resp-headers" style="display:none">
-          <summary>response headers</summary>
-          <pre id="resp-headers-pre"></pre>
-        </details>
-        <div class="hint" id="resp-hint">Pick an operation from the catalog, hit a quick action, or type a path
-          (relative to <code>/api/v2.0.0</code>), then send. Writes are welcome — it's an emulator.
-          Try enqueueing a mission, then listing the queue.</div>
-      </div>
-    </section>
-    </div>
-  </div>
-
-  <h2 class="sect-title" id="quickstart">Start in thirty seconds</h2>
-  <div class="quick">
-    <div class="steps">
-      <div>
-        <b>1 &mdash; From your terminal.</b> The demo speaks plain HTTPS; the only trick is MiR's hashed-password Basic auth.
-        A robot only queues missions it knows, so list them first &mdash; exactly like a real one:
-<pre class="snippet">TOKEN=$(printf 'distributor:%s' "$(printf 'distributor' | shasum -a 256 | cut -d' ' -f1)" | base64 | tr -d '\n')
-curl -H "Authorization: Basic $TOKEN" https://amr-emulator.com/latest/api/v2.0.0/status
-MISSION=$(curl -s -H "Authorization: Basic $TOKEN" https://amr-emulator.com/latest/api/v2.0.0/missions | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["guid"])')
-curl -X POST -H "Authorization: Basic $TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"mission_id\": \"$MISSION\"}" https://amr-emulator.com/latest/api/v2.0.0/mission_queue
-# the same emulator also runs MiR Fleet Enterprise — simpler auth, bigger picture:
-curl -H 'x-api-key: distributor' https://amr-emulator.com/fleet/latest/api/v1/robots</pre>
-      </div>
-      <div>
-        <b>2 &mdash; Or skip the terminal.</b> The <a href="#console">console above</a> has the full API catalog,
-        generated request bodies, live telemetry, and a curl mirror of every request it sends &mdash;
-        plus a chat panel that turns &ldquo;pause the robot&rdquo; into the right API call, optionally
-        through a tiny language model running entirely in your browser.
-      </div>
-      <div>
-        <b>3 &mdash; Run it yourself.</b> The emulator is a Python package: clone
-        <a href="https://github.com/JimothyJohn/amr-emulator" rel="noopener">the repo</a> and
-        <code>uv run mir-emulator --mir-version 3.8.1</code> for a robot on <code>localhost</code>,
-        CI, or an air-gapped bench.
-      </div>
+      <a class="btn btn-ghost" href="#compare">Compare versions</a>
+      <a class="btn btn-ghost" href="#endpoints">Endpoints</a>
     </div>
   </div>
 
   <h2 class="sect-title" id="docs">Documentation &amp; primary sources</h2>
-  <p class="lead">
-    Everything this emulator serves is derived from <b>MiR's official REST API documentation</b> — no invented
-    endpoints, no guessed schemas. Check its answers against the primary sources yourself:
-  </p>
+  <p class="lead">Everything here is derived from MiR's official API docs. Check it against the sources:</p>
   <div class="cards">
     <div class="card">
       <h3>The official MiR Fleet API docs</h3>
-      <p>MiR publishes the <b>Fleet Enterprise Integration API</b> as an interactive, public
-        <a href="https://supportportal.mobile-industrial-robots.com/support-files/manuals/MiR_Fleet_Enterprise_OpenAPI_Specification/1.5.0/index.html?urls.primaryName=MiR+Fleet+Integration+API+v1" rel="noopener">Swagger UI</a> — no login needed. That is the canonical
-        reference for the fleet surface; this emulator serves the same OpenAPI documents verbatim at
-        <code>/fleet/&lt;version&gt;/openapi.json</code> and emulates them at <code>/fleet/&lt;version&gt;/api/v1</code>.</p>
+      <p>MiR's <b>Fleet Enterprise Integration API</b> as a public
+        <a href="https://supportportal.mobile-industrial-robots.com/support-files/manuals/MiR_Fleet_Enterprise_OpenAPI_Specification/1.5.0/index.html?urls.primaryName=MiR+Fleet+Integration+API+v1" rel="noopener">Swagger UI</a>
+        (no login). Served here verbatim at <code>/fleet/&lt;version&gt;/openapi.json</code>.</p>
     </div>
     <div class="card">
       <h3>The official MiR robot API docs</h3>
-      <p>Mobile Industrial Robots publishes the REST API reference on its
-        <a href="https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/" rel="noopener">support
-        portal ("REST API files")</a> — one PDF per product per software version, behind a free account.
-        That page is the primary source for every spec used here.</p>
-    </div>
-    <div class="card">
-      <h3>PDF &rarr; machine-readable spec</h3>
-      <p>MiR ships the API definition as PDFs only. A weekly scraper converts each tracked version's MIR250 PDF
-        back to Swagger 2.0, gated by a correctness oracle: the one machine-readable spec MiR ever published
-        (3.5.4 <code>swagger.json</code>) must re-convert with <b>zero structural differences</b> on every run.
-        See the <a href="https://github.com/JimothyJohn/amr-emulator#how-it-stays-current" rel="noopener">README</a>
-        for the full pipeline.</p>
-    </div>
-    <div class="card">
-      <h3>Verifiable provenance</h3>
-      <p>The <a href="https://github.com/JimothyJohn/amr-emulator/blob/master/packages/mir-emulator/src/mir_emulator/specs/registry.json" rel="noopener">spec
-        registry</a> records, for every tracked version, the source PDF URL and SHA-256 of both the PDF and the
-        converted spec. The emulator serves its own definitions at <code>/&lt;version&gt;/swagger.json</code> and
-        <code>/&lt;version&gt;/openapi.json</code>, so contract-testing tools can point straight at it.</p>
+      <p>The REST API reference on MiR's
+        <a href="https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/" rel="noopener">support portal</a>
+        — one PDF per version, behind a free account. The primary source for every spec used here.</p>
     </div>
   </div>
-  <table class="plain" id="prov-table" style="display:none">
-    <thead>
-    <tr><th>MiR version</th><th>Derived from</th><th>Official source document</th><th>Served spec</th></tr>
-    </thead>
-    <tbody id="prov-body"></tbody>
-  </table>
-  <div class="hint" id="prov-hint">connect to the demo endpoint to load per-version provenance&hellip;</div>
 
+  <div id="console">
+    <section class="panel">
+      <div class="panel-head">Endpoint</div>
+      <div class="panel-body auth ep-compact">
+        <label class="radio">
+          <input type="radio" name="ep" id="ep-demo" checked>
+          <span>Emulator <span class="dim">amr-emulator.com</span></span>
+        </label>
+        <label class="radio">
+          <input type="radio" name="ep" id="ep-custom">
+          <span>Local robot <span class="dim">same-network MiR</span></span>
+        </label>
+        <div id="custom-row" style="display:none; flex:1; min-width:200px">
+          <input type="text" id="custom-url" placeholder="http://192.168.12.20  or  http://mir.local" spellcheck="false" autocomplete="off">
+        </div>
+        <button class="connect-btn" id="connect">Connect</button>
+        <button class="connect-btn" id="scan">Scan localhost</button>
+        <span class="hint" id="ep-status" style="margin:0"></span>
+        <div class="ep-extra">
+          <div class="hint" id="scan-status"></div>
+          <div id="scan-results"></div>
+          <div class="hint warn" id="mixed-warn" style="display:none">
+            &#9888; This page is HTTPS but the endpoint is plain HTTP &mdash; browsers block that (mixed content).
+            Run the console over HTTP locally to reach a LAN robot:
+            <code>curl -so console.html https://amr-emulator.com/console && python3 -m http.server 8000</code>.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top:18px">
+      <div class="panel-head">Credentials</div>
+      <div class="panel-body auth">
+        <div class="cred-cols">
+          <div class="session-feature">
+            <label for="session"><b>Your robot key</b> <span class="dim">&mdash; a private virtual robot (emulator only)</span></label>
+            <div class="row" style="margin-top:6px">
+              <div style="flex:1"><input type="text" id="session" spellcheck="false" autocomplete="off" maxlength="64"></div>
+              <div style="flex:none">
+                <button class="connect-btn" id="new-session" style="padding:9px 16px" title="fresh isolated robot">New</button>
+              </div>
+            </div>
+            <div class="hint" style="margin-top:8px">Keep this key to keep your robot &mdash; its own queue, registers, and status.
+              It's saved in this browser, so it survives a reload. Clear it to share the default demo robot; real robots ignore it.</div>
+          </div>
+          <div>
+            <div class="row" id="robot-creds">
+              <div style="flex:1"><label for="user">user</label><input type="text" id="user" value="distributor" autocomplete="off"></div>
+              <div style="flex:1"><label for="pass">password</label><input type="text" id="pass" value="distributor" autocomplete="off"></div>
+            </div>
+            <div class="row" id="apikey-row" style="display:none">
+              <div style="flex:1"><label for="apikey">fleet api key <span class="dim">(x-api-key header)</span></label><input type="text" id="apikey" value="distributor" autocomplete="off"></div>
+            </div>
+            <div class="token" id="token-view"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid" style="margin-top:18px">
+      <div style="display:grid; gap:18px;">
+        <section class="panel">
+          <div class="panel-head">Software version <span class="tag" id="vcount"></span></div>
+          <div class="panel-body">
+            <select id="version-select" class="version-select" disabled><option>connect to load versions&hellip;</option></select>
+          </div>
+        </section>
+      </div>
+
+      <div style="min-width:0;">
+        <section class="panel">
+          <div class="panel-head">Request console <span class="tag" id="target-tag"></span></div>
+          <div class="panel-body">
+            <div class="telemetry">
+              <button id="tele-toggle" title="poll GET /status every 2s">&#9654; Telemetry</button>
+              <span id="tele-read">off &mdash; enqueue a mission, then watch your robot run it</span>
+            </div>
+            <div class="body-label" style="margin-top:0">Action &mdash; pick an API operation <span id="op-count"></span></div>
+            <div class="cat-row">
+              <input type="text" id="op-filter" placeholder="filter operations&hellip; e.g. mission, registers, PUT" spellcheck="false" autocomplete="off">
+              <select id="op-select" disabled><option value="">browse all operations&hellip;</option></select>
+            </div>
+            <div class="op-params" id="op-params"></div>
+            <div class="hint op-info" id="op-info" style="display:none"></div>
+            <select id="method" style="display:none"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select>
+            <input type="text" id="path" value="/status" style="display:none">
+            <div class="reqline">
+              <button class="send" id="send">Send request</button>
+            </div>
+            <div class="body-label" id="body-label">request body &mdash; JSON</div>
+            <textarea id="body" spellcheck="false"></textarea>
+            <div class="resp-meta" id="resp-meta" style="display:none">
+              <span class="status-big" id="resp-status"></span>
+              <span id="resp-time"></span>
+              <span id="resp-type"></span>
+            </div>
+            <pre class="resp" id="resp" style="display:none"></pre>
+            <details class="resp-headers" id="resp-headers" style="display:none">
+              <summary>response headers</summary>
+              <pre id="resp-headers-pre"></pre>
+            </details>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
   <h2 class="sect-title" id="compare">Compare versions</h2>
   <p class="lead">
     Preflight an upgrade: the structural API changes between any two tracked versions of one
@@ -736,10 +595,10 @@ curl -H 'x-api-key: distributor' https://amr-emulator.com/fleet/latest/api/v1/ro
   </div>
   <div id="cmp-result" class="hint">connect to the demo endpoint to compare versions&hellip;</div>
 
-  <h2 class="sect-title">Endpoints</h2>
+  <h2 class="sect-title" id="endpoints">Endpoints</h2>
   <table class="plain">
     <tr><th>Path</th><th>What it serves</th></tr>
-    <tr><td>/console</td><td>This page (also served at <code>/</code> to browsers) — plain-language chat, catalog, telemetry, virtual robot sessions.</td></tr>
+    <tr><td>/console</td><td>This page (also served at <code>/</code> to browsers) — catalog, telemetry, virtual robot sessions.</td></tr>
     <tr><td>/&lt;version&gt;/api/v2.0.0/&hellip;</td><td>The emulated MiR robot REST API for that software version (also <code>/latest/&hellip;</code>).</td></tr>
     <tr><td>/fleet/&lt;version&gt;/api/v1/&hellip;</td><td>The emulated MiR Fleet Enterprise Integration API (also <code>/fleet/latest/&hellip;</code>); auth is an <code>x-api-key</code> header, default key <code>distributor</code>. Each fleet embeds robot emulators it controls over their own REST API.</td></tr>
     <tr><td>/fleet/&lt;version&gt;/openapi.json</td><td>The official Fleet OpenAPI 3 document, served verbatim.</td></tr>
@@ -751,13 +610,8 @@ curl -H 'x-api-key: distributor' https://amr-emulator.com/fleet/latest/api/v1/ro
 
   <footer>
     <div>
-      AMR Emulator is an independent open-source emulator by <a href="https://advin.io" rel="noopener">Advin</a>; not affiliated with Mobile Industrial Robots A/S.
-      The endpoint is rate-limited and concurrency-capped; responses are deterministic, stateful simulations
-      generated from the <a href="https://supportportal.mobile-industrial-robots.com/documentation/rest-api/rest-api-files/" rel="noopener">official
-      MiR API definitions</a>. State is in-memory per runtime instance and resets on cold start — don't store
-      anything you need to keep. Machine-readable specs per version:
-      <code>/&lt;version&gt;/swagger.json</code> (Swagger 2.0) &middot; <code>/&lt;version&gt;/openapi.json</code> (OpenAPI 3.0).
-      Source, issues, and local install: <a href="https://github.com/JimothyJohn/amr-emulator" rel="noopener">github.com/JimothyJohn/amr-emulator</a>.
+      An open-source project by <a href="https://advin.io" rel="noopener">Advin</a> &middot;
+      <a href="https://github.com/JimothyJohn/amr-emulator" rel="noopener">github.com/JimothyJohn/amr-emulator</a>
     </div>
   </footer>
 </div>
@@ -773,6 +627,26 @@ const STORE_KEY = "mir-console-endpoint";
 
 const qs = new URLSearchParams(location.search);
 const $ = (id) => document.getElementById(id);
+
+/* ---------- theme toggle ----------
+   The <head> script has already set data-theme; here we sync the button glyph
+   and persist an explicit choice (which then overrides the OS preference). */
+function syncThemeButton() {
+  const dark = document.documentElement.getAttribute("data-theme") === "dark";
+  const b = $("theme-toggle");
+  if (b) {
+    b.innerHTML = dark ? "&#9728;" : "&#9789;"; // sun in dark, moon in light
+    b.setAttribute("aria-pressed", String(dark));
+    b.title = dark ? "Switch to light mode" : "Switch to dark mode";
+  }
+}
+syncThemeButton();
+$("theme-toggle").addEventListener("click", () => {
+  const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem("mir-console-theme", next); } catch (e) {}
+  syncThemeButton();
+});
 
 /* Active connection. MODE:
    "fleet" — this project's multi-version dispatcher (/<version>/api/v2.0.0)
@@ -794,33 +668,6 @@ function fetchT(url, opts = {}, ms = 6000) {
   return fetch(url, { ...opts, signal: ctl.signal }).finally(() => clearTimeout(timer));
 }
 
-const ROBOT_PRESETS = [
-  { m: "GET",    p: "/status",             body: null, note: "robot state" },
-  { m: "PUT",    p: "/status",             body: { name: "renamed-from-console" }, note: "rename robot" },
-  { m: "PUT",    p: "/status",             body: { state_id: 4 }, note: "pause" },
-  { m: "PUT",    p: "/status",             body: { state_id: 3 }, note: "resume" },
-  { m: "GET",    p: "/missions",           body: null, note: "list missions" },
-  // The robot rejects unknown mission ids (400, like real hardware) — the
-  // click handler swaps the placeholder for a mission it actually has.
-  { m: "POST",   p: "/mission_queue",      body: { mission_id: "pick-one-from-GET-missions" }, note: "enqueue", resolveMission: true },
-  { m: "GET",    p: "/mission_queue",      body: null, note: "queue" },
-  { m: "DELETE", p: "/mission_queue",      body: null, note: "clear queue" },
-  { m: "GET",    p: "/registers/1",        body: null, note: "PLC register" },
-  { m: "PUT",    p: "/registers/1",        body: { value: 42, label: "from console" }, note: "write register" },
-  { m: "GET",    p: "/system/info",        body: null, note: "system" },
-];
-
-const FLEET_PRESETS = [
-  { m: "GET",    p: "/robots",             body: null, note: "fleet robots" },
-  { m: "GET",    p: "/site/mission",       body: null, note: "site missions" },
-  // Dispatch: the click handler swaps the placeholder for a mission the
-  // fleet's robots actually know (the fleet rejects unknown ones with 400).
-  { m: "POST",   p: "/serial-order",
-    body: { "serial-order": { phases: [{ "mission-id": "pick-one-from-site-missions" }] } },
-    note: "dispatch order", resolveFleetMission: true },
-  { m: "GET",    p: "/order",              body: null, note: "orders" },
-  { m: "GET",    p: "/system/version",     body: null, note: "fleet version" },
-];
 
 let versions = [];       // robot software versions, newest first
 let fleetVersions = [];  // MiR Fleet Enterprise versions (dispatcher endpoints only)
@@ -885,233 +732,7 @@ function highlight(json) {
     });
 }
 
-/* ---------- multi-language samples (Stripe-style: pick a language once,
-   every sample on the page follows, choice persists across visits) ----------
-   Each sampler emits a complete, runnable program: it derives MiR's
-   Basic BASE64(user ":" SHA-256-hex(password)) token in-language, carries the
-   X-MiR-Session header when a virtual robot session is active, and targets
-   the selected software version's path prefix. */
-const LANG_KEY = "mir-console-lang";
-const LANGS = [["curl", "cURL"], ["python", "Python"], ["javascript", "JavaScript"], ["go", "Go"], ["rust", "Rust"]];
-let lang = "curl";
-try {
-  const stored = localStorage.getItem(LANG_KEY);
-  if (LANGS.some(([id]) => id === stored)) lang = stored;
-} catch { /* private mode */ }
-
-function compactBody(raw) {
-  if (!raw) return "";
-  try { return JSON.stringify(JSON.parse(raw)); } catch { return raw; }
-}
-const shQ = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
-const dq = (s) => JSON.stringify(String(s)); // valid literal in py/js/go (and rust for JSON-safe text)
-const pyS = (s) => {
-  s = String(s);
-  return (!s.includes("'") && !s.includes("\\") && !s.includes("\n")) ? "'" + s + "'" : dq(s);
-};
-
-const SAMPLERS = {
-  curl(c) {
-    let out;
-    if (c.apiKey) {
-      out = "curl -X " + c.method + " " + shQ(c.url) + " \\\n  -H " + shQ("x-api-key: " + c.apiKey);
-    } else {
-      out =
-        "# MiR auth: Basic BASE64(user \":\" SHA-256-hex(password))\n" +
-        "HASH=$(printf '%s' " + shQ(c.pass) + " | shasum -a 256 | cut -d' ' -f1)\n" +
-        "TOKEN=$(printf '%s:%s' " + shQ(c.user) + " \"$HASH\" | base64 | tr -d '\\n')\n" +
-        "curl -X " + c.method + " " + shQ(c.url) + " \\\n  -H \"Authorization: Basic $TOKEN\"";
-    }
-    if (c.session) out += " \\\n  -H " + shQ("X-MiR-Session: " + c.session);
-    if (c.body) out += " \\\n  -H 'Content-Type: application/json' \\\n  -d " + shQ(c.body);
-    return out;
-  },
-  python(c) {
-    const lines = c.apiKey
-      ? [
-          "import requests  # pip install requests",
-          "",
-          "headers = {\"x-api-key\": " + pyS(c.apiKey) + "}",
-        ]
-      : [
-          "import base64, hashlib",
-          "",
-          "import requests  # pip install requests",
-          "",
-          "USER, PASSWORD = " + pyS(c.user) + ", " + pyS(c.pass),
-          "digest = hashlib.sha256(PASSWORD.encode()).hexdigest()",
-          "token = base64.b64encode(f\"{USER}:{digest}\".encode()).decode()",
-          "headers = {\"Authorization\": \"Basic \" + token}",
-        ];
-    if (c.session) lines.push("headers[\"X-MiR-Session\"] = " + pyS(c.session) + "  # your virtual robot");
-    lines.push("");
-    if (c.body) {
-      lines.push(
-        "resp = requests." + c.method.toLowerCase() + "(",
-        "    " + pyS(c.url) + ",",
-        "    headers={**headers, \"Content-Type\": \"application/json\"},",
-        "    data=" + pyS(c.body) + ",",
-        ")");
-    } else {
-      lines.push("resp = requests." + c.method.toLowerCase() + "(" + pyS(c.url) + ", headers=headers)");
-    }
-    lines.push("print(resp.status_code)", "print(resp.json())");
-    return lines.join("\n");
-  },
-  javascript(c) {
-    const lines = c.apiKey
-      ? [
-          "// Node 18+ or the browser — fetch is built in",
-          "const headers = { \"x-api-key\": " + dq(c.apiKey) + " };",
-        ]
-      : [
-          "// Node 18+ or the browser — fetch and WebCrypto are built in",
-          "const USER = " + dq(c.user) + ", PASSWORD = " + dq(c.pass) + ";",
-          "",
-          "const digest = await crypto.subtle.digest(\"SHA-256\", new TextEncoder().encode(PASSWORD));",
-          "const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, \"0\")).join(\"\");",
-          "const headers = { Authorization: \"Basic \" + btoa(USER + \":\" + hex) };",
-        ];
-    if (c.session) lines.push("headers[\"X-MiR-Session\"] = " + dq(c.session) + "; // your virtual robot");
-    lines.push("");
-    if (c.body) {
-      lines.push(
-        "headers[\"Content-Type\"] = \"application/json\";",
-        "const resp = await fetch(" + dq(c.url) + ", {",
-        "  method: " + dq(c.method) + ",",
-        "  headers,",
-        "  body: " + dq(c.body) + ",",
-        "});");
-    } else {
-      lines.push("const resp = await fetch(" + dq(c.url) + ", { method: " + dq(c.method) + ", headers });");
-    }
-    lines.push("console.log(resp.status, await resp.json());");
-    return lines.join("\n");
-  },
-  go(c) {
-    const imports = c.apiKey
-      ? ["\"fmt\"", "\"io\"", "\"net/http\""]
-      : ["\"crypto/sha256\"", "\"encoding/base64\"", "\"encoding/hex\"", "\"fmt\"", "\"io\"", "\"net/http\""];
-    if (c.body) imports.push("\"strings\"");
-    const authLines = c.apiKey
-      ? []
-      : [
-          "\tuser, password := " + dq(c.user) + ", " + dq(c.pass),
-          "\tsum := sha256.Sum256([]byte(password))",
-          "\ttoken := base64.StdEncoding.EncodeToString([]byte(user + \":\" + hex.EncodeToString(sum[:])))",
-          "",
-        ];
-    const lines = [
-      "package main",
-      "",
-      "import (",
-      ...imports.sort().map((i) => "\t" + i),
-      ")",
-      "",
-      "func main() {",
-      ...authLines,
-      c.body
-        ? "\treq, err := http.NewRequest(" + dq(c.method) + ", " + dq(c.url) + ", strings.NewReader(" + dq(c.body) + "))"
-        : "\treq, err := http.NewRequest(" + dq(c.method) + ", " + dq(c.url) + ", nil)",
-      "\tif err != nil {",
-      "\t\tpanic(err)",
-      "\t}",
-      c.apiKey
-        ? "\treq.Header.Set(\"x-api-key\", " + dq(c.apiKey) + ")"
-        : "\treq.Header.Set(\"Authorization\", \"Basic \"+token)",
-    ];
-    if (c.session) lines.push("\treq.Header.Set(\"X-MiR-Session\", " + dq(c.session) + ") // your virtual robot");
-    if (c.body) lines.push("\treq.Header.Set(\"Content-Type\", \"application/json\")");
-    lines.push(
-      "",
-      "\tresp, err := http.DefaultClient.Do(req)",
-      "\tif err != nil {",
-      "\t\tpanic(err)",
-      "\t}",
-      "\tdefer resp.Body.Close()",
-      "\tbody, _ := io.ReadAll(resp.Body)",
-      "\tfmt.Println(resp.Status)",
-      "\tfmt.Println(string(body))",
-      "}");
-    return lines.join("\n");
-  },
-  rust(c) {
-    const lines = c.apiKey
-      ? [
-          "// Cargo.toml: reqwest = { version = \"0.12\", features = [\"blocking\"] }",
-          "",
-          "fn main() -> Result<(), Box<dyn std::error::Error>> {",
-          "    let client = reqwest::blocking::Client::new();",
-          "    let resp = client",
-          "        ." + c.method.toLowerCase() + "(" + dq(c.url) + ")",
-          "        .header(\"x-api-key\", " + dq(c.apiKey) + ")",
-        ]
-      : [
-          "// Cargo.toml: reqwest = { version = \"0.12\", features = [\"blocking\"] },",
-          "//             sha2 = \"0.10\", hex = \"0.4\", base64 = \"0.22\"",
-          "use base64::Engine;",
-          "use sha2::{Digest, Sha256};",
-          "",
-          "fn main() -> Result<(), Box<dyn std::error::Error>> {",
-          "    let (user, password) = (" + dq(c.user) + ", " + dq(c.pass) + ");",
-          "    let digest = hex::encode(Sha256::digest(password.as_bytes()));",
-          "    let token = base64::engine::general_purpose::STANDARD.encode(format!(\"{user}:{digest}\"));",
-          "",
-          "    let client = reqwest::blocking::Client::new();",
-          "    let resp = client",
-          "        ." + c.method.toLowerCase() + "(" + dq(c.url) + ")",
-          "        .header(\"Authorization\", format!(\"Basic {token}\"))",
-        ];
-    if (c.session) lines.push("        .header(\"X-MiR-Session\", " + dq(c.session) + ") // your virtual robot");
-    if (c.body) lines.push(
-      "        .header(\"Content-Type\", \"application/json\")",
-      "        .body(" + dq(c.body) + ")");
-    lines.push(
-      "        .send()?;",
-      "    println!(\"{}\", resp.status());",
-      "    println!(\"{}\", resp.text()?);",
-      "    Ok(())",
-      "}");
-    return lines.join("\n");
-  },
-};
-
-function sampleCtx() {
-  const m = $("method").value;
-  return {
-    method: m,
-    url: fullPath(currentVersion || "latest", $("path").value || "/"),
-    user: $("user").value || "distributor",
-    pass: $("pass").value || "distributor",
-    session: sessionId(),
-    apiKey: currentKind === "mirfleet" ? apiKey() : "",
-    body: ["POST", "PUT", "PATCH"].includes(m) ? compactBody($("body").value.trim()) : "",
-  };
-}
-
-function renderLangTabs() {
-  ["lang-tabs"].forEach((id) => {
-    const box = $(id);
-    if (!box) return;
-    box.innerHTML = "";
-    LANGS.forEach(([key, label]) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "lang-tab" + (key === lang ? " active" : "");
-      b.textContent = label;
-      b.onclick = () => {
-        lang = key;
-        try { localStorage.setItem(LANG_KEY, lang); } catch { /* private mode */ }
-        renderLangTabs();
-        refreshSample();
-      };
-      box.appendChild(b);
-    });
-  });
-}
-
 async function refreshSample() {
-  $("curl").textContent = SAMPLERS[lang](sampleCtx());
   $("token-view").innerHTML = currentKind === "mirfleet"
     ? "<b>x-api-key:</b> " + esc(apiKey())
     : "<b>Authorization:</b> Basic " + esc(await authToken());
@@ -1119,57 +740,58 @@ async function refreshSample() {
 
 /* ---------- version panel ---------- */
 function renderVersions() {
-  const box = $("versions");
-  box.innerHTML = "";
+  const sel = $("version-select");
+  sel.innerHTML = "";
   if (MODE === "robot") {
+    // Direct connection: one fixed target, no version to choose.
     const fleetDirect = currentKind === "mirfleet";
-    const b = document.createElement("button");
-    b.className = "vbtn active";
-    b.innerHTML = '<span class="vnum">' + (fleetDirect ? "Fleet" : "Robot") +
-      (detectedVersion ? " " + esc(detectedVersion) : "") +
-      '</span><span class="chip latest">direct</span>' +
-      '<span class="vpath">' + apiPrefix() + '</span>';
-    box.appendChild(b);
+    const o = document.createElement("option");
+    o.value = "";
+    o.textContent = (fleetDirect ? "Fleet" : "Robot") +
+      (detectedVersion ? " " + detectedVersion : "") + " (direct)";
+    sel.appendChild(o);
+    sel.disabled = true;
     $("vcount").textContent = detectedVersion
-      ? "software " + detectedVersion + " (reported by the target)"
-      : "direct connection — version not reported";
+      ? "software " + detectedVersion + " (reported)"
+      : "direct — version not reported";
     $("target-tag").textContent = "target: " + BASE.replace(/^https?:\/\//, "") +
       (detectedVersion ? " · " + (fleetDirect ? "Fleet " : "") + detectedVersion : "");
     return;
   }
-  const select = (kind, v) => () => {
-    currentKind = kind;
-    currentVersion = v;
-    renderVersions();
-    renderPresets();
-    syncAuthPanel();
-    loadVersionMeta();
-    loadSpec();
-    refreshSample();
+  sel.disabled = false;
+  const addGroup = (label, list, kind) => {
+    if (!list.length) return;
+    const og = document.createElement("optgroup");
+    og.label = label;
+    list.forEach((v, i) => {
+      const o = document.createElement("option");
+      o.value = kind + ":" + v;
+      o.textContent = v + (i === 0 ? " — latest" : "");
+      if (currentKind === kind && v === currentVersion) o.selected = true;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
   };
-  versions.forEach((v, i) => {
-    const b = document.createElement("button");
-    b.className = "vbtn" + (currentKind === "robot" && v === currentVersion ? " active" : "");
-    b.innerHTML = '<span class="vnum">' + esc(v) + "</span>" +
-      (i === 0 ? '<span class="chip latest">latest</span>' : "") +
-      '<span class="vpath">/' + esc(v) + "/api/v2.0.0</span>";
-    b.onclick = select("robot", v);
-    box.appendChild(b);
-  });
-  fleetVersions.forEach((v, i) => {
-    const b = document.createElement("button");
-    b.className = "vbtn" + (currentKind === "mirfleet" && v === currentVersion ? " active" : "");
-    b.innerHTML = '<span class="vnum">' + esc(v) + '</span><span class="chip fleetc">Fleet</span>' +
-      (i === 0 ? '<span class="chip latest">latest</span>' : "") +
-      '<span class="vpath">/fleet/' + esc(v) + "/api/v1</span>";
-    b.onclick = select("mirfleet", v);
-    box.appendChild(b);
-  });
+  addGroup("MiR robot", versions, "robot");
+  addGroup("MiR Fleet", fleetVersions, "mirfleet");
   $("vcount").textContent =
     versions.length + " robot" + (fleetVersions.length ? " + " + fleetVersions.length + " fleet" : "");
   $("target-tag").textContent = currentVersion
     ? "target: " + (currentKind === "mirfleet" ? "Fleet " : "") + currentVersion
     : "";
+}
+
+function onVersionChange() {
+  const raw = $("version-select").value;
+  const idx = raw.indexOf(":");
+  if (idx < 0) return;
+  currentKind = raw.slice(0, idx);
+  currentVersion = raw.slice(idx + 1);
+  syncAuthPanel();
+  loadSpec();
+  refreshSample();
+  $("target-tag").textContent =
+    "target: " + (currentKind === "mirfleet" ? "Fleet " : "") + currentVersion;
 }
 
 function syncAuthPanel() {
@@ -1178,121 +800,9 @@ function syncAuthPanel() {
   $("apikey-row").style.display = fleetSelected ? "" : "none";
 }
 
-async function loadVersionMeta() {
-  const dl = $("vmeta");
-  dl.innerHTML = "";
-  if (MODE === "fleet" && !currentVersion) return;
-  try {
-    // Fleet mode and a locally-run `mir-emulator` both serve a JSON index and
-    // their spec files; a real robot serves neither — hide the panel then.
-    const r = await fetchT(apiRoot(currentVersion) + "/", { headers: await requestHeaders() });
-    if (!r.ok) return;
-    const j = await r.json();
-    if (!j.api_title && !j.emulated_mir_version && !j.emulated_fleet_version) return;
-    const rows = [
-      ["title", esc(String(j.api_title ?? "—"))],
-      ["operations", esc(String(j.operations ?? "—"))],
-    ];
-    if (currentKind !== "mirfleet")
-      rows.push(["swagger 2.0", '<a href="' + apiRoot(currentVersion) + '/swagger.json" rel="noopener">swagger.json</a>']);
-    rows.push(["openapi 3.0", '<a href="' + apiRoot(currentVersion) + '/openapi.json" rel="noopener">openapi.json</a>']);
-    if (j.official_docs)
-      rows.push(["official docs", '<a href="' + encodeURI(String(j.official_docs)) + '" rel="noopener">interactive Swagger UI (public)</a>']);
-    // Provenance: the official MiR document this version's spec was built from.
-    const src = j.source || {};
-    if (src.source_url)
-      rows.push(["source", '<a href="' + encodeURI(src.source_url) + '" rel="noopener" title="' +
-        esc(String(src.provenance || "")) + '">official MiR PDF</a>']);
-    else if (src.provenance)
-      rows.push(["source", '<span title="' + esc(String(src.provenance)) + '">' +
-        (src.pinned ? "official swagger.json (pinned oracle)" : esc(String(src.provenance)).slice(0, 60)) + "</span>"]);
-    dl.innerHTML = rows.map(([k, v]) => "<div><dt>" + k + "</dt><dd>" + v + "</dd></div>").join("");
-  } catch { /* index is cosmetic */ }
-}
 
-/* ---------- provenance table (documentation section) ---------- */
-async function loadProvenance() {
-  const table = $("prov-table"), tbody = $("prov-body"), hint = $("prov-hint");
-  tbody.innerHTML = "";
-  if (MODE !== "fleet" || !versions.length) {
-    table.style.display = "none";
-    hint.style.display = "";
-    hint.textContent = MODE === "robot"
-      ? "connected to a robot directly — provenance applies to the emulator fleet endpoint"
-      : "connect to the demo endpoint to load per-version provenance…";
-    return;
-  }
-  const targets = [
-    ...versions.map((v) => ({ label: v, root: BASE + "/" + encodeURIComponent(v), fleet: false })),
-    ...fleetVersions.map((v) => ({ label: "Fleet " + v, root: BASE + "/fleet/" + encodeURIComponent(v), fleet: true })),
-  ];
-  const rows = await Promise.all(targets.map(async (target) => {
-    try {
-      const r = await fetchT(target.root + "/");
-      const src = (await r.json()).source || {};
-      return { ...target, src };
-    } catch { return { ...target, src: {} }; }
-  }));
-  rows.forEach(({ label, root, fleet, src }) => {
-    const tr = document.createElement("tr");
-    const doc = src.source_url
-      ? '<a href="' + encodeURI(src.source_url) + '" rel="noopener">' +
-        (fleet ? "official OpenAPI JSON (public)" : "MiR PDF (portal login)") + "</a>" +
-        (src.source_sha256 ? ' <span title="SHA-256 of the source document">&middot; sha256 ' + esc(src.source_sha256.slice(0, 12)) + '&hellip;</span>' : "")
-      : esc(String(src.provenance || "—"));
-    const derived = src.pinned
-      ? "official swagger.json — the converter's oracle"
-      : fleet
-        ? "served verbatim (no conversion)"
-        : (src.source_url ? "converted from the official REST API PDF" : "official");
-    tr.innerHTML = "<td>" + esc(label) + "</td><td>" + derived + "</td><td>" + doc + "</td>" +
-      "<td>" +
-      (fleet ? "" : '<a href="' + root + '/swagger.json" rel="noopener">swagger.json</a> &middot; ') +
-      '<a href="' + root + '/openapi.json" rel="noopener">openapi.json</a></td>';
-    tbody.appendChild(tr);
-  });
-  hint.style.display = "none";
-  table.style.display = "";
-}
 
-/* ---------- presets ---------- */
-function renderPresets() {
-  const box = $("presets");
-  box.innerHTML = "";
-  const presets = currentKind === "mirfleet" ? FLEET_PRESETS : ROBOT_PRESETS;
-  presets.forEach((pr) => {
-    const b = document.createElement("button");
-    b.className = "preset";
-    b.innerHTML = "<b>" + pr.m + "</b>" + esc(pr.p) + " · " + esc(pr.note);
-    b.onclick = async () => {
-      clearOperation();
-      $("method").value = pr.m;
-      $("path").value = pr.p;
-      let body = pr.body;
-      if (pr.resolveMission && BASE) {
-        try {
-          const r = await fetchT(fullPath(currentVersion, "/missions"), { headers: await requestHeaders() });
-          const missions = await r.json();
-          if (r.ok && Array.isArray(missions) && missions.length)
-            body = { ...body, mission_id: missions[0].guid };
-        } catch { /* placeholder body still shows the idea */ }
-      }
-      if (pr.resolveFleetMission && BASE) {
-        try {
-          const r = await fetchT(fullPath(currentVersion, "/site/mission"), { headers: await requestHeaders() });
-          const site = await r.json();
-          if (r.ok && Array.isArray(site.missions) && site.missions.length)
-            body = { "serial-order": { phases: [{ "mission-id": site.missions[0].id }] } };
-        } catch { /* placeholder body still shows the idea */ }
-      }
-      $("body").value = body ? JSON.stringify(body, null, 2) : "";
-      syncBodyVisibility();
-      refreshSample();
-    };
-    box.appendChild(b);
-  });
-  renderChatSuggests(); // the chat's suggestions follow the selected API family
-}
+
 function syncBodyVisibility() {
   const writable = ["POST", "PUT", "PATCH"].includes($("method").value);
   $("body").style.display = writable ? "" : "none";
@@ -1470,46 +980,6 @@ function rebuildPath() {
   refreshSample();
 }
 
-/* ---------- request history ---------- */
-const HIST_KEY = "mir-console-history";
-let hist = [];
-
-/* One definition of "load this request into the console form" — used by
-   history rows and the chat's api chips. */
-function loadIntoConsole(m, p, body) {
-  clearOperation();
-  $("method").value = m;
-  $("path").value = p;
-  $("body").value = body || "";
-  syncBodyVisibility();
-  refreshSample();
-}
-
-function renderHistory() {
-  const box = $("history");
-  $("hist-count").textContent = hist.length ? hist.length + " sent" : "";
-  if (!hist.length) {
-    box.innerHTML = '<div class="hint" style="margin-top:0">requests you send appear here &mdash; click one to reload it</div>';
-    return;
-  }
-  box.innerHTML = "";
-  hist.forEach((h) => {
-    const b = document.createElement("button");
-    b.className = "hrow";
-    b.title = h.ms + " ms — click to reload into the console";
-    b.innerHTML = '<span class="hm">' + esc(h.m) + '</span><span class="hp">' + esc(h.p) + "</span>" +
-      '<span class="hs s' + String(h.status)[0] + '">' + (h.status || "ERR") + "</span>";
-    b.onclick = () => loadIntoConsole(h.m, h.p, h.body);
-    box.appendChild(b);
-  });
-}
-
-function pushHistory(h) {
-  hist.unshift(h);
-  hist = hist.slice(0, 30);
-  try { localStorage.setItem(HIST_KEY, JSON.stringify(hist)); } catch { /* private mode */ }
-  renderHistory();
-}
 
 /* ---------- transmit ---------- */
 async function transmit() {
@@ -1550,7 +1020,6 @@ async function transmit() {
   $("resp-type").textContent = ctype;
   const pre = $("resp");
   pre.style.display = "";
-  $("resp-hint").style.display = "none";
   try {
     pre.innerHTML = highlight(JSON.stringify(JSON.parse(text), null, 2));
   } catch {
@@ -1558,7 +1027,6 @@ async function transmit() {
   }
   $("resp-headers").style.display = "";
   $("resp-headers-pre").textContent = rhdrs || "(none exposed to this page — same-origin requests show all)";
-  pushHistory({ m, p: $("path").value || "/", status, ms, body: opts.body || "" });
   btn.disabled = false;
 }
 
@@ -1620,573 +1088,6 @@ function setTelemetry(on) {
   }
 }
 
-/* ---------- chat: the plain-language console ----------
-   Two planners, one executor. Tier 0 (always on): a deterministic rule
-   engine — regexes with slot extraction over a fixed whitelist of tools.
-   Tier 1 (opt-in): a tiny in-browser LLM (WebLLM over WebGPU) whose only
-   job is translating free-form text into {"tool": ..., "args": ...}; the
-   same whitelisted executor runs the result either way, so neither
-   planner can reach an endpoint that isn't in the table below. */
-
-let turnCalls = []; // requests made while answering the current message
-
-async function chatApi(m, p, body) {
-  const url = fullPath(currentVersion, p);
-  const opts = { method: m, headers: await requestHeaders() };
-  if (body !== undefined && body !== null) {
-    opts.headers["Content-Type"] = "application/json";
-    opts.body = JSON.stringify(body);
-  }
-  const entry = { m, p, body: opts.body || "", status: 0 };
-  turnCalls.push(entry);
-  const t0 = performance.now();
-  let r;
-  try {
-    r = await fetchT(url, opts, 8000);
-  } catch (e) {
-    throw new Error("network error talking to the robot: " + e.message);
-  }
-  entry.status = r.status;
-  pushHistory({ m, p, status: r.status, ms: Math.round(performance.now() - t0), body: entry.body });
-  const text = await r.text();
-  let j = null;
-  try { j = JSON.parse(text); } catch { /* non-JSON answer */ }
-  if (!r.ok)
-    throw new Error((j && (j.error_human || j.error)) || m + " " + p + " answered " + r.status);
-  return j;
-}
-
-/* MiR shapes vary version to version (list vs object answers) — never
-   assume echo-back; normalize before reading. */
-const asList = (j, key) => Array.isArray(j) ? j : (j && Array.isArray(j[key])) ? j[key] : [];
-
-function statusLine(s) {
-  if (!s || typeof s !== "object") return "state unknown";
-  const pos = s.position || {};
-  let line = String(s.state_text || "state unknown");
-  if (s.battery_percentage != null) line += " · battery " + Math.round(s.battery_percentage) + "%";
-  if (pos.x != null && pos.y != null)
-    line += " · at (" + Number(pos.x).toFixed(1) + ", " + Number(pos.y).toFixed(1) + ")";
-  if (s.mission_text) line += " · " + s.mission_text;
-  return line;
-}
-
-function pickByName(items, name, getName) {
-  if (!name) return items[0];
-  const q = name.toLowerCase().trim();
-  let best = null, bestScore = 0;
-  for (const it of items) {
-    const n = String(getName(it) || "").toLowerCase();
-    if (!n) continue;
-    let score = n === q ? 3 : n.includes(q) ? 2 : q.includes(n) ? 1.5 : 0;
-    if (!score) {
-      const toks = q.split(/\s+/).filter((t) => t.length > 2);
-      score = toks.filter((t) => n.includes(t)).length / (toks.length || 1);
-    }
-    if (score > bestScore) { best = it; bestScore = score; }
-  }
-  return bestScore > 0 ? best : null;
-}
-
-/* "the first mission", "any", "one", "it" are picks, not names — empty
-   means take the first. One vocabulary, shared by the rule planner
-   (missionName) and the executor (ordinalToEmpty). */
-const PICK_WORDS = "first|any|some|a|one|it";
-function ordinalToEmpty(name) {
-  const want = String(name || "").trim();
-  return new RegExp("^(the\\s+)?(" + PICK_WORDS + ")(\\s+(mission|one|job))?$", "i").test(want)
-    ? "" : want;
-}
-
-const isActive = (state) => /pending|executing/i.test(String(state));
-
-const intIn = (v, lo, hi, what) => {
-  const n = Math.trunc(Number(v));
-  if (!Number.isFinite(n) || n < lo || n > hi)
-    throw new Error(what + " must be a whole number between " + lo + " and " + hi + ".");
-  return n;
-};
-
-/* All per-API-family chat copy in one place: help text, few-shot examples
-   for the LLM planner, and the suggestion chips. */
-const PER_KIND = {
-  robot: {
-    help: 'Try: "what’s the battery at?" · "pause" / "resume" · "what’s wrong?" · "clear the error" · ' +
-      '"what missions does it know?" · "queue the <name> mission" · "clear the queue" · ' +
-      '"read register 5" / "set register 5 to 42" · "rename it to Wall-E" · "clear the chat".',
-    examples: [
-      ["is it charged up?", '{"tool": "get_battery", "args": {}}'],
-      ["take a break for a moment", '{"tool": "pause", "args": {}}'],
-      ["do the delivery run", '{"tool": "enqueue_mission", "args": {"name": "delivery run"}}'],
-      // a follow-up pair: teaches that "run/start it/one" after missions = enqueue
-      ["which missions are there?", '{"tool": "list_missions", "args": {}}'],
-      ["ok run the first one", '{"tool": "enqueue_mission", "args": {}}'],
-      ["what's the weather like?", '{"tool": "none", "args": {"reply": "I only control this robot."}}'],
-    ],
-    suggests: ["what's the battery at?", "pause the robot", "resume", "what missions does it know?",
-      "queue the first mission", "clear the error"],
-  },
-  mirfleet: {
-    help: 'Fleet mode. Try: "how many robots are online?" · "any active orders?" · ' +
-      '"dispatch the <name> mission" · "fleet version".',
-    examples: [
-      ["how busy are we?", '{"tool": "fleet_orders", "args": {}}'],
-      ["send out the delivery job", '{"tool": "dispatch_order", "args": {"name": "delivery"}}'],
-      ["what's the weather like?", '{"tool": "none", "args": {"reply": "I only manage this MiR fleet."}}'],
-    ],
-    suggests: ["how many robots are online?", "any active orders?", "dispatch an order", "fleet version"],
-  },
-};
-const kindCfg = () => PER_KIND[currentKind] || PER_KIND.robot;
-
-const TOOLS = {
-  help: { kind: "both", desc: "list what this chat can do",
-    run: async () => kindCfg().help },
-  none: { kind: "both", argSpec: '{"reply": string}',
-    desc: "reply when the request is unrelated to the robot",
-    run: async (a) => String((a && a.reply) || "That's outside what I can do here.").slice(0, 300) },
-  clear_chat: { kind: "both", desc: "clear this chat transcript",
-    // Renders for itself: null tells chatSend the turn is already on screen.
-    run: async () => { chatWipe("Chat cleared. " + CHAT_GREETING); return null; } },
-  get_status: { kind: "robot", desc: "robot state: mode, battery, position, current mission",
-    async run() { return statusLine(await chatApi("GET", "/status")); } },
-  get_battery: { kind: "robot", desc: "battery percentage and time remaining",
-    async run() {
-      const s = await chatApi("GET", "/status");
-      if (!s || s.battery_percentage == null) return "The robot didn't report a battery level.";
-      let out = "Battery at " + Math.round(s.battery_percentage) + "%";
-      const secs = Number(s.battery_time_remaining);
-      if (Number.isFinite(secs) && secs > 0)
-        out += " — about " + Math.floor(secs / 3600) + " h " + Math.round((secs % 3600) / 60) + " m remaining";
-      return out + ".";
-    } },
-  pause: { kind: "robot", desc: "pause the robot (state_id 4)",
-    async run() { return "Paused. " + statusLine(await chatApi("PUT", "/status", { state_id: 4 })); } },
-  resume: { kind: "robot", desc: "resume / continue (state_id 3)",
-    async run() { return "Resuming. " + statusLine(await chatApi("PUT", "/status", { state_id: 3 })); } },
-  clear_error: { kind: "robot", desc: "clear a resettable error state",
-    async run() { return "Error cleared. " + statusLine(await chatApi("PUT", "/status", { clear_error: true })); } },
-  get_errors: { kind: "robot", desc: "what's wrong: the robot's current error list",
-    async run() {
-      const s = await chatApi("GET", "/status");
-      const errs = Array.isArray(s && s.errors) ? s.errors : [];
-      if (!errs.length) return "No errors reported — " + statusLine(s);
-      return errs.length + " error" + (errs.length === 1 ? "" : "s") + ": " +
-        errs.slice(0, 5).map((e) =>
-          (e.code != null ? "[" + e.code + "] " : "") + (e.description || e.module || "unknown")).join("; ") +
-        ". Say “clear the error” to reset the resettable ones.";
-    } },
-  rename: { kind: "robot", argSpec: '{"name": string}', desc: "rename the robot",
-    async run(a) {
-      const name = String(a.name || "").trim().slice(0, 64);
-      if (!name) throw new Error("What should I call it? Say e.g. “rename it to Wall-E”.");
-      const s = await chatApi("PUT", "/status", { name });
-      return "Done — it now answers to “" + ((s && s.robot_name) || name) + "”.";
-    } },
-  list_missions: { kind: "robot", desc: "list the missions the robot knows",
-    async run() {
-      const missions = asList(await chatApi("GET", "/missions"), "missions");
-      if (!missions.length) return "The robot reports no missions.";
-      const names = missions.map((m) => m.name || m.guid).filter(Boolean);
-      return missions.length + " mission" + (missions.length === 1 ? "" : "s") + ": " +
-        names.slice(0, 12).join(", ") + (names.length > 12 ? ", … and " + (names.length - 12) + " more" : "") + ".";
-    } },
-  enqueue_mission: { kind: "robot", argSpec: '{"name": string, optional}',
-    desc: "queue a mission by (fuzzy) name; empty name = first known mission",
-    async run(a) {
-      const missions = asList(await chatApi("GET", "/missions"), "missions");
-      if (!missions.length) throw new Error("The robot reports no missions to queue.");
-      const want = ordinalToEmpty(a.name);
-      const hit = pickByName(missions, want, (m) => m.name);
-      if (!hit)
-        throw new Error("No mission matching “" + want + "”. It knows: " +
-          missions.slice(0, 8).map((m) => m.name || m.guid).join(", ") +
-          (missions.length > 8 ? ", …" : "") + ".");
-      const q = await chatApi("POST", "/mission_queue", { mission_id: hit.guid });
-      return "Queued “" + (hit.name || hit.guid) + "”" +
-        (q && q.id != null ? " — queue entry #" + q.id : "") +
-        ". Turn on Telemetry below to watch it run.";
-    } },
-  get_queue: { kind: "robot", desc: "mission queue summary",
-    async run() {
-      const list = asList(await chatApi("GET", "/mission_queue"), "mission_queue");
-      if (!list.length) return "The mission queue is empty.";
-      const active = list.filter((e) => isActive(e.state));
-      return list.length + " entr" + (list.length === 1 ? "y" : "ies") + " in the queue" +
-        (active.length ? ", " + active.length + " pending or executing." : ", none active.");
-    } },
-  clear_queue: { kind: "robot", desc: "delete every entry in the mission queue",
-    async run() { await chatApi("DELETE", "/mission_queue"); return "Mission queue cleared."; } },
-  read_register: { kind: "robot", argSpec: '{"register": integer 1-200}', desc: "read a PLC register",
-    async run(a) {
-      const n = intIn(a.register, 1, 200, "register");
-      const r = await chatApi("GET", "/registers/" + n);
-      return "Register " + n + " = " + ((r && r.value) ?? "?") +
-        (r && r.label ? " (" + r.label + ")" : "") + ".";
-    } },
-  write_register: { kind: "robot", argSpec: '{"register": integer 1-200, "value": number}',
-    desc: "write a PLC register",
-    async run(a) {
-      const n = intIn(a.register, 1, 200, "register");
-      const v = Number(a.value);
-      if (!Number.isFinite(v)) throw new Error("What value should register " + n + " get?");
-      const r = await chatApi("PUT", "/registers/" + n, { value: v });
-      return "Register " + n + " set to " + ((r && r.value) ?? v) + ".";
-    } },
-  system_info: { kind: "robot", desc: "system information (software, serial, …)",
-    async run() {
-      const i = await chatApi("GET", "/system/info");
-      if (!i || typeof i !== "object") return "No system info reported.";
-      const rows = Object.entries(i)
-        .filter(([, v]) => ["string", "number", "boolean"].includes(typeof v))
-        .slice(0, 8).map(([k, v]) => k + ": " + v);
-      return rows.length ? rows.join("\n") : "No system info reported.";
-    } },
-  fleet_robots: { kind: "mirfleet", desc: "list the robots in the fleet",
-    async run() {
-      const robots = asList(await chatApi("GET", "/robots"), "robots");
-      if (!robots.length) return "The fleet reports no robots.";
-      return robots.length + " robot" + (robots.length === 1 ? "" : "s") + ": " +
-        robots.map((r) => r.name || r.id).filter(Boolean).slice(0, 12).join(", ") + ".";
-    } },
-  fleet_orders: { kind: "mirfleet", desc: "list orders and how many are active",
-    async run() {
-      const orders = asList(await chatApi("GET", "/order"), "orders");
-      if (!orders.length) return "No orders on record.";
-      const active = orders.filter((o) => isActive(o["order-status"]));
-      return orders.length + " order" + (orders.length === 1 ? "" : "s") +
-        (active.length ? ", " + active.length + " active." : ", none active.");
-    } },
-  dispatch_order: { kind: "mirfleet", argSpec: '{"name": string, optional}',
-    desc: "dispatch a serial order for a site mission by (fuzzy) name",
-    async run(a) {
-      const site = await chatApi("GET", "/site/mission");
-      const missions = asList(site, "missions");
-      if (!missions.length) throw new Error("The site reports no missions to dispatch.");
-      const want = ordinalToEmpty(a.name);
-      const hit = pickByName(missions, want, (m) => m.name || m.id);
-      if (!hit)
-        throw new Error("No site mission matching “" + want + "”. Known: " +
-          missions.slice(0, 8).map((m) => m.name || m.id).join(", ") + ".");
-      const order = await chatApi("POST", "/serial-order",
-        { "serial-order": { phases: [{ "mission-id": hit.id }] } });
-      const oid = order && (order["order-id"] ?? order.id);
-      return "Order dispatched for “" + (hit.name || hit.id) + "”" +
-        (oid != null ? " — order " + oid : "") + ".";
-    } },
-  fleet_version: { kind: "mirfleet", desc: "fleet software version",
-    async run() {
-      const v = await chatApi("GET", "/system/version");
-      return "MiR Fleet " + ((v && v.version) || "— version not reported") + ".";
-    } },
-};
-
-async function runTool(name, args) {
-  const t = TOOLS[name];
-  if (!t) throw new Error("I don't have an action called “" + name + "”.");
-  if (t.kind !== "both" && t.kind !== currentKind)
-    throw new Error(t.kind === "robot"
-      ? "That needs a robot connection — you're talking to a MiR Fleet. Pick a robot version on the left."
-      : "That's a Fleet action — pick a Fleet version on the left.");
-  return t.run(args || {});
-}
-
-/* ---- tier 0: the rule engine ---- */
-function quotedOr(raw, re) {
-  const q = raw.match(/"([^"]+)"|'([^']+)'|“([^”]+)”/);
-  if (q) return q[1] || q[2] || q[3];
-  const m = raw.match(re);
-  return m ? m[1].replace(/[?.!]+\s*$/, "").trim() : "";
-}
-function missionName(raw) {
-  if (new RegExp("\\b(" + PICK_WORDS + ") (mission|one|job)\\b", "i").test(raw)) return "";
-  let n = quotedOr(raw, /mission (?:called |named )?(.+)$/i);
-  if (n) return n;
-  const m = raw.match(/\b(?:queue|enqueue|run|start|launch|execute|dispatch|do)\s+(?:the\s+)?(.+?)\s+mission\b/i);
-  return m ? m[1].replace(/^(a|an|the|first)\s+/i, "").trim() : "";
-}
-
-function planWithRules(raw) {
-  const t = raw.toLowerCase();
-  if (/\b(clear|wipe|reset|erase)\b[^.]*\b(chat|transcript|conversation)\b/.test(t))
-    return { tool: "clear_chat", args: {} };
-  if (/^(help|\?)\s*$|\bwhat can (you|this|i)\b/.test(t)) return { tool: "help", args: {} };
-  if (currentKind === "mirfleet") {
-    if (/\b(dispatch|place|create)\b|\b(send|start|queue|enqueue|run|execute|do)\b.*\b(order|mission)\b/.test(t))
-      return { tool: "dispatch_order", args: { name: missionName(raw) } };
-    if (/\border/.test(t)) return { tool: "fleet_orders", args: {} };
-    if (/\bversion\b/.test(t)) return { tool: "fleet_version", args: {} };
-    // Robot-only phrasing ("pause the robot", "battery?") keeps its robot
-    // meaning: runTool answers it with a switch-to-a-robot redirect.
-    const robot = robotRules(raw, t);
-    if (robot && !["get_status", "system_info"].includes(robot.tool)) return robot;
-    if (/\brobots?\b|\bfleet\b|\bhow many\b|\bstatus\b|\bstate\b|\bonline\b/.test(t))
-      return { tool: "fleet_robots", args: {} };
-    return null;
-  }
-  return robotRules(raw, t);
-}
-
-function robotRules(raw, t) {
-  if (/\b(clear|empty|cancel|flush|wipe)\b[^.]*\bqueue\b/.test(t)) return { tool: "clear_queue", args: {} };
-  if (/\b(what|which|list|show|available|know)\b[^.]*\bmissions\b/.test(t)) return { tool: "list_missions", args: {} };
-  if (/\b(queue|enqueue|run|start|launch|execute|dispatch|send|do)\b[^.]*\bmission\b/.test(t))
-    return { tool: "enqueue_mission", args: { name: missionName(raw) } };
-  if (/\bqueue\b/.test(t)) return { tool: "get_queue", args: {} };
-  if (/batter|\bcharge\b|\bjuice\b|\bpower level\b/.test(t)) return { tool: "get_battery", args: {} };
-  if (/\b(clear|reset|acknowledge|ack|fix)\b[^.]*\b(errors?|faults?|alarms?)\b|\b(errors?|faults?)\b[^.]*\b(clear|reset|away)\b/.test(t))
-    return { tool: "clear_error", args: {} };
-  if (/\b(errors?|faults?|alarms?)\b|\bwrong\b|\bbroken\b/.test(t)) return { tool: "get_errors", args: {} };
-  if (/\b(resume|unpause|continue|keep going|carry on|go again)\b/.test(t)) return { tool: "resume", args: {} };
-  if (/\b(pause|stop|halt|hold|freeze|wait)\b/.test(t)) return { tool: "pause", args: {} };
-  if (/\brename\b|\b(call|name) (it|the robot)\b/.test(t))
-    return { tool: "rename", args: { name: quotedOr(raw, /(?:rename[^]*?\bto\b|(?:call|name) (?:it|the robot))\s+(.+)$/i) } };
-  const reg = t.match(/register\s*#?(\d+)/);
-  if (reg) {
-    const val = raw.match(/(?:\bto\b|=)\s*(-?\d+(?:\.\d+)?)/i);
-    return val
-      ? { tool: "write_register", args: { register: Number(reg[1]), value: Number(val[1]) } }
-      : { tool: "read_register", args: { register: Number(reg[1]) } };
-  }
-  if (/\bmissions\b/.test(t)) return { tool: "list_missions", args: {} };
-  if (/\b(system|software|serial|firmware|version|info)\b/.test(t)) return { tool: "system_info", args: {} };
-  if (/\bstatus\b|\bstate\b|\bwhere\b|\bposition\b|\bdoing\b|\bup to\b|\bhow('s| is)\b|\bok\b|\balive\b/.test(t))
-    return { tool: "get_status", args: {} };
-  return null;
-}
-
-/* ---- tier 1: the in-browser model (WebLLM, opt-in) ---- */
-let ai = null, aiLoading = false, aiWanted = false;
-const AI_KEY = "mir-console-ai";
-const WEBLLM_URL = "https://esm.run/@mlc-ai/web-llm@0.2.84"; // pinned; CSP allows only esm.run + cdn.jsdelivr.net
-const AI_PREFERRED = [ // smallest first; the real list is read from the runtime at load time
-  "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
-  "Llama-3.2-1B-Instruct-q4f16_1-MLC",
-  "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
-];
-
-function aiSystemPrompt() {
-  const tools = Object.entries(TOOLS)
-    .filter(([name, t]) => name !== "none" && (t.kind === "both" || t.kind === currentKind))
-    .map(([name, t]) => "- " + name + (t.argSpec ? " " + t.argSpec : " {}") + " — " + t.desc)
-    .join("\n");
-  return "You translate one user message about a MiR robot into exactly one JSON object " +
-    'on a single line — no prose, no code fences: {"tool": "<name>", "args": {...}}. Available tools:\n' + tools +
-    '\nUse "help" only when the user asks what you can do. For anything unrelated to the robot, ' +
-    'answer {"tool": "none", "args": {"reply": "<one short sentence>"}}.';
-}
-
-/* Fixed few-shot pairs (kindCfg().examples) anchor the 0.5B model to the
-   JSON contract; the session's own successful translations are appended
-   after them, which is what lets follow-ups like "run the first one"
-   resolve in context. */
-let aiHistory = []; // [{u: user text, a: assistant JSON}], capped
-
-async function planWithAI(text) {
-  let deadline;
-  try {
-    const shots = [...kindCfg().examples, ...aiHistory.map((h) => [h.u, h.a])]
-      .flatMap(([u, a]) => [{ role: "user", content: u }, { role: "assistant", content: a }]);
-    // Race the model against a deadline: a wedged generation must degrade
-    // to the rule engine, never hang the chat turn.
-    const r = await Promise.race([
-      ai.engine.chat.completions.create({
-        messages: [
-          { role: "system", content: aiSystemPrompt() },
-          ...shots,
-          { role: "user", content: text },
-        ],
-        temperature: 0,
-        max_tokens: 128,
-        // No response_format json_object: WebLLM 0.2.84's grammar mode
-        // wedges the generation ("Cannot pass non-string to std::string");
-        // the prompt demands JSON and the parse below is defensive instead.
-      }),
-      new Promise((_, rej) => {
-        deadline = setTimeout(() => rej(new Error("model timeout")), 45000);
-      }),
-    ]);
-    const raw = r.choices[0].message.content;
-    // Small models sometimes wrap the object in prose — take the first {...}.
-    const out = JSON.parse((raw.match(/\{[^]*\}/) || [raw])[0]);
-    if (!TOOLS[out.tool]) return null;
-    const args = (out.args && typeof out.args === "object") ? out.args : {};
-    aiHistory.push({ u: text.slice(0, 200), a: JSON.stringify({ tool: out.tool, args }) });
-    aiHistory = aiHistory.slice(-3);
-    return { tool: out.tool, args };
-  } catch {
-    return null; // any failure → the rule engine takes the message
-  } finally {
-    clearTimeout(deadline);
-  }
-}
-
-async function loadAI() {
-  if (ai || aiLoading) return;
-  const st = $("ai-status"), btn = $("ai-load");
-  if (!navigator.gpu) {
-    st.className = "hint warn";
-    st.textContent = "This browser has no WebGPU, so no in-browser model — the rule engine keeps working.";
-    return;
-  }
-  aiLoading = true;
-  btn.disabled = true;
-  st.className = "hint";
-  st.textContent = "fetching the WebLLM runtime…";
-  try {
-    const webllm = await import(WEBLLM_URL);
-    const list = ((webllm.prebuiltAppConfig || {}).model_list || []).map((m) => m.model_id);
-    const model = AI_PREFERRED.find((id) => list.includes(id)) ||
-      list.find((id) => /instruct/i.test(id) && /(0\.5B|1B|1\.5B)/i.test(id));
-    if (!model) throw new Error("no small instruct model in WebLLM's prebuilt list");
-    const engine = await webllm.CreateMLCEngine(model, {
-      initProgressCallback: (p) => { st.textContent = (p && p.text) || "loading model…"; },
-    });
-    ai = { engine, model, label: "AI · " + model.replace(/-MLC$/, "") };
-    $("chat-brain").textContent = ai.label;
-    btn.style.display = "none";
-    st.className = "hint ok";
-    st.textContent = "model loaded — free-form phrasing on. It still only picks from the same fixed actions.";
-    try { localStorage.setItem(AI_KEY, "1"); } catch { /* private mode */ }
-  } catch (e) {
-    st.className = "hint warn";
-    st.textContent = "couldn't load the model (" + e.message + ") — the rule engine keeps working. " +
-      "A strict Content-Security-Policy or an offline network blocks the CDN import.";
-    btn.disabled = false;
-    aiWanted = false;
-    try { localStorage.removeItem(AI_KEY); } catch { /* private mode */ }
-  }
-  aiLoading = false;
-}
-
-/* ---- transcript ---- */
-const CHAT_KEY = "mir-console-chat";
-let chatStore = []; // [{c: css class, t: text}] — chips are not persisted
-
-function chatMsg(cls, text) {
-  const log = $("chat-log");
-  const div = document.createElement("div");
-  div.className = "msg " + cls;
-  div.textContent = text;
-  log.appendChild(div);
-  while (log.children.length > 200) log.removeChild(log.firstChild);
-  log.scrollTop = log.scrollHeight;
-  return div;
-}
-
-function chatPersist(cls, text) {
-  chatStore.push({ c: cls, t: String(text).slice(0, 600) });
-  chatStore = chatStore.slice(-40);
-  try { localStorage.setItem(CHAT_KEY, JSON.stringify(chatStore)); } catch { /* private mode */ }
-}
-
-const CHAT_GREETING = "Tell your robot what to do in plain words — no endpoint paths needed. " +
-  "Try a suggestion below, or load the in-browser AI for free-form phrasing.";
-
-function chatWipe(say) {
-  chatStore = [];
-  try { localStorage.removeItem(CHAT_KEY); } catch { /* private mode */ }
-  $("chat-log").innerHTML = "";
-  chatMsg("bot", say || CHAT_GREETING);
-}
-
-function markVia(div, via) {
-  const v = document.createElement("span");
-  v.className = "via";
-  v.textContent = "via " + via;
-  div.appendChild(v);
-}
-
-function attachCalls(div, calls) {
-  if (!calls.length) return;
-  const row = document.createElement("div");
-  row.className = "chat-calls";
-  calls.forEach((c) => {
-    const b = document.createElement("button");
-    b.className = "api-chip";
-    b.title = "load into the request console";
-    const m = document.createElement("b");
-    m.textContent = c.m;
-    const st = document.createElement("span");
-    st.className = "st s" + String(c.status)[0];
-    st.textContent = " · " + (c.status || "ERR");
-    b.appendChild(m);
-    b.appendChild(document.createTextNode(c.p));
-    b.appendChild(st);
-    b.onclick = () => {
-      let body = c.body;
-      try { body = c.body ? JSON.stringify(JSON.parse(c.body), null, 2) : ""; } catch { /* raw */ }
-      loadIntoConsole(c.m, c.p, body);
-    };
-    row.appendChild(b);
-  });
-  div.appendChild(row);
-  $("chat-log").scrollTop = $("chat-log").scrollHeight;
-}
-
-function renderChatSuggests() {
-  aiHistory = []; // tool set may have changed with the API family
-  const box = $("chat-suggests");
-  box.innerHTML = "";
-  kindCfg().suggests.forEach((s) => {
-    const b = document.createElement("button");
-    b.className = "preset";
-    b.textContent = s;
-    b.onclick = () => { $("chat-input").value = s; chatSubmit(); };
-    box.appendChild(b);
-  });
-}
-
-/* Every terminal branch of a chat turn ends here: set the text, persist
-   the exchange (one localStorage write per turn), tag provenance, attach
-   the request chips. */
-function finishBot(reply, text, opts = {}) {
-  if (opts.err) reply.classList.add("err");
-  reply.textContent = text;
-  chatPersist(opts.err ? "bot err" : "bot", text);
-  if (opts.via) markVia(reply, opts.via);
-  attachCalls(reply, opts.calls || []);
-}
-
-async function chatSend(text) {
-  chatMsg("user", text);
-  chatStore.push({ c: "user", t: text.slice(0, 600) }); // written with the reply
-  if (aiWanted) loadAI(); // deferred opt-in: first chat use starts the load
-  const reply = chatMsg("bot", ai ? "thinking…" : "…");
-  if (!BASE || (MODE === "fleet" && !currentVersion)) {
-    finishBot(reply, "Not connected — pick an endpoint in the panel on the left first.", { err: true });
-    return;
-  }
-  turnCalls = [];
-  let plan = null, via = "rules";
-  if (ai) {
-    plan = await planWithAI(text);
-    if (plan) via = ai.label;
-  }
-  if (!plan) plan = planWithRules(text);
-  if (!plan) {
-    finishBot(reply, "I didn't catch that — try a suggestion below" +
-      (ai ? "." : ", or load the in-browser AI for free-form phrasing."), { err: true });
-    return;
-  }
-  try {
-    const out = await runTool(plan.tool, plan.args);
-    if (out === null) return; // the tool rendered for itself (clear_chat wipes the log)
-    finishBot(reply, out, { via, calls: turnCalls });
-  } catch (e) {
-    finishBot(reply, e.message, { err: true, via, calls: turnCalls });
-  }
-}
-
-async function chatSubmit() {
-  const input = $("chat-input"), btn = $("chat-send");
-  const text = input.value.trim();
-  if (!text || btn.disabled) return;
-  input.value = "";
-  btn.disabled = true;
-  try { await chatSend(text); } finally { btn.disabled = false; input.focus(); }
-}
-
 /* ---------- endpoint selection / probe ---------- */
 function syncMixedContentWarning(base) {
   const blocked = location.protocol === "https:" && /^http:\/\//i.test(base);
@@ -2204,7 +1105,6 @@ async function connectTo(rawBase) {
   $("connect").disabled = true;
   led.className = "led"; lt.textContent = "probing…";
   st.className = "hint"; st.textContent = "probing " + base + " …";
-  $("endpoint-label").textContent = base.replace(/^https?:\/\//, "");
 
   // Connect-time handshake: ask the target what it is and which software
   // version it runs, instead of assuming one. First hit wins.
@@ -2276,7 +1176,9 @@ async function connectTo(rawBase) {
     st.className = "hint warn";
     st.textContent = "no MiR API at " + base + " — not reachable from this browser, or no CORS. " +
       (syncMixedContentWarning(base) ? "Mixed content is blocking this request (see below)." : "");
-    $("versions").innerHTML = '<div class="hint">connect to an endpoint to load versions</div>';
+    const vsel = $("version-select");
+    vsel.disabled = true;
+    vsel.innerHTML = '<option>connect to an endpoint to load versions&hellip;</option>';
     return;
   }
 
@@ -2286,15 +1188,15 @@ async function connectTo(rawBase) {
   currentKind = mode === "fleet" ? "robot" : directKind;
   currentVersion = mode === "fleet" ? versions[0] : null;
   try { localStorage.setItem(STORE_KEY, base); } catch { /* private mode */ }
-  led.className = "led on"; lt.textContent = "online";
+  led.className = "led on"; lt.textContent = "online \u00b7 " + base.replace(/^https?:\/\//, "");
   st.className = "hint ok";
   const family = currentKind === "mirfleet" ? "MiR Fleet" : "MiR robot";
   st.textContent = mode === "fleet"
     ? "connected — emulator fleet, " + versions.length + " versions"
     : "connected — " + family + " " + (detectedVersion || "(version not reported — assuming newest)") +
       " at " + base.replace(/^https?:\/\//, "") + apiPrefix();
-  renderVersions(); renderPresets(); syncAuthPanel();
-  loadVersionMeta(); loadSpec(); loadProvenance(); fillCompare(); refreshSample();
+  renderVersions(); syncAuthPanel();
+  loadSpec(); fillCompare(); refreshSample();
 }
 
 /* ---------- localhost scan ----------
@@ -2462,38 +1364,20 @@ function probe() {
   connectTo(start);
 }
 
-renderPresets();
-renderLangTabs();
 syncBodyVisibility();
 ["method", "path", "body", "user", "pass", "apikey"].forEach((id) =>
   $(id).addEventListener("input", () => { syncBodyVisibility(); refreshSample(); }));
 $("send").onclick = transmit;
-$("path").addEventListener("keydown", (e) => { if (e.key === "Enter") transmit(); });
+$("version-select").addEventListener("change", onVersionChange);
 $("op-filter").addEventListener("input", renderCatalog);
 $("op-select").addEventListener("change", () => {
   const v = $("op-select").value;
   if (v === "") clearOperation(); else applyOperation(Number(v));
 });
-try { hist = JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch { hist = []; }
-renderHistory();
 $("connect").onclick = () => connectTo(selectedEndpoint());
 $("scan").onclick = scanLocalhost;
 $("cmp-go").onclick = runCompare;
 $("tele-toggle").onclick = () => setTelemetry(!teleTimer);
-$("chat-send").onclick = chatSubmit;
-$("chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter") chatSubmit(); });
-$("ai-load").onclick = loadAI;
-try { chatStore = (JSON.parse(localStorage.getItem(CHAT_KEY)) || []).filter(
-  (m) => m && typeof m.t === "string" && /^(user|bot|bot err)$/.test(m.c)); } catch { chatStore = []; }
-if (chatStore.length) chatStore.forEach((m) => chatMsg(m.c, m.t));
-else chatMsg("bot", CHAT_GREETING);
-// Opted-in AI loads on first chat use, not on page load — visitors who never
-// touch the chat shouldn't pay the engine init and model residency.
-try { aiWanted = localStorage.getItem(AI_KEY) === "1"; } catch { /* private mode */ }
-if (aiWanted) {
-  $("ai-status").textContent = "AI enabled — the model loads the first time you use the chat.";
-  $("chat-input").addEventListener("focus", () => loadAI(), { once: true });
-}
 $("new-session").onclick = () => {
   $("session").value = newSessionId();
   try { localStorage.setItem(SESSION_KEY, $("session").value); } catch { /* private mode */ }
@@ -2511,10 +1395,6 @@ $("ep-demo").addEventListener("change", () => { syncEndpointForm(); connectTo(DE
 $("ep-custom").addEventListener("change", () => { syncEndpointForm(); $("custom-url").focus(); });
 $("custom-url").addEventListener("input", syncEndpointForm);
 $("custom-url").addEventListener("keydown", (e) => { if (e.key === "Enter") connectTo(selectedEndpoint()); });
-$("copy").onclick = async () => {
-  await navigator.clipboard.writeText($("curl").textContent);
-  $("copy").textContent = "Copied"; setTimeout(() => ($("copy").textContent = "Copy"), 1200);
-};
 probe(); refreshSample();
 </script>
 </body>
