@@ -71,3 +71,11 @@ an agentic workflow an assistant writes the snippet for free.)
       Stripe-style reference in favor of linking MiR's official docs. If
       MiR ever unpublishes the Fleet Swagger UI or the portal's REST API
       files, resurrect ours from the scraped registry.
+
+## Open questions for Nick (session log — answer whenever, then delete)
+
+- 2026-07-20: Roll out the same PR automation (auto-merge + branch
+  protection + `automerge.yml`) to your other repos? None of the other 26
+  have a `dev` default branch yet, and each needs its CI job names read
+  before required checks are set — so I did amr-emulator only and held the
+  sweep. Say the word and I'll do them one by one.
