@@ -272,7 +272,7 @@ def sync(
             )
 
         tracked.extend(pinned.values())
-        tracked.sort(key=lambda t: [int(p) for p in t["mir_version"].split(".")], reverse=True)
+        tracked.sort(key=lambda t: [int(p) for p in str(t["mir_version"]).split(".")], reverse=True)
     finally:
         client.close()
 

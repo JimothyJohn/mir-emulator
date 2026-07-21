@@ -218,7 +218,7 @@ def sync_fleet(
         if own_client:
             client.close()
 
-    tracked.sort(key=lambda t: [int(p) for p in t["fleet_version"].split(".")], reverse=True)
+    tracked.sort(key=lambda t: [int(p) for p in str(t["fleet_version"]).split(".")], reverse=True)
     dropped = set(existing) - {t["fleet_version"] for t in tracked}
     if dropped:
         changed = True
