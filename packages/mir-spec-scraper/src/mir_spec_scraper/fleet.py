@@ -23,7 +23,7 @@ from pathlib import Path
 
 import httpx
 
-from mir_spec_scraper.versions import format_version, select_tracked
+from mir_spec_scraper.versions import format_version, line_of, select_tracked
 
 FLEET_BASE = (
     "https://supportportal.mobile-industrial-robots.com/support-files/manuals/"
@@ -136,7 +136,7 @@ def sync_fleet(
             f"fleet: {len(available)} versions published, latest {latest}, majors {majors}"
         )
 
-        keep_lines = {tuple(int(p) for p in v.split("."))[:2] for v in existing}
+        keep_lines = {line_of(v) for v in existing}
         targets = select_tracked(
             sorted(available), minors_per_major=minors_per_major, keep_lines=keep_lines
         )

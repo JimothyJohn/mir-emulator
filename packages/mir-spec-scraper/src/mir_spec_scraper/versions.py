@@ -34,6 +34,12 @@ def format_version(version: tuple[int, ...]) -> str:
     return ".".join(str(p) for p in version)
 
 
+def line_of(version: str) -> tuple[int, int]:
+    """The (major, minor) release line of a dotted version string."""
+    parts = version.split(".")
+    return int(parts[0]), int(parts[1])
+
+
 def select_tracked(
     versions: Sequence[tuple[int, ...]],
     minors_per_major: int = 4,

@@ -37,7 +37,7 @@ from pathlib import Path
 
 from mir_spec_scraper.portal import PortalClient, PortalFile
 from mir_spec_scraper.summarize import SummaryError, summarizer_from_env
-from mir_spec_scraper.versions import format_version, select_tracked
+from mir_spec_scraper.versions import format_version, line_of, select_tracked
 
 DEFAULT_SPECS_DIR = Path("packages/mir-emulator/src/mir_emulator/specs")
 
@@ -198,7 +198,7 @@ def sync(
 
         # Already-tracked minor lines are permanent: they keep refreshing to
         # their latest patch but are never rotated out by newer minors.
-        keep_lines = {tuple(int(p) for p in v.split("."))[:2] for v in existing}
+        keep_lines = {line_of(v) for v in existing}
         targets = select_tracked(
             [f.version for f in files],
             minors_per_major=minors_per_major,
