@@ -9,7 +9,8 @@ There is no version listing page, so discovery probes forward from the
 versions already tracked: newer patches of each tracked minor, newer minors
 of each tracked major, and the next majors — with a small gap tolerance so
 a skipped number doesn't end discovery. Selection then applies the same rule
-as the robot family: latest patch of the newest N minor lines per major.
+as the robot family: latest patch of the newest N minor lines per major,
+with already-tracked minor lines kept forever (refreshed, never rotated out).
 """
 
 from __future__ import annotations
@@ -135,7 +136,10 @@ def sync_fleet(
             f"fleet: {len(available)} versions published, latest {latest}, majors {majors}"
         )
 
-        targets = select_tracked(sorted(available), minors_per_major=minors_per_major)
+        keep_lines = {tuple(int(p) for p in v.split("."))[:2] for v in existing}
+        targets = select_tracked(
+            sorted(available), minors_per_major=minors_per_major, keep_lines=keep_lines
+        )
         tracked = []
         for version in targets:
             version_str = format_version(version)
@@ -218,11 +222,26 @@ def sync_fleet(
         if own_client:
             client.close()
 
+    # A tracked version is only ever superseded by a newer patch of its own
+    # minor line — never erased because the line aged out of the selection
+    # window, vanished, or its replacement failed to download.
+    newest_per_line: dict[tuple[int, int], list[int]] = {}
+    for t in tracked:
+        key = [int(p) for p in str(t["fleet_version"]).split(".")]
+        newest_per_line[(key[0], key[1])] = max(newest_per_line.get((key[0], key[1]), key), key)
+    present = {t["fleet_version"] for t in tracked}
+    for version_str, entry in sorted(existing.items()):
+        key = [int(p) for p in version_str.split(".")]
+        replacement = newest_per_line.get((key[0], key[1]))
+        if version_str not in present and (replacement is None or replacement < key):
+            tracked.append(entry)
+            lines.append(f"fleet: kept {version_str}: no replacement published")
+
     tracked.sort(key=lambda t: [int(p) for p in str(t["fleet_version"]).split(".")], reverse=True)
     dropped = set(existing) - {t["fleet_version"] for t in tracked}
     if dropped:
         changed = True
-        lines.append(f"fleet: dropped (no longer selected): {', '.join(sorted(dropped))}")
+        lines.append(f"fleet: superseded by a newer patch: {', '.join(sorted(dropped))}")
 
     if changed and not dry_run:
         fleet["tracked"] = tracked
